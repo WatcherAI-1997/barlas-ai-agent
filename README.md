@@ -2,6 +2,8 @@
 
 **Think ahead. Act beyond.**
 
+![Barlas AI Agent](assets/brand/barlas-ai-agent-logo-original.png)
+
 Barlas AI Agent is an independent, brand-owned AI agent platform inspired by
 the strongest product ideas in OpenClaw and Nous Research Hermes Agent.
 
@@ -16,13 +18,26 @@ the strongest product ideas in OpenClaw and Nous Research Hermes Agent.
 
 ## Status
 
-The project is in the architecture and foundation phase. No production agent,
-token, configuration, memory, port, database, or process is shared with this
-repository.
+The isolated foundation now includes a branded HTTP API, an OpenAI Responses
+API adapter, PostgreSQL conversation storage, approval policy primitives,
+container hardening, and automated tests. No production agent, token,
+configuration, memory, port, database, or process is shared with this project.
+
+## Local verification
+
+```bash
+npm install
+npm run check:isolation
+npm run typecheck
+npm test
+npm run build
+```
+
+Copy `.env.example` to `.env` only inside an isolated development environment
+and replace every placeholder secret before starting the containers.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Isolation policy](docs/ISOLATION.md)
 - [Roadmap](docs/ROADMAP.md)
-
