@@ -12,7 +12,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+RUN mkdir -p /var/lib/barlas/workspaces && chown -R node:node /var/lib/barlas
 USER node
 EXPOSE 17840
 CMD ["node", "dist/src/server.js"]
-

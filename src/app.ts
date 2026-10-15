@@ -6,6 +6,8 @@ import { z } from "zod";
 
 import type { ModelProvider } from "./core/models.js";
 import { agentJobSchema } from "./jobs/agent-handler.js";
+import { workflowJobSchema } from "./jobs/workflow-handler.js";
+import type { SkillRegistry } from "./skills/registry.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
 
@@ -62,12 +64,20 @@ const approvalDecisionSchema = z.object({
   approved: z.boolean(),
 });
 
-const createJobSchema = z.object({
-  userId: z.string().min(1).max(128),
-  jobType: z.literal("agent.run"),
-  input: agentJobSchema,
-  scheduledFor: z.string().datetime().optional(),
-});
+const createJobSchema = z.discriminatedUnion("jobType", [
+  z.object({
+    userId: z.string().min(1).max(128),
+    jobType: z.literal("agent.run"),
+    input: agentJobSchema,
+    scheduledFor: z.string().datetime().optional(),
+  }),
+  z.object({
+    userId: z.string().min(1).max(128),
+    jobType: z.literal("agent.workflow"),
+    input: workflowJobSchema,
+    scheduledFor: z.string().datetime().optional(),
+  }),
+]);
 
 const listJobsSchema = z.object({
   userId: z.string().min(1).max(128),
@@ -79,6 +89,7 @@ export interface AppDependencies {
   database: AgentStore;
   modelProvider: ModelProvider;
   toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
+  skillRegistry?: Pick<SkillRegistry, "list">;
   telegram?: {
     webhookSecret: string;
     client: { sendMessage(chatId: number, text: string): Promise<void> };
@@ -194,6 +205,11 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   app.get("/v1/tools", async (_request, reply) => {
     if (!dependencies.toolExecutor) return reply.notFound();
     return { tools: dependencies.toolExecutor.listTools() };
+  });
+
+  app.get("/v1/skills", async (_request, reply) => {
+    if (!dependencies.skillRegistry) return reply.notFound();
+    return { skills: dependencies.skillRegistry.list() };
   });
 
   app.post("/v1/tools/execute", async (request, reply) => {

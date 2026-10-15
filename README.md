@@ -22,7 +22,8 @@ The isolated foundation now includes a branded HTTP API, an OpenAI Responses
 API adapter, a task-aware model router, PostgreSQL conversation and long-term
 memory storage, an authenticated Telegram webhook, approval policy primitives,
 an auditable tool executor, durable job storage, container hardening, and
-automated tests. No production agent, token,
+automated tests. The private-alpha core also includes versioned skills, bounded
+subagent workflows, and per-user file workspaces. No production agent, token,
 configuration, memory, port, database, or process is shared with this project.
 
 ## Local verification

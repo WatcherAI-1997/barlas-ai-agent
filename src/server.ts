@@ -4,8 +4,10 @@ import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
 import { createAgentJobHandler } from "./jobs/agent-handler.js";
 import { JobWorker } from "./jobs/worker.js";
+import { createWorkflowJobHandler } from "./jobs/workflow-handler.js";
 import { OpenAIProvider } from "./providers/openai-provider.js";
 import { Database } from "./storage/database.js";
+import { createBuiltinSkillRegistry } from "./skills/registry.js";
 import { createBuiltinToolRegistry } from "./tools/builtins.js";
 import { ToolExecutor } from "./tools/executor.js";
 
@@ -34,7 +36,8 @@ const modelProvider = new ModelRouter({
   deep: deepProvider,
   private: privateProvider,
 });
-const toolExecutor = new ToolExecutor(createBuiltinToolRegistry(), database);
+const skillRegistry = createBuiltinSkillRegistry();
+const toolExecutor = new ToolExecutor(createBuiltinToolRegistry(config.WORKSPACE_ROOT), database);
 const jobWorker = new JobWorker(database, {
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
   batchSize: config.JOB_WORKER_BATCH_SIZE,
@@ -42,6 +45,7 @@ const jobWorker = new JobWorker(database, {
   onError: (error) => console.error("Barlas AI Agent job worker error", error),
 });
 jobWorker.register("agent.run", createAgentJobHandler(modelProvider));
+jobWorker.register("agent.workflow", createWorkflowJobHandler(modelProvider, skillRegistry));
 const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
   ? {
       webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,
@@ -53,6 +57,7 @@ const app = await buildApp({
   database,
   modelProvider,
   toolExecutor,
+  skillRegistry,
   ...(telegram ? { telegram } : {}),
   logger: true,
 });

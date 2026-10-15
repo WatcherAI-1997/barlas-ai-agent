@@ -19,6 +19,16 @@ autonomy.
 8. **Policy engine** — approvals, allowlists, quotas, tenancy, and audit logs.
 9. **Control panel** — users, models, costs, tools, traces, and administration.
 
+## Implemented capability boundaries
+
+- The file workspace is a dedicated Barlas AI Agent volume partitioned by a
+  SHA-256 user key. It is not mounted from an existing agent installation.
+- Built-in skills have immutable IDs, semantic versions, explicit instructions,
+  and declared tool allowlists. Runtime listing omits the internal prompt.
+- Managed workflows contain at most six sequential subagent steps. A step can
+  consume the previous result but cannot recursively create more subagents or
+  claim that it performed external actions.
+
 ## Data boundaries
 
 Each deployment has separate secrets, databases, storage, queues, networks,
