@@ -3,19 +3,25 @@ import OpenAI from "openai";
 import type { GenerateRequest, GenerateResult, ModelProvider } from "../core/models.js";
 
 export class OpenAIProvider implements ModelProvider {
-  readonly name = "openai";
+  readonly name: string;
   private readonly client: OpenAI;
 
-  constructor(
-    apiKey: string,
-    private readonly model: string,
-  ) {
-    this.client = new OpenAI({ apiKey });
+  constructor(private readonly options: {
+    apiKey: string;
+    model: string;
+    baseURL?: string;
+    providerName?: string;
+  }) {
+    this.name = options.providerName ?? "openai";
+    this.client = new OpenAI({
+      apiKey: options.apiKey,
+      ...(options.baseURL ? { baseURL: options.baseURL } : {}),
+    });
   }
 
   async generate(request: GenerateRequest): Promise<GenerateResult> {
     const response = await this.client.responses.create({
-      model: this.model,
+      model: this.options.model,
       input: request.messages.map((message) => ({
         role: message.role,
         content: message.content,
@@ -30,9 +36,8 @@ export class OpenAIProvider implements ModelProvider {
     return {
       text: response.output_text,
       provider: this.name,
-      model: this.model,
+      model: this.options.model,
       responseId: response.id,
     };
   }
 }
-

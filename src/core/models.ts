@@ -9,6 +9,7 @@ export interface GenerateRequest {
   messages: AgentMessage[];
   userId: string;
   conversationId: string;
+  taskClass?: "fast" | "deep" | "private";
 }
 
 export interface GenerateResult {

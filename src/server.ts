@@ -1,15 +1,46 @@
 import { buildApp } from "./app.js";
+import { TelegramClient } from "./channels/telegram.js";
 import { loadConfig } from "./config.js";
+import { ModelRouter } from "./core/model-router.js";
 import { OpenAIProvider } from "./providers/openai-provider.js";
 import { Database } from "./storage/database.js";
 
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
-const modelProvider = new OpenAIProvider(config.MODEL_API_KEY, config.MODEL_NAME);
+const fastProvider = new OpenAIProvider({
+  apiKey: config.MODEL_API_KEY,
+  model: config.MODEL_NAME,
+});
+const deepProvider = new OpenAIProvider({
+  apiKey: config.MODEL_API_KEY,
+  model: config.DEEP_MODEL_NAME ?? config.MODEL_NAME,
+});
+const privateProvider = config.PRIVATE_MODEL_BASE_URL &&
+  config.PRIVATE_MODEL_NAME &&
+  config.PRIVATE_MODEL_API_KEY
+  ? new OpenAIProvider({
+      apiKey: config.PRIVATE_MODEL_API_KEY,
+      model: config.PRIVATE_MODEL_NAME,
+      baseURL: config.PRIVATE_MODEL_BASE_URL,
+      providerName: "private-openai-compatible",
+    })
+  : fastProvider;
+const modelProvider = new ModelRouter({
+  fast: fastProvider,
+  deep: deepProvider,
+  private: privateProvider,
+});
+const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
+  ? {
+      webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,
+      client: new TelegramClient(config.TELEGRAM_BOT_TOKEN),
+    }
+  : undefined;
 const app = await buildApp({
   apiToken: config.BARLAS_API_TOKEN,
   database,
   modelProvider,
+  ...(telegram ? { telegram } : {}),
   logger: true,
 });
 
@@ -23,4 +54,3 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 await app.listen({ host: config.HOST, port: config.PORT });
-

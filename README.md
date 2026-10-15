@@ -19,7 +19,8 @@ the strongest product ideas in OpenClaw and Nous Research Hermes Agent.
 ## Status
 
 The isolated foundation now includes a branded HTTP API, an OpenAI Responses
-API adapter, PostgreSQL conversation storage, approval policy primitives,
+API adapter, a task-aware model router, PostgreSQL conversation and long-term
+memory storage, an authenticated Telegram webhook, approval policy primitives,
 container hardening, and automated tests. No production agent, token,
 configuration, memory, port, database, or process is shared with this project.
 
@@ -39,5 +40,6 @@ and replace every placeholder secret before starting the containers.
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [API](docs/API.md)
 - [Isolation policy](docs/ISOLATION.md)
 - [Roadmap](docs/ROADMAP.md)

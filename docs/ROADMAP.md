@@ -8,10 +8,10 @@
 
 ## Phase 1 — Private alpha
 
-- Telegram chat and streaming responses.
-- Persistent conversations and user memory.
+- Telegram webhook and replies. *(foundation implemented; credentials pending)*
+- Persistent conversations and explicit long-term memory. *(implemented)*
 - Web research, files, terminal tools, and task execution.
-- Model switching and routing.
+- Model switching and routing. *(fast/deep/private foundation implemented)*
 - Approval gates, audit trail, and usage limits.
 
 ## Phase 2 — Agent capabilities
@@ -27,4 +27,3 @@
 - Multi-user organizations, roles, and billing foundations.
 - Connector catalog and deployment automation.
 - Security review, backups, recovery drills, and staged release.
-
