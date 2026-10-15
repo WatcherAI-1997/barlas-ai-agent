@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build one cohesive AI-agent product under the Barlas brand. The product should
+Build one cohesive product named **Barlas AI Agent**. The product should
 combine dependable multi-channel operation and tool orchestration with model
 independence, durable memory, reusable skills, delegated work, and controlled
 autonomy.
@@ -32,4 +32,3 @@ sources and are not runtime dependencies.
 - Provider adapters instead of hard-coding a single model vendor.
 - MCP-compatible external tools where that reduces custom integration work.
 - API-first backend so Telegram and the future web interface share one runtime.
-
