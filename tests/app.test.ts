@@ -30,6 +30,40 @@ function dependencies() {
       createdAt: "2026-10-16T00:00:00.000Z",
     })),
     recall: vi.fn(async () => []),
+    createApproval: vi.fn(async (input: {
+      userId: string;
+      toolName: string;
+      risk: "write" | "external" | "destructive";
+      summary: string;
+      toolInput: unknown;
+    }) => ({
+      id: "00000000-0000-4000-8000-000000000002",
+      userId: input.userId,
+      toolName: input.toolName,
+      risk: input.risk,
+      summary: input.summary,
+      input: input.toolInput,
+      status: "pending" as const,
+      createdAt: "2026-10-16T00:00:00.000Z",
+    })),
+    decideApproval: vi.fn(async () => null),
+    markApprovalExecuted: vi.fn(async () => undefined),
+    appendAudit: vi.fn(async () => undefined),
+    createJob: vi.fn(async (input: {
+      userId: string;
+      jobType: string;
+      jobInput: unknown;
+      scheduledFor: Date;
+    }) => ({
+      id: "00000000-0000-4000-8000-000000000003",
+      userId: input.userId,
+      jobType: input.jobType,
+      input: input.jobInput,
+      status: "queued" as const,
+      scheduledFor: input.scheduledFor.toISOString(),
+      createdAt: "2026-10-16T00:00:00.000Z",
+    })),
+    listJobs: vi.fn(async () => []),
     close: vi.fn(async () => undefined),
   };
 
@@ -126,6 +160,26 @@ describe("Barlas AI Agent API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(sendMessage).toHaveBeenCalledWith(42, "Hello from Barlas AI Agent");
+    await app.close();
+  });
+
+  it("creates durable jobs with an audit event", async () => {
+    const deps = dependencies();
+    const app = await buildApp({ apiToken, ...deps });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/jobs",
+      headers: { authorization: `Bearer ${apiToken}` },
+      payload: {
+        userId: "user-1",
+        jobType: "research",
+        input: { topic: "AI agents" },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().job.status).toBe("queued");
+    expect(deps.database.appendAudit).toHaveBeenCalledOnce();
     await app.close();
   });
 });

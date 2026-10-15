@@ -16,9 +16,10 @@
 
 ## Phase 2 — Agent capabilities
 
-- Durable long-running jobs and schedules.
+- Durable long-running job storage and schedules. *(storage/API implemented; worker pending)*
 - Isolated subagents and resumable workflows.
 - Versioned skills with evaluation and rollback.
+- Approval queue and audit trail. *(foundation implemented)*
 - Admin controls, observability, and cost reporting.
 
 ## Phase 3 — Product

@@ -4,6 +4,8 @@ import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
 import { OpenAIProvider } from "./providers/openai-provider.js";
 import { Database } from "./storage/database.js";
+import { createBuiltinToolRegistry } from "./tools/builtins.js";
+import { ToolExecutor } from "./tools/executor.js";
 
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
@@ -30,6 +32,7 @@ const modelProvider = new ModelRouter({
   deep: deepProvider,
   private: privateProvider,
 });
+const toolExecutor = new ToolExecutor(createBuiltinToolRegistry(), database);
 const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
   ? {
       webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,
@@ -40,6 +43,7 @@ const app = await buildApp({
   apiToken: config.BARLAS_API_TOKEN,
   database,
   modelProvider,
+  toolExecutor,
   ...(telegram ? { telegram } : {}),
   logger: true,
 });
