@@ -27,6 +27,10 @@ export interface DurableJob {
   input: unknown;
   status: "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled";
   scheduledFor: string;
+  attempts: number;
+  maxAttempts: number;
+  result?: unknown;
+  error?: string;
   createdAt: string;
 }
 
@@ -72,5 +76,17 @@ export interface AgentStore {
     scheduledFor: Date;
   }): Promise<DurableJob>;
   listJobs(userId: string, limit: number): Promise<DurableJob[]>;
+  claimJobs(input: {
+    workerId: string;
+    limit: number;
+    leaseSeconds: number;
+  }): Promise<DurableJob[]>;
+  completeJob(input: { id: string; workerId: string; result: unknown }): Promise<boolean>;
+  failJob(input: {
+    id: string;
+    workerId: string;
+    error: string;
+    retryAt?: Date;
+  }): Promise<"queued" | "failed" | null>;
   close(): Promise<void>;
 }

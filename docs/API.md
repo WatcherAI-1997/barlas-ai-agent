@@ -22,6 +22,11 @@ Send `Authorization: Bearer <BARLAS_API_TOKEN>`.
 - `POST /v1/jobs` — persist a durable task for immediate or scheduled work.
 - `GET /v1/jobs` — list a user's durable tasks.
 
+An isolated background run uses `jobType: "agent.run"` and accepts an `input`
+with `objective`, optional bounded `context`, and `taskClass` (`fast`, `deep`,
+or `private`). The worker leases jobs with PostgreSQL row locking, applies
+bounded exponential retries, and records the result or terminal error.
+
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.
 
@@ -37,4 +42,4 @@ configured specifically for Barlas AI Agent.
 Read-only tools may execute immediately. Write, external, and destructive tools
 are persisted as approval requests and cannot execute until the same user
 explicitly approves them. Requests, decisions, executions, and durable job
-creation are written to a separate audit log.
+creation, retries, completion, and failure are written to a separate audit log.

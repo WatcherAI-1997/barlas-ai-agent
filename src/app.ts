@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import type { ModelProvider } from "./core/models.js";
+import { agentJobSchema } from "./jobs/agent-handler.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
 
@@ -63,8 +64,8 @@ const approvalDecisionSchema = z.object({
 
 const createJobSchema = z.object({
   userId: z.string().min(1).max(128),
-  jobType: z.string().min(1).max(128),
-  input: z.unknown(),
+  jobType: z.literal("agent.run"),
+  input: agentJobSchema,
   scheduledFor: z.string().datetime().optional(),
 });
 

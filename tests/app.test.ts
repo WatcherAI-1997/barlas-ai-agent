@@ -61,9 +61,14 @@ function dependencies() {
       input: input.jobInput,
       status: "queued" as const,
       scheduledFor: input.scheduledFor.toISOString(),
+      attempts: 0,
+      maxAttempts: 3,
       createdAt: "2026-10-16T00:00:00.000Z",
     })),
     listJobs: vi.fn(async () => []),
+    claimJobs: vi.fn(async () => []),
+    completeJob: vi.fn(async () => true),
+    failJob: vi.fn(async () => "failed" as const),
     close: vi.fn(async () => undefined),
   };
 
@@ -172,8 +177,8 @@ describe("Barlas AI Agent API", () => {
       headers: { authorization: `Bearer ${apiToken}` },
       payload: {
         userId: "user-1",
-        jobType: "research",
-        input: { topic: "AI agents" },
+        jobType: "agent.run",
+        input: { objective: "Research AI agents" },
       },
     });
 

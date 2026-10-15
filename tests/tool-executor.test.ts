@@ -35,6 +35,9 @@ function store(): AgentStore {
       throw new Error("not used");
     }),
     listJobs: vi.fn(async () => []),
+    claimJobs: vi.fn(async () => []),
+    completeJob: vi.fn(async () => true),
+    failJob: vi.fn(async () => "failed" as const),
     close: vi.fn(async () => undefined),
   };
 }

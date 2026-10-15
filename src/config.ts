@@ -17,6 +17,10 @@ const configSchema = z.object({
   PRIVATE_MODEL_API_KEY: z.string().min(1).optional(),
   TELEGRAM_BOT_TOKEN: z.string().min(20).optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().min(32).optional(),
+  JOB_WORKER_ENABLED: z.stringbool().default(true),
+  JOB_WORKER_POLL_MS: z.coerce.number().int().min(100).max(60_000).default(1_000),
+  JOB_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(32).default(4),
+  JOB_LEASE_SECONDS: z.coerce.number().int().min(30).max(3_600).default(300),
 }).superRefine((config, context) => {
   const telegramFields = [config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_WEBHOOK_SECRET];
   if (telegramFields.some(Boolean) && !telegramFields.every(Boolean)) {

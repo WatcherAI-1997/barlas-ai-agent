@@ -225,11 +225,16 @@ export class Database implements AgentStore {
       input: unknown;
       status: DurableJob["status"];
       scheduled_for: Date;
+      attempts: number;
+      max_attempts: number;
+      result: unknown | null;
+      error: string | null;
       created_at: Date;
     }>(
       `insert into jobs (user_id, job_type, input, scheduled_for)
        values ($1, $2, $3::jsonb, $4)
-       returning id, user_id, job_type, input, status, scheduled_for, created_at`,
+       returning id, user_id, job_type, input, status, scheduled_for, attempts,
+                 max_attempts, result, error, created_at`,
       [input.userId, input.jobType, JSON.stringify(input.jobInput), input.scheduledFor],
     );
     const row = result.rows[0];
@@ -245,14 +250,88 @@ export class Database implements AgentStore {
       input: unknown;
       status: DurableJob["status"];
       scheduled_for: Date;
+      attempts: number;
+      max_attempts: number;
+      result: unknown | null;
+      error: string | null;
       created_at: Date;
     }>(
-      `select id, user_id, job_type, input, status, scheduled_for, created_at
+      `select id, user_id, job_type, input, status, scheduled_for, attempts,
+              max_attempts, result, error, created_at
        from jobs where user_id = $1
        order by created_at desc limit $2`,
       [userId, limit],
     );
     return result.rows.map((row) => this.mapJob(row));
+  }
+
+  async claimJobs(input: {
+    workerId: string;
+    limit: number;
+    leaseSeconds: number;
+  }): Promise<DurableJob[]> {
+    const result = await this.pool.query<JobRow>(
+      `with exhausted as (
+         update jobs
+         set status = 'failed', error = 'Worker lease expired after maximum attempts',
+             worker_id = null, locked_at = null, updated_at = now()
+         where status = 'running'
+           and locked_at < now() - make_interval(secs => $3)
+           and attempts >= max_attempts
+         returning id
+       ), candidates as (
+         select id
+         from jobs
+         where (
+           (status = 'queued' and scheduled_for <= now())
+           or (status = 'running' and locked_at < now() - make_interval(secs => $3))
+         )
+         and attempts < max_attempts
+         order by scheduled_for, created_at
+         for update skip locked
+         limit $2
+       )
+       update jobs as job
+       set status = 'running', worker_id = $1, locked_at = now(),
+           attempts = job.attempts + 1, updated_at = now(), error = null
+       from candidates
+       where job.id = candidates.id
+       returning job.id, job.user_id, job.job_type, job.input, job.status,
+                 job.scheduled_for, job.attempts, job.max_attempts, job.result,
+                 job.error, job.created_at`,
+      [input.workerId, input.limit, input.leaseSeconds],
+    );
+    return result.rows.map((row) => this.mapJob(row));
+  }
+
+  async completeJob(input: { id: string; workerId: string; result: unknown }): Promise<boolean> {
+    const result = await this.pool.query(
+      `update jobs
+       set status = 'completed', result = $3::jsonb, error = null,
+           worker_id = null, locked_at = null, updated_at = now()
+       where id = $1 and worker_id = $2 and status = 'running'`,
+      [input.id, input.workerId, JSON.stringify(input.result ?? null)],
+    );
+    return result.rowCount === 1;
+  }
+
+  async failJob(input: {
+    id: string;
+    workerId: string;
+    error: string;
+    retryAt?: Date;
+  }): Promise<"queued" | "failed" | null> {
+    const result = await this.pool.query<{ status: "queued" | "failed" }>(
+      `update jobs
+       set status = case when attempts < max_attempts and $4::timestamptz is not null
+                         then 'queued' else 'failed' end,
+           scheduled_for = coalesce($4::timestamptz, scheduled_for),
+           error = $3, worker_id = null, locked_at = null, updated_at = now()
+       where id = $1 and worker_id = $2 and status = 'running'
+       returning status`,
+      [input.id, input.workerId, input.error, input.retryAt ?? null],
+    );
+    return result.rows[0]?.status ?? null;
   }
 
   private mapApproval(row: {
@@ -277,23 +356,34 @@ export class Database implements AgentStore {
     };
   }
 
-  private mapJob(row: {
-    id: string;
-    user_id: string;
-    job_type: string;
-    input: unknown;
-    status: DurableJob["status"];
-    scheduled_for: Date;
-    created_at: Date;
-  }): DurableJob {
-    return {
+  private mapJob(row: JobRow): DurableJob {
+    const job: DurableJob = {
       id: row.id,
       userId: row.user_id,
       jobType: row.job_type,
       input: row.input,
       status: row.status,
       scheduledFor: row.scheduled_for.toISOString(),
+      attempts: row.attempts,
+      maxAttempts: row.max_attempts,
       createdAt: row.created_at.toISOString(),
     };
+    if (row.result !== null) job.result = row.result;
+    if (row.error !== null) job.error = row.error;
+    return job;
   }
+}
+
+interface JobRow {
+  id: string;
+  user_id: string;
+  job_type: string;
+  input: unknown;
+  status: DurableJob["status"];
+  scheduled_for: Date;
+  attempts: number;
+  max_attempts: number;
+  result: unknown | null;
+  error: string | null;
+  created_at: Date;
 }
