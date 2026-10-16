@@ -25,11 +25,10 @@ Options:
   -h, --help            Show this help
 
 Non-interactive required variables:
-  BARLAS_DOMAIN, OWNER_EMAIL, OPENAI_OAUTH_CLIENT_ID, MODEL_NAME, MODEL_API_KEY
+  BARLAS_DOMAIN, OWNER_EMAIL, OWNER_PASSWORD, MODEL_NAME, MODEL_API_KEY
 
 Optional variables include DEEP_MODEL_NAME, VISION_MODEL, EMBEDDING_MODEL,
-OWNER_LANGUAGE, OPENAI_OAUTH_CLIENT_SECRET,
-TELEGRAM_BOT_TOKEN, and port/model settings.
+OWNER_DISPLAY_NAME, OWNER_LANGUAGE, TELEGRAM_BOT_TOKEN, and port/model settings.
 EOF
 }
 
@@ -136,7 +135,7 @@ docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required (d
 if [[ -e "$ENV_FILE" ]]; then
   [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "Environment path must be a regular, non-symlink file: $ENV_FILE"
   chmod 600 -- "$ENV_FILE"
-  if grep -Eq 'replace-with-|oaiapp_replace|agent\.example\.com|owner@example\.com' "$ENV_FILE"; then
+  if grep -Eq 'replace-with-|agent\.example\.com|owner@example\.com' "$ENV_FILE"; then
     fail "Existing environment file still contains placeholders: $ENV_FILE"
   fi
   ok "Using existing protected configuration: $ENV_FILE"
@@ -146,10 +145,8 @@ else
   prompt BARLAS_HTTP_PORT "Host HTTP port" "18080"
   prompt BARLAS_HTTPS_PORT "Host HTTPS port" "18443"
   prompt OWNER_EMAIL "First owner email"
+  prompt OWNER_DISPLAY_NAME "First owner display name" "Barlas Owner"
   prompt OWNER_LANGUAGE "Owner language code; blank means choose on first login" ""
-  prompt OPENAI_OAUTH_CLIENT_ID "Sign in with ChatGPT client ID (oaiapp_...)"
-  prompt OPENAI_OAUTH_CLIENT_SECRET "OAuth client secret; blank for a public PKCE client" "" true
-  prompt OPENAI_OAUTH_REDIRECT_URI "Exact registered OAuth callback" "https://${BARLAS_DOMAIN:-}/auth/openai/callback"
   prompt MODEL_PROVIDER "Model provider" "openai"
   prompt MODEL_NAME "Fast/default model name"
   prompt DEEP_MODEL_NAME "Deep model name" "${MODEL_NAME:-}"
@@ -158,6 +155,7 @@ else
   prompt SPEECH_MODEL "Speech model" "gpt-4o-mini-tts"
   prompt EMBEDDING_MODEL "Embedding model; blank disables semantic embeddings" ""
   prompt MODEL_API_KEY "Dedicated model API key" "" true
+  prompt OWNER_PASSWORD "First owner password (12+ characters)" "" true
   prompt TELEGRAM_BOT_TOKEN "Dedicated Telegram bot token; blank disables Telegram" "" true
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
     prompt TELEGRAM_WEBHOOK_SECRET "Telegram webhook secret; blank generates one" "" true
@@ -165,7 +163,7 @@ else
     TELEGRAM_WEBHOOK_SECRET=""
   fi
 
-  for variable in BARLAS_DOMAIN BARLAS_HTTP_PORT BARLAS_HTTPS_PORT OWNER_EMAIL OWNER_LANGUAGE OPENAI_OAUTH_CLIENT_ID OPENAI_OAUTH_CLIENT_SECRET OPENAI_OAUTH_REDIRECT_URI MODEL_PROVIDER MODEL_NAME DEEP_MODEL_NAME VISION_MODEL TRANSCRIPTION_MODEL SPEECH_MODEL EMBEDDING_MODEL MODEL_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET; do
+  for variable in BARLAS_DOMAIN BARLAS_HTTP_PORT BARLAS_HTTPS_PORT OWNER_EMAIL OWNER_DISPLAY_NAME OWNER_LANGUAGE MODEL_PROVIDER MODEL_NAME DEEP_MODEL_NAME VISION_MODEL TRANSCRIPTION_MODEL SPEECH_MODEL EMBEDDING_MODEL MODEL_API_KEY OWNER_PASSWORD TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET; do
     require_single_line "$variable"
   done
 
@@ -174,15 +172,13 @@ else
   [[ "$BARLAS_DOMAIN" != *.example.com ]] || fail "Replace the example domain with the real hostname"
   require_value OWNER_EMAIL "Owner email"
   [[ "$OWNER_EMAIL" == *@*.* ]] || fail "Owner email is invalid"
-  require_value OPENAI_OAUTH_CLIENT_ID "Sign in with ChatGPT client ID"
-  [[ "$OPENAI_OAUTH_CLIENT_ID" == oaiapp_* ]] || fail "OAuth client ID must start with oaiapp_"
-  require_value OPENAI_OAUTH_REDIRECT_URI "OAuth callback URL"
-  [[ "$OPENAI_OAUTH_REDIRECT_URI" == "https://${BARLAS_DOMAIN}/auth/openai/callback" ]] || fail "OAuth callback must exactly match https://${BARLAS_DOMAIN}/auth/openai/callback"
   if [[ -n "$OWNER_LANGUAGE" && " $SUPPORTED_LANGUAGE_CODES " != *" $OWNER_LANGUAGE "* ]]; then
     fail "Owner language is unsupported; use one of: $SUPPORTED_LANGUAGE_CODES"
   fi
   require_value MODEL_NAME "Fast/default model name"
   require_value MODEL_API_KEY "Model API key"
+  require_value OWNER_PASSWORD "Owner password"
+  [[ ${#OWNER_PASSWORD} -ge 12 ]] || fail "Owner password must contain at least 12 characters"
   [[ "$MODEL_PROVIDER" == "openai" ]] || fail "This release supports the openai-compatible provider adapter"
   [[ "$BARLAS_HTTP_PORT" =~ ^[0-9]+$ && "$BARLAS_HTTPS_PORT" =~ ^[0-9]+$ ]] || fail "Ports must be numeric"
   ((BARLAS_HTTP_PORT >= 1 && BARLAS_HTTP_PORT <= 65535 && BARLAS_HTTPS_PORT >= 1 && BARLAS_HTTPS_PORT <= 65535)) || fail "Ports must be between 1 and 65535"
@@ -216,10 +212,9 @@ else
   write_setting CONNECTOR_VAULT_KEY "$CONNECTOR_VAULT_KEY"
   write_setting CONNECTOR_VAULT_KEY_VERSION "1"
   write_setting OWNER_EMAIL "$OWNER_EMAIL"
+  write_setting OWNER_PASSWORD "$OWNER_PASSWORD"
+  write_setting OWNER_DISPLAY_NAME "$OWNER_DISPLAY_NAME"
   write_setting OWNER_LANGUAGE "$OWNER_LANGUAGE"
-  write_setting OPENAI_OAUTH_CLIENT_ID "$OPENAI_OAUTH_CLIENT_ID"
-  write_setting OPENAI_OAUTH_CLIENT_SECRET "$OPENAI_OAUTH_CLIENT_SECRET"
-  write_setting OPENAI_OAUTH_REDIRECT_URI "$OPENAI_OAUTH_REDIRECT_URI"
   write_setting BROWSER_WS_ENDPOINT "ws://browser:3000/"
   write_setting SANDBOX_SOCKET_PATH "/run/barlas-sandbox/sandbox.sock"
   write_setting SANDBOX_SHARED_TOKEN "$SANDBOX_SHARED_TOKEN"

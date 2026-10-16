@@ -10,7 +10,7 @@
 
 <p align="center">
   <img alt="Status: Private Alpha" src="https://img.shields.io/badge/STATUS-PRIVATE_ALPHA-E10600?style=for-the-badge&labelColor=090909">
-  <img alt="Tests: 127 passing" src="https://img.shields.io/badge/TESTS-127_PASSING-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
+  <img alt="Tests: 125 passing" src="https://img.shields.io/badge/TESTS-125_PASSING-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
   <img alt="Languages: 38" src="https://img.shields.io/badge/LANGUAGES-38-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
   <img alt="Runtime: Docker" src="https://img.shields.io/badge/RUNTIME-DOCKER-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
 </p>
@@ -93,10 +93,6 @@ The guided installer checks prerequisites, asks for deployment-specific values,
 generates independent cryptographic secrets, protects them with mode `0600`,
 validates the entire production stack, starts it, and runs diagnostics.
 
-Human access is passwordless: the installer configures the official **Sign in
-with ChatGPT** OAuth/OIDC flow with PKCE. The first verified OpenAI account must
-match the configured owner email; all other users are explicitly invited.
-
 ```bash
 # Prepare and validate without starting anything
 ./install.sh --prepare-only
@@ -106,7 +102,7 @@ match the configured owner email; all other users are explicitly invited.
 ```
 
 > [!IMPORTANT]
-> Never paste production secrets or tokens into chat. Enter them directly on
+> Never paste production passwords or tokens into chat. Enter them directly on
 > the target server. Barlas does not import credentials or data from another
 > agent installation.
 
@@ -136,7 +132,7 @@ See the [security policy](docs/SECURITY.md),
 
 ## Current state
 
-**Private alpha · 127 automated tests · 20 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
+**Private alpha · 125 automated tests · 19 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
 
 The functional agent core, web cabinet, Telegram channel, project system,
 recurring tasks, multimodal tools, sandbox, browser, MCP, encrypted connectors,

@@ -11,14 +11,12 @@ directly to public interfaces.
 
 ## Authenticated endpoints
 
-Automation sends `Authorization: Bearer <access token>` with the dedicated
-`BARLAS_API_TOKEN`. Human users authenticate through the official Sign in with
-ChatGPT OAuth 2.0 Authorization Code + PKCE flow. The browser receives only a
-Secure, HttpOnly, SameSite=Lax Barlas session cookie; its SHA-256 hash is stored
-server-side.
+Send `Authorization: Bearer <access token>`. Automation may use the dedicated
+`BARLAS_API_TOKEN`. Human users authenticate through `POST /auth/login` and
+receive an opaque expiring session token whose SHA-256 hash is stored server-side.
 
-- `GET /auth/openai` — create a one-time PKCE transaction and redirect to OpenAI.
-- `GET /auth/openai/callback` — verify state, nonce, code exchange, issuer, audience, signature, subject, and verified email; then create the local session.
+- `POST /auth/login` — exchange email/password for an expiring session.
+- `POST /auth/password-reset` — consume an owner-issued one-time code and set a new password.
 - `GET /v1/me` — return the current account and authentication type.
 - `POST /v1/auth/logout` — revoke the current user session.
 - `GET /v1/me/telegram` — return the current account's Telegram link.
@@ -26,6 +24,7 @@ server-side.
 - `DELETE /v1/me/telegram` — remove the account's Telegram link.
 - `GET /v1/admin/users` — list accounts; owner only.
 - `POST /v1/admin/users` — create an owner or user account; owner only.
+- `POST /v1/admin/users/:id/password-reset` — issue a 15-minute recovery code; owner only.
 - `GET /v1/organizations` — list organizations for the current signed-in account.
 - `POST /v1/organizations` — create an organization and its first owner membership.
 - `GET /v1/organizations/:id/members` — list members for an organization member.
@@ -216,20 +215,17 @@ tool inputs, prompts, file contents, and secrets are not copied into traces.
 
 ## Account isolation
 
-There are no Barlas human passwords to store, reset, or expose. External
-identities are keyed by OpenAI issuer, OAuth client, and stable subject. Raw
-Barlas session tokens are never persisted. A normal `user` session may submit only its own account
+Passwords use scrypt with a unique random salt. Raw session tokens are returned
+once and never persisted. A normal `user` session may submit only its own account
 ID to chat, memory, tools, approvals, jobs, and trace endpoints. Attempts to
 substitute another ID return HTTP 403. Owners and the service API token retain
-administrative scope. OAuth transactions are single-use, expire after ten
-minutes, and are bound to both a hashed state and a separate HttpOnly browser
-cookie.
+administrative scope. Login attempts are bounded per source address.
 
-The initial owner is created only after a verified OpenAI identity logs in with
-the exact configured `OWNER_EMAIL`. Later accounts must be invited by an owner
-before their first OpenAI login. If `OWNER_LANGUAGE` is omitted, the owner must
-choose a language at first login. Authentication configuration is never written
-to source control.
+The optional initial owner is created from `OWNER_EMAIL`, `OWNER_PASSWORD`,
+`OWNER_DISPLAY_NAME`, and optional `OWNER_LANGUAGE`; both email and password
+must be supplied together. If `OWNER_LANGUAGE` is omitted, the owner must choose
+a language at first login. The
+bootstrap is idempotent and never writes credentials to source control.
 
 ## Language preferences
 

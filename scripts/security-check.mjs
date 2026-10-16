@@ -49,7 +49,6 @@ for (const required of [
   "migrations/016_skills.sql",
   "migrations/018_projects.sql",
   "migrations/019_project_execution.sql",
-  "migrations/020_openai_oidc.sql",
   "install.sh",
   "scripts/doctor.sh",
   "docs/INSTALLATION.md",
@@ -68,19 +67,6 @@ for (const required of ["barlas-ai-agent-github-hero.png", "Quick install", "Sec
 }
 for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "--prepare-only", "scripts/doctor.sh", "never prints them"]) {
   if (!installer.includes(required)) throw new Error(`Installer safety/usability boundary is missing: ${required}`);
-}
-const oidc = await readFile("src/auth/openai-oidc.ts", "utf8");
-const oidcMigration = await readFile("migrations/020_openai_oidc.sql", "utf8");
-const authenticationAppSource = await readFile("src/app.ts", "utf8");
-for (const required of ["code_challenge_method", "S256", "nonce", "jwtVerify", "requiredClaims", "email_verified", "AbortSignal.timeout", 'redirect: "error"']) {
-  if (!oidc.includes(required)) throw new Error(`Passwordless OIDC boundary is missing: ${required}`);
-}
-for (const required of ["external_identities", "oidc_transactions", "delete from user_sessions", "column_name = 'password_hash'", "drop column password_hash", "drop column password_salt", "drop table if exists password_reset_codes"]) {
-  if (!oidcMigration.includes(required)) throw new Error(`Password-removal migration is missing: ${required}`);
-}
-if (authenticationAppSource.includes('/auth/login') || authenticationAppSource.includes('password-reset')) throw new Error("Legacy password authentication route remains enabled");
-for (const required of ["HttpOnly", "SameSite=Lax", "Cross-origin session request is not allowed", "barlas_session", "barlas_oidc"]) {
-  if (!authenticationAppSource.includes(required)) throw new Error(`Browser session boundary is missing: ${required}`);
 }
 for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {
   if (!doctor.includes(required)) throw new Error(`Doctor safety/usability boundary is missing: ${required}`);

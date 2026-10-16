@@ -18,7 +18,6 @@ import {
 import type { ModelProvider } from "./core/models.js";
 import type { AgentLoop } from "./core/agent-loop.js";
 import type { TelegramLinkService } from "./auth/telegram-link.js";
-import type { OpenAiOidcService } from "./auth/openai-oidc.js";
 import type { GitHubConnector } from "./connectors/github.js";
 import type { GoogleConnector } from "./connectors/google.js";
 import { connectorProviders, type ConnectorService } from "./connectors/vault.js";
@@ -224,6 +223,11 @@ const organizationMemberSchema = z.object({
 const organizationPlanSchema = z.object({
   plan: z.enum(["private_alpha", "team", "business"]),
 }).strict();
+const accountParamsSchema = z.object({ id: z.string().uuid() });
+const passwordResetSchema = z.object({
+  code: z.string().min(20).max(256),
+  password: z.string().min(12).max(256),
+}).strict();
 const skillParamsSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9.-]{2,63}$/u),
   version: z.string().regex(/^\d+\.\d+\.\d+$/u),
@@ -254,9 +258,15 @@ const scheduleCreateSchema = z.object({
   deliveryChannel: z.enum(["web", "telegram"]).default("web"),
 }).strict();
 
+const loginSchema = z.object({
+  email: z.string().email().max(254),
+  password: z.string().min(1).max(256),
+}).strict();
+
 const createUserSchema = z.object({
   email: z.string().min(3).max(254),
   displayName: z.string().min(2).max(100),
+  password: z.string().min(12).max(256),
   role: z.enum(["owner", "user"]).default("user"),
   languageCode: z.string()
     .refine(isSupportedLanguage, "Unsupported language")
@@ -289,11 +299,8 @@ export interface AppDependencies {
   skillManager?: Pick<SkillManager, "install" | "evaluate" | "activate">;
   governance?: RuntimeGovernance;
   authService?: Pick<AuthService,
-    "authenticate" | "logout" | "listAccounts" | "createAccount" | "getAccount" | "setLanguage"
-  > & Partial<Pick<AuthService, "completeExternalLogin">>;
-  openAiOidc?: Pick<OpenAiOidcService, "begin" | "complete">;
-  ownerEmail?: string;
-  oauthRedirectUri?: string;
+    "authenticate" | "login" | "logout" | "listAccounts" | "createAccount" | "issuePasswordReset" | "resetPassword" | "getAccount" | "setLanguage"
+  >;
   telegramLinks?: Pick<TelegramLinkService, "createCode" | "claim" | "get" | "resolve" | "unlink">;
   connectors?: Pick<ConnectorService, "save" | "list" | "delete">;
   githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
@@ -349,7 +356,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("X-Frame-Options", "DENY");
     reply.header("Referrer-Policy", "no-referrer");
-    if (request.url.startsWith("/v1/") || request.url.startsWith("/auth/")) {
+    if (request.url.startsWith("/v1/") || request.url === "/auth/login") {
       reply.header("Cache-Control", "no-store");
     }
     reply.header(
@@ -384,6 +391,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   const principals = new WeakMap<FastifyRequest, Principal>();
+  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
   app.get("/health", async () => ({
     name: "Barlas AI Agent",
@@ -409,26 +417,16 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       principals.set(request, { userId: "service", role: "owner", authType: "service" });
       return;
     }
-    const cookieToken = readCookie(request.headers.cookie, "barlas_session") || "";
-    const sessionToken = suppliedToken || cookieToken;
-    const account = dependencies.authService && sessionToken
-      ? await dependencies.authService.authenticate(sessionToken)
+    const account = dependencies.authService && suppliedToken
+      ? await dependencies.authService.authenticate(suppliedToken)
       : null;
     if (!account) return reply.unauthorized("Invalid or expired access token");
-    if (!suppliedToken && cookieToken && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
-      const origin = request.headers.origin;
-      try {
-        if (!origin || new URL(origin).host !== request.headers.host) throw new Error();
-      } catch {
-        return reply.forbidden("Cross-origin session request is not allowed");
-      }
-    }
     principals.set(request, {
       userId: account.id,
       role: account.role,
       authType: "session",
       account,
-      token: sessionToken,
+      token: suppliedToken,
     });
   });
 
@@ -458,31 +456,39 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     return principal;
   };
 
-  app.get("/auth/openai", async (_request, reply) => {
-    if (!dependencies.openAiOidc || !dependencies.oauthRedirectUri) return reply.serviceUnavailable("Sign in with ChatGPT is not configured");
-    const login = await dependencies.openAiOidc.begin(dependencies.oauthRedirectUri);
-    reply.header("Set-Cookie", cookie("barlas_oidc", login.browserToken, 600, dependencies.oauthRedirectUri.startsWith("https:"), "/auth/openai/callback"));
-    return reply.redirect(login.authorizationUrl);
+  app.post("/auth/login", async (request, reply) => {
+    if (!dependencies.authService) return reply.notFound();
+    const parsed = loginSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid login request");
+    const now = Date.now();
+    for (const [key, value] of loginAttempts) {
+      if (value.resetAt <= now) loginAttempts.delete(key);
+    }
+    if (loginAttempts.size >= 10_000 && !loginAttempts.has(request.ip)) {
+      const oldest = loginAttempts.keys().next().value as string | undefined;
+      if (oldest) loginAttempts.delete(oldest);
+    }
+    const attempts = loginAttempts.get(request.ip);
+    if (attempts && attempts.resetAt > now && attempts.count >= 5) {
+      return reply.code(429).send({ error: "Too many login attempts. Try again later." });
+    }
+    try {
+      const session = await dependencies.authService.login(parsed.data.email, parsed.data.password);
+      loginAttempts.delete(request.ip);
+      return session;
+    } catch (error) {
+      const current = attempts && attempts.resetAt > now ? attempts : { count: 0, resetAt: now + 15 * 60_000 };
+      loginAttempts.set(request.ip, { ...current, count: current.count + 1 });
+      throw error;
+    }
   });
 
-  app.get("/auth/openai/callback", async (request, reply) => {
-    if (!dependencies.openAiOidc || !dependencies.authService?.completeExternalLogin) return reply.notFound();
-    const query = z.object({ state: z.string().min(20).max(256), code: z.string().min(10).max(4096) }).safeParse(request.query);
-    const browserToken = readCookie(request.headers.cookie, "barlas_oidc");
-    if (!query.success || !browserToken) throw new AuthenticationError("Sign-in callback could not be verified");
-    const identity = await dependencies.openAiOidc.complete({ ...query.data, browserToken });
-    const session = await dependencies.authService.completeExternalLogin(identity, dependencies.ownerEmail);
-    await dependencies.database.appendAudit({
-      userId: session.account.id,
-      eventType: "account.login",
-      resourceType: "account",
-      resourceId: session.account.id,
-      details: { provider: "openai" },
-    });
-    const secure = dependencies.oauthRedirectUri?.startsWith("https:") ?? false;
-    const sessionMaxAge = Math.max(1, Math.floor((Date.parse(session.expiresAt) - Date.now()) / 1_000));
-    reply.header("Set-Cookie", [cookie("barlas_session", session.token, sessionMaxAge, secure), clearCookie("barlas_oidc", secure, "/auth/openai/callback")]);
-    return reply.redirect("/ui/index.html");
+  app.post("/auth/password-reset", async (request, reply) => {
+    if (!dependencies.authService) return reply.notFound();
+    const parsed = passwordResetSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid password reset request");
+    await dependencies.authService.resetPassword(parsed.data.code, parsed.data.password);
+    return { reset: true };
   });
 
   app.get("/v1/me", async (request) => {
@@ -733,14 +739,6 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       return reply.badRequest("Session logout requires a user access token");
     }
     await dependencies.authService.logout(principal.token);
-    await dependencies.database.appendAudit({
-      userId: principal.userId,
-      eventType: "account.logout",
-      resourceType: "account",
-      resourceId: principal.userId,
-      details: {},
-    });
-    reply.header("Set-Cookie", clearCookie("barlas_session", dependencies.oauthRedirectUri?.startsWith("https:") ?? false));
     return { ok: true };
   });
 
@@ -776,6 +774,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const user = await dependencies.authService.createAccount({
       email: parsed.data.email,
       displayName: parsed.data.displayName,
+      password: parsed.data.password,
       role: parsed.data.role,
       ...(parsed.data.languageCode ? { languageCode: parsed.data.languageCode } : {}),
     });
@@ -789,6 +788,21 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     return reply.code(201).send({ user });
   });
 
+  app.post("/v1/admin/users/:id/password-reset", async (request, reply) => {
+    const principal = principalFor(request);
+    if (principal.role !== "owner" || !dependencies.authService) return reply.forbidden();
+    const params = accountParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.badRequest("Invalid account request");
+    const reset = await dependencies.authService.issuePasswordReset(params.data.id);
+    await dependencies.database.appendAudit({
+      userId: principal.userId,
+      eventType: "account.password_reset.issued",
+      resourceType: "account",
+      resourceId: params.data.id,
+      details: { expiresAt: reset.expiresAt },
+    });
+    return reset;
+  });
 
   app.get("/v1/organizations", async (request, reply) => {
     const principal = principalFor(request);
@@ -1676,21 +1690,4 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   return app;
-}
-
-function readCookie(header: string | undefined, name: string): string | undefined {
-  if (!header) return undefined;
-  for (const part of header.split(";")) {
-    const [key, ...value] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
-  }
-  return undefined;
-}
-
-function cookie(name: string, value: string, maxAge: number, secure: boolean, path = "/"): string {
-  return `${name}=${encodeURIComponent(value)}; Path=${path}; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
-}
-
-function clearCookie(name: string, secure: boolean, path = "/"): string {
-  return `${name}=; Path=${path}; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
 }
