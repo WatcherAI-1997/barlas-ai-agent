@@ -71,6 +71,11 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `GET /v1/integrations/google-calendar/events` — list upcoming primary-calendar events.
 - `POST /v1/media/upload?userId=...&path=media%2Fphoto.png` — upload one
   multipart media file into the user's isolated workspace.
+- `GET /v1/files?userId=...&path=.` — list an owned workspace directory.
+- `POST /v1/files/upload?userId=...&path=projects%2Finput.txt&overwrite=false`
+  — upload one file; replacement requires `overwrite=true` explicitly.
+- `GET /v1/files/download?userId=...&path=projects%2Freport.md` — download an
+  owned regular file as an attachment.
 
 An isolated background run uses `jobType: "agent.run"` and accepts an `input`
 with `objective`, optional bounded `context`, and `taskClass` (`fast`, `deep`,
@@ -161,6 +166,17 @@ downtime. Pausing or disabling a schedule never cancels an already queued run.
 - Configure `VISION_MODEL` (defaults to `MODEL_NAME`), `TRANSCRIPTION_MODEL`,
   and `SPEECH_MODEL`. Provider support and billing depend on the dedicated model
   account; Barlas never silently falls back to another provider for a media call.
+
+## Workspace file cabinet
+
+- The authenticated file cabinet exposes only the requesting user's workspace.
+  Paths retain traversal, symlink, regular-file, ownership, and 10 MB limits.
+- Uploads never replace an existing file unless the caller explicitly supplies
+  `overwrite=true`. Downloads use `application/octet-stream` and attachment
+  disposition so uploaded code or active content is not rendered by the cabinet.
+- Audit records contain path and byte count, never file contents. Uploading a
+  project file does not execute it; execution remains a separate approval-gated
+  sandbox action.
 
 ## Quotas and traces
 

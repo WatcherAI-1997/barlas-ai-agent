@@ -94,8 +94,9 @@ const subagentCoordinator = new SubagentCoordinator(modelProvider);
 const codeSandbox = config.SANDBOX_SOCKET_PATH && config.SANDBOX_SHARED_TOKEN
   ? new CodeSandboxClient(config.SANDBOX_SOCKET_PATH, config.SANDBOX_SHARED_TOKEN)
   : undefined;
+const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
 const mediaService = new MediaService(
-  new FileWorkspace(config.WORKSPACE_ROOT),
+  workspace,
   new OpenAIMediaModel({
     apiKey: config.MODEL_API_KEY,
     visionModel: config.VISION_MODEL ?? config.MODEL_NAME,
@@ -221,6 +222,7 @@ const app = await buildApp({
   memory,
   organizations,
   media: mediaService,
+  workspace,
   schedules,
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),
   webRoot: config.WEB_ROOT,

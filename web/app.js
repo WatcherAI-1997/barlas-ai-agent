@@ -210,6 +210,7 @@ async function loadPanel(name) {
   if (name === "runs") await loadRuns();
   if (name === "jobs") await loadJobs();
   if (name === "schedules") await loadSchedules();
+  if (name === "files") await loadFiles();
   if (name === "traces") renderList("#traces", (await api(`/v1/traces?userId=${encodeURIComponent(state.account.id)}`)).traces, (item) => card(item.operation, `${item.status} · ${new Date(item.createdAt).toLocaleString()}`, item.traceId));
   if (name === "skills") {
     await loadSkillOptions();
@@ -223,6 +224,65 @@ async function loadPanel(name) {
 
 function renderList(selector, items, renderer) { const root = $(selector); root.replaceChildren(...items.map(renderer)); }
 document.querySelectorAll("nav button[data-panel]").forEach((button) => button.addEventListener("click", () => loadPanel(button.dataset.panel).catch((error) => alert(error.message))));
+
+$("#file-upload").addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (file && !$("#file-upload-path").value) $("#file-upload-path").value = file.name;
+});
+
+$("#file-upload-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = $("#file-upload-status");
+  const file = $("#file-upload").files[0];
+  if (!file) return;
+  status.textContent = "Загрузка…";
+  try {
+    const formData = new FormData(); formData.append("file", file, file.name);
+    const query = new URLSearchParams({
+      userId: state.account.id,
+      path: $("#file-upload-path").value.trim(),
+      overwrite: String($("#file-overwrite").checked),
+    });
+    const data = await upload(`/v1/files/upload?${query}`, formData);
+    status.textContent = `Загружено: ${data.file.path} (${data.file.bytes} байт)`;
+    event.target.reset();
+    await loadFiles();
+  } catch (error) { status.textContent = `Ошибка: ${error.message}`; }
+});
+
+$("#file-path-form").addEventListener("submit", async (event) => { event.preventDefault(); await loadFiles(); });
+$("#file-up").addEventListener("click", async () => {
+  const parts = $("#file-path").value.split("/").filter((part) => part && part !== ".");
+  parts.pop(); $("#file-path").value = parts.join("/") || "."; await loadFiles();
+});
+
+async function downloadFile(path) {
+  const query = new URLSearchParams({ userId: state.account.id, path });
+  const headers = state.token ? { authorization: `Bearer ${state.token}` } : {};
+  const response = await fetch(`/v1/files/download?${query}`, { headers });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || body.message || `HTTP ${response.status}`);
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a"); link.href = url; link.download = path.split("/").at(-1) || "download";
+  document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+}
+
+async function loadFiles() {
+  const path = $("#file-path").value.trim() || "."; $("#file-path").value = path;
+  const query = new URLSearchParams({ userId: state.account.id, path });
+  const items = (await api(`/v1/files?${query}`)).files;
+  renderList("#files", items, (item) => {
+    const node = card(item.path, item.type === "directory" ? "Папка" : "Файл");
+    const button = document.createElement("button"); button.textContent = item.type === "directory" ? "Открыть" : "Скачать";
+    button.addEventListener("click", () => {
+      if (item.type === "directory") { $("#file-path").value = item.path; loadFiles().catch((error) => alert(error.message)); }
+      else downloadFile(item.path).catch((error) => alert(error.message));
+    });
+    node.append(button); return node;
+  });
+}
 
 function newConversation() {
   state.conversationId = null;

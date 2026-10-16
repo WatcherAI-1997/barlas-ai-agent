@@ -57,4 +57,12 @@ describe("Barlas AI Agent file workspace", () => {
     const entries = await import("node:fs/promises").then(({ readdir }) => readdir(root));
     await expect(readFile(join(root, entries[0] ?? "", "result.txt"), "utf8")).resolves.toBe("hello");
   });
+
+  it("requires explicit overwrite for direct uploads", async () => {
+    const files = await workspace();
+    await expect(files.writeUpload("user-a", "projects/input.txt", Buffer.from("first"))).resolves.toEqual({ path: "projects/input.txt", bytes: 5 });
+    await expect(files.writeUpload("user-a", "projects/input.txt", Buffer.from("second"))).rejects.toMatchObject({ code: "EEXIST" });
+    await expect(files.writeUpload("user-a", "projects/input.txt", Buffer.from("second"), true)).resolves.toEqual({ path: "projects/input.txt", bytes: 6 });
+    await expect(files.readBuffer("user-a", "projects/input.txt")).resolves.toMatchObject({ content: Buffer.from("second") });
+  });
 });

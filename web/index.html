@@ -54,6 +54,7 @@
           <button data-panel="runs">Запуски</button>
           <button data-panel="jobs">Задачи</button>
           <button data-panel="schedules">Расписания</button>
+          <button data-panel="files">Файлы</button>
           <button data-panel="traces">Трассировка</button>
           <button data-panel="skills">Навыки</button>
           <button data-panel="organizations">Организации</button>
@@ -109,6 +110,23 @@
           </form>
           <p id="schedule-error" class="error" role="alert"></p>
           <div id="schedules" class="grid"></div>
+        </section>
+        <section id="panel-files" class="panel hidden">
+          <h2>Файловый кабинет</h2>
+          <p class="meta">Личные файлы и результаты агента. Максимум 10 МБ; замена существующего файла требует явного разрешения.</p>
+          <form id="file-upload-form" class="inline-form">
+            <input id="file-upload" type="file" required>
+            <input id="file-upload-path" maxlength="1000" placeholder="Путь, например projects/report.md" required>
+            <label><input id="file-overwrite" type="checkbox"> Разрешить замену</label>
+            <button type="submit">Загрузить</button>
+          </form>
+          <p id="file-upload-status" class="meta" role="status"></p>
+          <form id="file-path-form" class="inline-form">
+            <input id="file-path" maxlength="1000" value="." aria-label="Текущая папка" required>
+            <button type="submit">Открыть</button>
+            <button id="file-up" type="button" class="secondary">На уровень выше</button>
+          </form>
+          <div id="files" class="grid"></div>
         </section>
         <section id="panel-traces" class="panel hidden"><h2>Трассировка</h2><div id="traces" class="grid"></div></section>
         <section id="panel-skills" class="panel hidden"><h2>Навыки</h2><div id="skills" class="grid"></div></section>

@@ -37,7 +37,7 @@
 
 ## Phase 3 — Product
 
-- Branded web application. *(authenticated cabinet foundation implemented)*
+- Branded web application. *(authenticated cabinet and isolated file manager implemented)*
 - Conversation history, approval inbox, and job controls. *(implemented)*
 - Multi-user organizations, roles, and billing foundations. *(organizations, owner/admin/member/viewer memberships, plan profiles, owner-led onboarding, and one-time account recovery implemented; payment processing pending)*
 - Connector catalog and deployment automation. *(encrypted per-user vault, GitHub branches/commits/PRs/issues, Drive text-file writes, Gmail drafts/send, Calendar event writes, and remote MCP Streamable HTTP tools implemented with mandatory approval; production OAuth credentials pending)*

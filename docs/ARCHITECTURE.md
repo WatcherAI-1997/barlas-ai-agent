@@ -41,6 +41,9 @@ autonomy.
   requested resource against the public-network policy before allowing it.
 - PDF/DOCX extraction and DOCX creation operate only on per-user workspace
   files with bounded input/output and no macros or active content execution.
+- The authenticated file cabinet lists, uploads, and downloads owned workspace
+  files. Upload replacement is explicit, downloads are attachment-only, and
+  file contents never enter audit details. Upload never implies execution.
 - Media uploads are limited to 10 MB and verified from binary signatures before
   storage. Vision, scanned-PDF analysis, transcription, and speech generation
   use owned workspace paths and remain external approval-gated model calls;

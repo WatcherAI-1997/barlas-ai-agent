@@ -3,7 +3,7 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 110 automated tests across 32 files pass.
+- 112 automated tests across 32 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -18,6 +18,8 @@
 - Media tests verify binary-signature/MIME/extension agreement, rejection of
   SVG and unknown content, per-user isolation, bounded upload, and external-risk
   registration for every vision, PDF, transcription, and speech tool.
+- File-cabinet tests verify authenticated listing, bounded upload, explicit-only
+  overwrite, attachment download, metadata-only audit, and workspace isolation.
 - The live agent evaluation suite validates scenario definitions and scores
   persisted statuses, tools, content-safe events, output constraints, steps,
   tokens, and cost without model self-grading. Credentialed baseline results

@@ -112,6 +112,14 @@ const mediaTools = await readFile("src/tools/media.ts", "utf8");
 for (const required of ["MAX_MEDIA_BYTES = 10_000_000", "detectMedia", "File extension does not match", "Unsupported or unrecognized", "workspace.readBuffer", "workspace.writeBuffer"]) {
   if (!mediaTools.includes(required)) throw new Error(`Media boundary is missing: ${required}`);
 }
+const fileWorkspace = await readFile("src/tools/file-workspace.ts", "utf8");
+const appSource = await readFile("src/app.ts", "utf8");
+for (const required of ["writeUpload", "constants.O_EXCL", "MAX_DOCUMENT_BYTES"]) {
+  if (!fileWorkspace.includes(required)) throw new Error(`Workspace upload boundary is missing: ${required}`);
+}
+for (const required of ["application/octet-stream", "Content-Disposition", "explicit overwrite is required"]) {
+  if (!appSource.includes(required)) throw new Error(`Workspace download/upload boundary is missing: ${required}`);
+}
 const evaluationRunner = await readFile("scripts/run-agent-evals.mjs", "utf8");
 if (evaluationRunner.includes("approved: true")) throw new Error("Agent evaluation must never auto-approve an action");
 for (const required of ["approved: false", "parseEvaluationScenarios", "BARLAS_EVAL_TOKEN"]) {

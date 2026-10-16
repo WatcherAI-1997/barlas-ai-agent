@@ -1,4 +1,5 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { basename } from "node:path";
 
 import sensible from "@fastify/sensible";
 import multipart from "@fastify/multipart";
@@ -40,6 +41,7 @@ import type { SkillManager } from "./skills/manager.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
 import { MAX_MEDIA_BYTES, type MediaService } from "./tools/media.js";
+import type { FileWorkspace } from "./tools/file-workspace.js";
 import type { ScheduleService } from "./schedules/service.js";
 
 const chatBodySchema = z.object({
@@ -110,6 +112,18 @@ const mediaUploadQuerySchema = z.object({
   userId: z.string().min(1).max(128),
   path: z.string().min(1).max(1_000),
 }).strict();
+const fileQuerySchema = z.object({
+  userId: z.string().min(1).max(128), path: z.string().min(1).max(1_000).default("."),
+}).strict();
+const fileUploadQuerySchema = fileQuerySchema.extend({ overwrite: z.enum(["true", "false"]).default("false") });
+
+function fileSystemCode(error: unknown): string | undefined {
+  return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
+}
+
+function isWorkspaceInputError(error: unknown): boolean {
+  return error instanceof Error && /^(Path must be relative|Path escapes|Unsafe workspace path|Only regular files|Uploaded file is empty|File exceeds)/u.test(error.message);
+}
 
 const approvalParamsSchema = z.object({ id: z.string().uuid() });
 const approvalDecisionSchema = z.object({
@@ -276,6 +290,7 @@ export interface AppDependencies {
   memory?: Pick<SemanticMemory, "remember" | "recall">;
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
   media?: Pick<MediaService, "saveUpload">;
+  workspace?: Pick<FileWorkspace, "list" | "readBuffer" | "writeUpload">;
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
@@ -516,6 +531,61 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       details: { path: stored.path, bytes: stored.bytes, kind: stored.kind, mimeType: stored.mimeType },
     });
     return reply.code(201).send({ media: stored });
+  });
+
+  app.get("/v1/files", async (request, reply) => {
+    if (!dependencies.workspace) return reply.notFound();
+    const query = fileQuerySchema.safeParse(request.query);
+    if (!query.success) return reply.badRequest("Invalid file list query");
+    try {
+      return { files: await dependencies.workspace.list(authorizeUser(request, query.data.userId), query.data.path) };
+    } catch (error) {
+      if (["ENOENT", "ENOTDIR"].includes(fileSystemCode(error) ?? "")) return reply.notFound("Workspace path was not found");
+      if (isWorkspaceInputError(error)) return reply.badRequest("Invalid workspace path");
+      throw error;
+    }
+  });
+
+  app.get("/v1/files/download", async (request, reply) => {
+    if (!dependencies.workspace) return reply.notFound();
+    const query = fileQuerySchema.safeParse(request.query);
+    if (!query.success || query.data.path === ".") return reply.badRequest("Invalid file download query");
+    const userId = authorizeUser(request, query.data.userId);
+    let file: Awaited<ReturnType<NonNullable<typeof dependencies.workspace>["readBuffer"]>>;
+    try {
+      file = await dependencies.workspace.readBuffer(userId, query.data.path, MAX_MEDIA_BYTES);
+    } catch (error) {
+      if (["ENOENT", "ENOTDIR", "EISDIR"].includes(fileSystemCode(error) ?? "")) return reply.notFound("Workspace file was not found");
+      if (isWorkspaceInputError(error)) return reply.badRequest("Invalid workspace file");
+      throw error;
+    }
+    const filename = basename(file.path).replace(/[\r\n"\\]/gu, "_");
+    await dependencies.database.appendAudit({ userId, eventType: "file.downloaded", resourceType: "workspace_file", resourceId: file.path, details: { path: file.path, bytes: file.content.byteLength } });
+    return reply
+      .header("Content-Type", "application/octet-stream")
+      .header("Content-Disposition", `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`)
+      .send(file.content);
+  });
+
+  app.post("/v1/files/upload", async (request, reply) => {
+    if (!dependencies.workspace) return reply.notFound();
+    const query = fileUploadQuerySchema.safeParse(request.query);
+    if (!query.success || query.data.path === ".") return reply.badRequest("Invalid file upload query");
+    const userId = authorizeUser(request, query.data.userId);
+    if (!request.isMultipart()) return reply.badRequest("Expected multipart file upload");
+    const part = await request.file();
+    if (!part) return reply.badRequest("File is required");
+    const content = await part.toBuffer();
+    if (part.file.truncated) return reply.payloadTooLarge("File exceeds the 10 MB limit");
+    try {
+      const stored = await dependencies.workspace.writeUpload(userId, query.data.path, content, query.data.overwrite === "true");
+      await dependencies.database.appendAudit({ userId, eventType: "file.uploaded", resourceType: "workspace_file", resourceId: stored.path, details: { path: stored.path, bytes: stored.bytes, overwritten: query.data.overwrite === "true" } });
+      return reply.code(201).send({ file: stored });
+    } catch (error) {
+      if (fileSystemCode(error) === "EEXIST") return reply.conflict("File already exists; explicit overwrite is required");
+      if (isWorkspaceInputError(error)) return reply.badRequest("Invalid workspace file");
+      throw error;
+    }
   });
 
   app.post("/v1/auth/logout", async (request, reply) => {

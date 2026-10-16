@@ -46,7 +46,8 @@ recovery, cancellation, an asynchronous lease worker, live progress, Telegram
 delivery, timezone-aware recurring schedules, approval buttons, and a content-safe step journal. It also includes optional SearXNG
 web search, a no-shell read-only terminal inspector,
 an isolated approval-gated JavaScript browser, PDF/DOCX extraction, Unicode
-DOCX creation, secure media uploads, vision/PDF analysis, audio transcription,
+DOCX creation, an authenticated personal file cabinet with safe upload/download,
+secure media uploads, vision/PDF analysis, audio transcription,
 speech generation, and an approval-gated offline Python/Node/Git/npm sandbox,
 encrypted GitHub/Drive/Gmail/Calendar connections with approval-gated writes,
 and SSRF-protected remote MCP Streamable HTTP tools,

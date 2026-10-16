@@ -646,6 +646,29 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("lists, uploads, and downloads only through the authenticated workspace", async () => {
+    const deps = dependencies();
+    const workspace = {
+      list: vi.fn(async () => [{ path: "projects/report.md", type: "file" as const }]),
+      writeUpload: vi.fn(async () => ({ path: "projects/report.md", bytes: 6 })),
+      readBuffer: vi.fn(async () => ({ path: "projects/report.md", content: Buffer.from("report") })),
+    };
+    const app = await buildApp({ apiToken, ...deps, workspace });
+    const auth = { authorization: `Bearer ${apiToken}` };
+    const listed = await app.inject({ method: "GET", url: "/v1/files?userId=user-1&path=projects", headers: auth });
+    const boundary = "barlas-file-boundary";
+    const uploaded = await app.inject({ method: "POST", url: "/v1/files/upload?userId=user-1&path=projects%2Freport.md&overwrite=false", headers: { ...auth, "content-type": `multipart/form-data; boundary=${boundary}` }, payload: Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="report.md"\r\nContent-Type: text/markdown\r\n\r\nreport\r\n--${boundary}--\r\n`) });
+    const downloaded = await app.inject({ method: "GET", url: "/v1/files/download?userId=user-1&path=projects%2Freport.md", headers: auth });
+    expect(listed.json()).toEqual({ files: [{ path: "projects/report.md", type: "file" }] });
+    expect(uploaded.statusCode).toBe(201);
+    expect(workspace.writeUpload).toHaveBeenCalledWith("user-1", "projects/report.md", Buffer.from("report"), false);
+    expect(downloaded.statusCode).toBe(200);
+    expect(downloaded.headers["content-disposition"]).toContain("attachment;");
+    expect(downloaded.rawPayload).toEqual(Buffer.from("report"));
+    expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "file.downloaded", details: expect.not.objectContaining({ content: expect.anything() }) }));
+    await app.close();
+  });
+
   it("creates and lists an owned recurring autonomous schedule", async () => {
     const deps = dependencies();
     const schedule = {

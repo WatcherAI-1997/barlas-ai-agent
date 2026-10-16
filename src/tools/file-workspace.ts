@@ -64,7 +64,13 @@ export class FileWorkspace {
     return this.writeData(userId, path, content);
   }
 
-  private async writeData(userId: string, path: string, content: Buffer): Promise<{ path: string; bytes: number }> {
+  async writeUpload(userId: string, path: string, content: Buffer, overwrite = false): Promise<{ path: string; bytes: number }> {
+    if (content.byteLength === 0) throw new Error("Uploaded file is empty");
+    if (content.byteLength > MAX_DOCUMENT_BYTES) throw new Error("File exceeds the 10 MB upload limit");
+    return this.writeData(userId, path, content, overwrite);
+  }
+
+  private async writeData(userId: string, path: string, content: Buffer, overwrite = true): Promise<{ path: string; bytes: number }> {
     const userRoot = await this.ensureUserRoot(userId);
     const target = this.resolveRelative(userRoot, path);
     await this.ensureSafeParent(userRoot, dirname(target));
@@ -78,7 +84,8 @@ export class FileWorkspace {
 
     const handle = await open(
       target,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW |
+        (overwrite ? constants.O_TRUNC : constants.O_EXCL),
       0o600,
     );
     try {
