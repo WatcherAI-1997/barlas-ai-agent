@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$ExpectedSha256 = "e78dde74e0e4ebc4fb7547202ee79a414b2de8504787a93cd0e1975f7641584e"
+$ExpectedSha256 = "f9505ab43878351d15c84690b1545b4f89f086340eb33c6d82228fa84a1c7e40"
 $Source = "https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/scripts/windows-node.ps1"
 $InstallRoot = Join-Path $env:LOCALAPPDATA "Barlas\desktop-node"
 $Destination = Join-Path $InstallRoot "windows-node.ps1"

@@ -56,6 +56,8 @@ describe("production installer", () => {
     expect(configure).toContain('"file", "schema", "validate"');
     expect(configure).toContain("Do not put secrets in command history");
     expect(configure).toContain("Protect-File");
+    expect(configure).toContain("icacls.exe");
+    expect(configure).not.toContain("Set-Acl");
     expect(configure).toContain("Read-ArrowChoice");
     expect(configure).toContain("Read-MappedChoice");
     expect(configure).toContain("Read-ModelSelection");
@@ -76,9 +78,11 @@ describe("production installer", () => {
     expect(nativeUpdater).toContain('ValidateSet("check", "update", "rollback", "repair")');
     expect(nativeUpdater).toContain("Rollback failed; restoring the current version");
     expect(nativeUpdater).toContain("Protect-File");
+    expect(nativeUpdater).toContain("icacls.exe");
     expect(nativeUninstaller).toContain("Type UNINSTALL to continue");
     expect(nativeUninstaller).toContain("uninstalled-native.env");
     expect(nativeUninstaller).toContain("Protect-File");
+    expect(nativeUninstaller).toContain("icacls.exe");
     expect(modelAuth).toContain('[switch]$Quiet');
     expect(modelAuth).toContain('$ErrorActionPreference = "Continue"');
     expect(modelAuth).toContain('Write-Output "disconnected"');

@@ -11,12 +11,14 @@ $StartupFile = Join-Path ([Environment]::GetFolderPath("Startup")) "Barlas AI Ag
 $BinDir = Join-Path $BarlasHome "bin"
 
 function Protect-File([string]$Path) {
-    $Identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $Acl = New-Object Security.AccessControl.FileSecurity
-    $Acl.SetAccessRuleProtection($true, $false)
-    $Acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($Identity, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow))
-    $Acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new("NT AUTHORITY\SYSTEM", [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow))
-    Set-Acl -LiteralPath $Path -AclObject $Acl
+    $UserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $PreviousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & icacls.exe $Path "/inheritance:r" "/grant:r" "*${UserSid}:(F)" "*S-1-5-18:(F)" *> $null
+        $AclExitCode = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $PreviousPreference }
+    if ($AclExitCode -ne 0) { throw "Unable to protect the Barlas configuration file for the current Windows user." }
 }
 
 Write-Host "Barlas will remove its application, private runtime, launcher, logs, and autostart entry." -ForegroundColor Yellow

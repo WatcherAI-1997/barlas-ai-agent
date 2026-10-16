@@ -15,12 +15,14 @@ $RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $RunName = "Barlas Desktop Node"
 
 function Protect-NodeFile([string]$Path) {
-    $Identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $Acl = New-Object Security.AccessControl.FileSecurity
-    $Acl.SetAccessRuleProtection($true, $false)
-    $Acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($Identity, "FullControl", "Allow"))
-    $Acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new("NT AUTHORITY\SYSTEM", "FullControl", "Allow"))
-    Set-Acl -LiteralPath $Path -AclObject $Acl
+    $UserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $PreviousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & icacls.exe $Path "/inheritance:r" "/grant:r" "*${UserSid}:(F)" "*S-1-5-18:(F)" *> $null
+        $AclExitCode = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $PreviousPreference }
+    if ($AclExitCode -ne 0) { throw "Unable to protect the Barlas desktop-node configuration for the current Windows user." }
 }
 
 function Assert-BaseUrl([string]$Url) {
