@@ -161,10 +161,14 @@ The extension catalog declares each built-in channel, connector, provider,
 runtime, skill source, and device bridge together with its capabilities, risk
 classes, and required setting names. It never returns secret values.
 
-Text and autonomous tool execution can use either native OpenAI Responses or
-native Anthropic Messages APIs (`MODEL_PROVIDER=openai|anthropic`). With
-Anthropic, OpenAI-only media and embeddings remain optional through a separate
-`MEDIA_API_KEY`, so model credentials are not silently reused across providers.
+Text and autonomous tool execution can use native OpenAI Responses, native
+Anthropic Messages, or a free local Ollama model
+(`MODEL_PROVIDER=openai|anthropic|ollama`). The Windows wizard can install
+Ollama with `winget`, start its local API, and pull the selected model. Ollama
+chat and tool continuations stay on the configured local endpoint and have zero
+provider cost. OpenAI-only media and embeddings remain optional through a
+separate `MEDIA_API_KEY`, so credentials are never silently reused across
+providers.
 
 Device nodes use a separate one-time pairing code and receive an independently
 revocable bearer token. The initial protocol supports heartbeat, capability

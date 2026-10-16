@@ -11,9 +11,10 @@ const configSchema = z.object({
   DATABASE_URL: z.string().min(1),
   BARLAS_API_TOKEN: z.string().min(32),
   BARLAS_GATEWAY_TOKEN: z.string().min(32),
-  MODEL_PROVIDER: z.enum(["openai", "anthropic"]).default("openai"),
+  MODEL_PROVIDER: z.enum(["openai", "anthropic", "ollama"]).default("openai"),
   MODEL_NAME: z.string().min(1),
-  MODEL_API_KEY: z.string().min(1),
+  MODEL_API_KEY: z.string().default(""),
+  OLLAMA_BASE_URL: z.string().url().default("http://127.0.0.1:11434"),
   MEDIA_API_KEY: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   VISION_MODEL: z.preprocess(
     (value) => value === "" ? undefined : value,
@@ -80,6 +81,9 @@ const configSchema = z.object({
   PRIVATE_MODEL_INPUT_USD_PER_MILLION: z.coerce.number().min(0).default(0),
   PRIVATE_MODEL_OUTPUT_USD_PER_MILLION: z.coerce.number().min(0).default(0),
 }).superRefine((config, context) => {
+  if (config.MODEL_PROVIDER !== "ollama" && !config.MODEL_API_KEY) {
+    context.addIssue({ code: "custom", message: "MODEL_API_KEY is required for OpenAI and Anthropic" });
+  }
   const telegramFields = [config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_WEBHOOK_SECRET];
   if (telegramFields.some(Boolean) && !telegramFields.every(Boolean)) {
     context.addIssue({
@@ -120,11 +124,11 @@ const configSchema = z.object({
       message: "CONNECTOR_VAULT_KEY is required in production",
     });
   }
-  if (config.MODEL_PROVIDER === "anthropic" && config.MEDIA_API_KEY && !config.VISION_MODEL) {
-    context.addIssue({ code: "custom", message: "VISION_MODEL is required when Anthropic uses an OpenAI media key" });
+  if (config.MODEL_PROVIDER !== "openai" && config.MEDIA_API_KEY && !config.VISION_MODEL) {
+    context.addIssue({ code: "custom", message: "VISION_MODEL is required when a non-OpenAI provider uses an OpenAI media key" });
   }
-  if (config.EMBEDDING_MODEL && config.MODEL_PROVIDER === "anthropic" && !config.MEDIA_API_KEY) {
-    context.addIssue({ code: "custom", message: "MEDIA_API_KEY is required for OpenAI embeddings with Anthropic" });
+  if (config.EMBEDDING_MODEL && config.MODEL_PROVIDER !== "openai" && !config.MEDIA_API_KEY) {
+    context.addIssue({ code: "custom", message: "MEDIA_API_KEY is required for OpenAI embeddings with a non-OpenAI provider" });
   }
 });
 

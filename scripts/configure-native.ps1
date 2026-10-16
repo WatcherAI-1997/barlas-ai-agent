@@ -12,7 +12,7 @@ $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $EnvFile = Join-Path $RootDir "deploy\native.env"
 $AllowedKeys = @(
     "PORT", "BARLAS_HTTP_PORT", "OWNER_EMAIL", "OWNER_DISPLAY_NAME", "OWNER_LANGUAGE",
-    "MODEL_PROVIDER", "MODEL_NAME", "MODEL_API_KEY", "DEEP_MODEL_NAME", "MEDIA_API_KEY", "VISION_MODEL",
+    "MODEL_PROVIDER", "MODEL_NAME", "MODEL_API_KEY", "OLLAMA_BASE_URL", "DEEP_MODEL_NAME", "MEDIA_API_KEY", "VISION_MODEL",
     "TRANSCRIPTION_MODEL", "SPEECH_MODEL", "EMBEDDING_MODEL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET",
     "TELEGRAM_POLLING_ENABLED", "AGENT_MAX_STEPS", "AGENT_MAX_TOTAL_TOKENS", "AGENT_MAX_OUTPUT_TOKENS_PER_STEP",
     "DAILY_CHAT_QUOTA", "DAILY_TOOL_QUOTA", "DAILY_JOB_QUOTA"
@@ -87,13 +87,18 @@ function Configure-General {
 }
 function Configure-Models {
     Write-Host "`n[Models]" -ForegroundColor Cyan
-    $Provider = (Read-Plain "Provider: openai or anthropic" (Current "MODEL_PROVIDER" "openai")).ToLowerInvariant()
-    if ($Provider -notin @("openai", "anthropic")) { throw "Provider must be openai or anthropic" }
+    $Provider = (Read-Plain "Provider: openai, anthropic, or local ollama" (Current "MODEL_PROVIDER" "openai")).ToLowerInvariant()
+    if ($Provider -notin @("openai", "anthropic", "ollama")) { throw "Provider must be openai, anthropic, or ollama" }
     Set-Value "MODEL_PROVIDER" $Provider
     Set-Value "MODEL_NAME" (Read-Plain "Default model" (Current "MODEL_NAME"))
     Set-Value "DEEP_MODEL_NAME" (Read-Plain "Deep model" (Current "DEEP_MODEL_NAME" (Current "MODEL_NAME")))
-    $NewKey = Read-Secret "Model API key (blank keeps current)"
-    if ($NewKey) { Set-Value "MODEL_API_KEY" $NewKey }
+    if ($Provider -eq "ollama") {
+        Set-Value "MODEL_API_KEY" ""
+        Set-Value "OLLAMA_BASE_URL" (Read-Plain "Ollama URL" (Current "OLLAMA_BASE_URL" "http://127.0.0.1:11434"))
+    } else {
+        $NewKey = Read-Secret "Model API key (blank keeps current)"
+        if ($NewKey) { Set-Value "MODEL_API_KEY" $NewKey }
+    }
     Set-Value "VISION_MODEL" (Read-Plain "Vision/PDF model; blank disables" (Current "VISION_MODEL"))
     Set-Value "TRANSCRIPTION_MODEL" (Read-Plain "Transcription model" (Current "TRANSCRIPTION_MODEL" "gpt-4o-mini-transcribe"))
     Set-Value "SPEECH_MODEL" (Read-Plain "Speech model" (Current "SPEECH_MODEL" "gpt-4o-mini-tts"))
@@ -140,10 +145,11 @@ if ($Action -eq "validate") {
     if ((Current "HOST" "127.0.0.1") -ne "127.0.0.1") { $Problems += "HOST must remain 127.0.0.1 in native mode" }
     $Port = Current "PORT"
     if ($Port -notmatch '^\d+$' -or [int]$Port -lt 1024 -or [int]$Port -gt 65535) { $Problems += "PORT is invalid" }
-    if ((Current "MODEL_PROVIDER") -notin @("openai", "anthropic")) { $Problems += "MODEL_PROVIDER is invalid" }
-    foreach ($Required in @("MODEL_NAME", "MODEL_API_KEY", "BARLAS_GATEWAY_TOKEN", "BARLAS_API_TOKEN", "CONNECTOR_VAULT_KEY")) {
+    if ((Current "MODEL_PROVIDER") -notin @("openai", "anthropic", "ollama")) { $Problems += "MODEL_PROVIDER is invalid" }
+    foreach ($Required in @("MODEL_NAME", "BARLAS_GATEWAY_TOKEN", "BARLAS_API_TOKEN", "CONNECTOR_VAULT_KEY")) {
         if ([string]::IsNullOrWhiteSpace((Current $Required))) { $Problems += "$Required is missing" }
     }
+    if ((Current "MODEL_PROVIDER") -ne "ollama" -and [string]::IsNullOrWhiteSpace((Current "MODEL_API_KEY"))) { $Problems += "MODEL_API_KEY is missing" }
     if ((Current "BARLAS_GATEWAY_TOKEN").Length -lt 32) { $Problems += "BARLAS_GATEWAY_TOKEN is too short" }
     if ($Problems.Count -gt 0) { throw ($Problems -join "; ") }
     Write-Output "Configuration: valid"
@@ -172,8 +178,18 @@ if ($Action -eq "models-status") {
     Write-Output "Provider: $(Current 'MODEL_PROVIDER')"
     Write-Output "Default model: $(Current 'MODEL_NAME')"
     Write-Output "Deep model: $(Current 'DEEP_MODEL_NAME')"
+    if ((Current "MODEL_PROVIDER") -eq "ollama") { Write-Output "Ollama URL: $(Current 'OLLAMA_BASE_URL' 'http://127.0.0.1:11434')" }
     Write-Output "Vision model: $(Current 'VISION_MODEL' 'disabled')"
-    Write-Output "API key: $(if (Current 'MODEL_API_KEY') { 'configured' } else { 'missing' })"
+    Write-Output "API key: $(if ((Current 'MODEL_PROVIDER') -eq 'ollama') { 'not required' } elseif (Current 'MODEL_API_KEY') { 'configured' } else { 'missing' })"
+    if ((Current "MODEL_PROVIDER") -eq "ollama") {
+        $BaseUrl = Current "OLLAMA_BASE_URL" "http://127.0.0.1:11434"
+        try {
+            $Tags = Invoke-RestMethod -Uri "$($BaseUrl.TrimEnd('/'))/api/tags" -TimeoutSec 5
+            $Names = @($Tags.models | ForEach-Object { $_.name })
+            Write-Output "Ollama API: reachable"
+            Write-Output "Selected model: $(if ($Names -contains (Current 'MODEL_NAME')) { 'installed' } else { 'not installed' })"
+        } catch { Write-Output "Ollama API: unavailable" }
+    }
     return
 }
 if ($Action -eq "channels-status") {

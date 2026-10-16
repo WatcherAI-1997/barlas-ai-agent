@@ -54,23 +54,24 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     $OwnerEmail = Read-Value "OWNER_EMAIL" "First owner email (local identity only)" "owner@barlas.local"
     $OwnerDisplayName = Read-Value "OWNER_DISPLAY_NAME" "First owner display name" "Barlas Owner"
     $OwnerLanguage = Read-Value "OWNER_LANGUAGE" "Owner language code; blank means choose on first login"
-    $ModelProvider = (Read-Value "MODEL_PROVIDER" "Model provider (openai or anthropic)" "openai").ToLowerInvariant()
-    if ($ModelProvider -notin @("openai", "anthropic")) { throw "Model provider must be openai or anthropic" }
+    $ModelProvider = (Read-Value "MODEL_PROVIDER" "Model provider (openai, anthropic, or local ollama)" "openai").ToLowerInvariant()
+    if ($ModelProvider -notin @("openai", "anthropic", "ollama")) { throw "Model provider must be openai, anthropic, or ollama" }
     $ModelName = Read-Value "MODEL_NAME" "Fast/default model name"
     $DeepModelName = Read-Value "DEEP_MODEL_NAME" "Deep model name" $ModelName
     $MediaApiKey = ""
-    if ($ModelProvider -eq "anthropic") {
+    if ($ModelProvider -ne "openai") {
         $MediaApiKey = Read-Value "MEDIA_API_KEY" "Optional OpenAI key for media features" "" -Secret
         $VisionModel = if ($MediaApiKey) { Read-Value "VISION_MODEL" "OpenAI vision/PDF model name" "gpt-4.1-mini" } else { "" }
     } else { $VisionModel = Read-Value "VISION_MODEL" "Vision/PDF model name" $ModelName }
-    $ModelApiKey = Read-Value "MODEL_API_KEY" "Dedicated model API key" "" -Secret
+    $ModelApiKey = if ($ModelProvider -eq "ollama") { "" } else { Read-Value "MODEL_API_KEY" "Dedicated model API key" "" -Secret }
+    $OllamaBaseUrl = if ($ModelProvider -eq "ollama") { Read-Value "OLLAMA_BASE_URL" "Ollama URL" "http://127.0.0.1:11434" } else { "http://127.0.0.1:11434" }
     $TelegramBotToken = Read-Value "TELEGRAM_BOT_TOKEN" "Dedicated Telegram bot token; blank disables Telegram" "" -Secret
 
     if ($Port -notmatch '^\d+$' -or [int]$Port -lt 1024 -or [int]$Port -gt 65535) { throw "Local web port must be between 1024 and 65535" }
     if ($OwnerEmail -notmatch '^.+@.+\..+$') { throw "Owner email is invalid" }
     if ($OwnerLanguage -and $OwnerLanguage -notin $SupportedLanguageCodes) { throw "Owner language is unsupported" }
     if (-not $ModelName) { throw "Model name is required" }
-    if (-not $ModelApiKey) { throw "Model API key is required" }
+    if ($ModelProvider -ne "ollama" -and -not $ModelApiKey) { throw "Model API key is required" }
 
     $Settings = [ordered]@{
         APP_ENV = "production"; APP_NAME = "Barlas AI Agent"; BARLAS_INSTALL_MODE = "native"
@@ -78,7 +79,7 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
         DATABASE_URL = "postgresql://native-runtime"; BARLAS_NATIVE_ROOT = $RootDir
         BARLAS_NATIVE_DATA = (Join-Path $BarlasHome "data"); BARLAS_NATIVE_DATABASE_PORT = "17841"
         BARLAS_API_TOKEN = New-RandomHex 32; BARLAS_GATEWAY_TOKEN = New-RandomHex 32
-        MODEL_PROVIDER = $ModelProvider; MODEL_NAME = $ModelName; MODEL_API_KEY = $ModelApiKey
+        MODEL_PROVIDER = $ModelProvider; MODEL_NAME = $ModelName; MODEL_API_KEY = $ModelApiKey; OLLAMA_BASE_URL = $OllamaBaseUrl
         MEDIA_API_KEY = $MediaApiKey; VISION_MODEL = $VisionModel; TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
         SPEECH_MODEL = "gpt-4o-mini-tts"; EMBEDDING_MODEL = ""; DEEP_MODEL_NAME = $DeepModelName
         CONNECTOR_VAULT_KEY = New-RandomBase64 32; CONNECTOR_VAULT_KEY_VERSION = "1"
@@ -106,6 +107,55 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     } finally { if (Test-Path -LiteralPath $Temporary) { Remove-Item -LiteralPath $Temporary -Force } }
     Write-Host "[OK] Protected native configuration created" -ForegroundColor Green
 }
+
+function Read-NativeSetting([string]$Name) {
+    $Prefix = "$Name="
+    foreach ($Line in [IO.File]::ReadAllLines($EnvFile)) {
+        if ($Line.StartsWith($Prefix, [StringComparison]::Ordinal)) {
+            $Raw = $Line.Substring($Prefix.Length)
+            if ($Raw.Length -ge 2 -and $Raw[0] -eq "'" -and $Raw[$Raw.Length - 1] -eq "'") { return $Raw.Substring(1, $Raw.Length - 2).Replace("\'", "'") }
+            return $Raw.Trim('"')
+        }
+    }
+    return ""
+}
+
+function Ensure-Ollama {
+    if ((Read-NativeSetting "MODEL_PROVIDER") -ne "ollama") { return }
+    $BaseUrl = Read-NativeSetting "OLLAMA_BASE_URL"
+    if (-not $BaseUrl) { $BaseUrl = "http://127.0.0.1:11434" }
+    $Model = Read-NativeSetting "MODEL_NAME"
+    $OllamaExe = (Get-Command ollama.exe -ErrorAction SilentlyContinue).Source
+    if (-not $OllamaExe) {
+        $OllamaExe = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"
+        if (-not (Test-Path -LiteralPath $OllamaExe -PathType Leaf)) {
+            $Winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+            if (-not $Winget) { throw "Ollama is not installed and winget is unavailable. Install Ollama from https://ollama.com/download/windows and run Barlas again." }
+            Write-Host "Installing the free local Ollama runtime..." -ForegroundColor Cyan
+            & $Winget.Source install --id Ollama.Ollama -e --accept-package-agreements --accept-source-agreements
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $OllamaExe -PathType Leaf)) { throw "Ollama installation did not complete. Install it from https://ollama.com/download/windows and run Barlas again." }
+        }
+    }
+    try { Invoke-RestMethod -Uri "$($BaseUrl.TrimEnd('/'))/api/tags" -TimeoutSec 3 | Out-Null }
+    catch {
+        Start-Process -FilePath $OllamaExe -ArgumentList "serve" -WindowStyle Hidden
+        $Ready = $false
+        for ($Attempt = 0; $Attempt -lt 30; $Attempt++) {
+            Start-Sleep -Seconds 2
+            try { Invoke-RestMethod -Uri "$($BaseUrl.TrimEnd('/'))/api/tags" -TimeoutSec 3 | Out-Null; $Ready = $true; break } catch { }
+        }
+        if (-not $Ready) { throw "Ollama was installed but its local API did not start at $BaseUrl." }
+    }
+    $Tags = Invoke-RestMethod -Uri "$($BaseUrl.TrimEnd('/'))/api/tags" -TimeoutSec 5
+    if ($Model -and -not (@($Tags.models | ForEach-Object { $_.name }) -contains $Model)) {
+        Write-Host "Downloading local model $Model (one-time, size depends on the model)..." -ForegroundColor Cyan
+        & $OllamaExe pull $Model
+        if ($LASTEXITCODE -ne 0) { throw "Ollama could not download model $Model." }
+    }
+    Write-Host "[OK] Ollama local model is ready" -ForegroundColor Green
+}
+
+Ensure-Ollama
 
 $StartupDir = [Environment]::GetFolderPath("Startup")
 $StartupFile = Join-Path $StartupDir "Barlas AI Agent.cmd"

@@ -349,6 +349,13 @@ bounded, and total model steps have a hard ceiling of twelve. Execution stops
 before another tool call when the total token budget is reached; output per
 model step is capped by `AGENT_MAX_OUTPUT_TOKENS_PER_STEP`.
 
+`MODEL_PROVIDER=ollama` routes chat and tool calls to the native Ollama
+`/api/chat` endpoint at `OLLAMA_BASE_URL` (localhost by default) and does not
+require `MODEL_API_KEY`. Tool-call history is encoded into the same bounded,
+durable continuation field used by hosted providers, so an approval or process
+restart can resume a local model run without pretending the tool completed.
+Ollama token counts are recorded with zero provider cost.
+
 Every autonomous invocation is persisted before the first model call. Its
 conversation, limits, provider continuation ID, aggregate usage, pending call,
 approval link, terminal result, error, and timestamps live in PostgreSQL. Step
