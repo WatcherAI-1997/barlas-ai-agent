@@ -68,6 +68,8 @@ describe("production installer", () => {
       'Start-Process ([string]$DashboardUrl).Trim()',
       "Show-PixelBanner",
       '"████  ███  ████  █     ███  ████"',
+      '" ▄██▄ ▄██▄ "',
+      '"   ▄██▄    "',
       '"           A I   A G E N T"',
       "[$Number/5]",
       "install.log",

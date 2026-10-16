@@ -46,18 +46,22 @@ function Invoke-NativeCommand([string]$FilePath, [string[]]$Arguments, [string]$
 function Show-PixelBanner {
     Write-Host ""
     $Mark = @(
-        " ██   ██  ",
-        "████ ████ ",
-        " ██   ██  ",
-        "   ████   ",
-        "    ██    "
+        " ▄██▄ ▄██▄ ",
+        " ████ ████ ",
+        " ▀██▀ ▀██▀ ",
+        "           ",
+        "   ▄██▄    ",
+        "   ████    ",
+        "   ▀██▀    "
     )
     $Word = @(
+        "                                   ",
         "████  ███  ████  █     ███  ████",
         "█   █ █  █ █   █ █    █   █ █   ",
         "████  ████ ████  █    █████ ████",
         "█   █ █  █ █  █  █    █   █    █",
-        "████  █  █ █   █ ████ █   █ ████"
+        "████  █  █ █   █ ████ █   █ ████",
+        "                                   "
     )
     for ($Row = 0; $Row -lt $Mark.Count; $Row++) {
         Write-Host $Mark[$Row] -ForegroundColor Red -NoNewline
