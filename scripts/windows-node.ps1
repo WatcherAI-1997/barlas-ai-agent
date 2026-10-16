@@ -14,6 +14,7 @@ $NodeRoot = Join-Path $env:LOCALAPPDATA "Barlas\desktop-node"
 $ConfigPath = Join-Path $NodeRoot "node.json"
 $RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $RunName = "Barlas Desktop Node"
+$WindowsPowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
 function Protect-NodeFile([string]$Path) {
     $UserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -80,7 +81,7 @@ if ($Configure) {
     Save-Configuration $script:Config.baseUrl ([string]$Paired.token) $Name
     $ScriptPath = $MyInvocation.MyCommand.Path
     New-Item -Path $RunKey -Force | Out-Null
-    Set-ItemProperty -Path $RunKey -Name $RunName -Value "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ScriptPath`""
+    Set-ItemProperty -Path $RunKey -Name $RunName -Value "`"$WindowsPowerShellExe`" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ScriptPath`""
     Write-Output "Barlas Desktop Node paired: $($Paired.node.id)"
     Write-Output "Autostart enabled for the current Windows user."
     exit 0

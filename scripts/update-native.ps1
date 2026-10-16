@@ -11,6 +11,7 @@ $SwapDir = Join-Path $BarlasHome "rollback-swap"
 $VersionFile = Join-Path $AppDir ".barlas-version"
 $ReleaseApiUrl = "https://api.github.com/repos/WatcherAI-1997/barlas-ai-agent/commits/main"
 $BootstrapUrl = "https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-windows.ps1"
+$WindowsPowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
 function Protect-File([string]$Path) {
     $UserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -38,7 +39,7 @@ function Run-Bootstrap {
     $Temporary = Join-Path ([IO.Path]::GetTempPath()) ("barlas-bootstrap-" + [Guid]::NewGuid().ToString("N") + ".ps1")
     try {
         Invoke-WebRequest -UseBasicParsing -Uri $BootstrapUrl -OutFile $Temporary
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Temporary
+        & $WindowsPowerShellExe -NoProfile -ExecutionPolicy Bypass -File $Temporary
         if ($LASTEXITCODE -ne 0) { throw "Barlas bootstrap failed" }
     } finally { Remove-Item -LiteralPath $Temporary -Force -ErrorAction SilentlyContinue }
 }

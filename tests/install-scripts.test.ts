@@ -163,6 +163,12 @@ describe("production installer", () => {
     expect(bootstrap).toContain('Get-Command barlas -CommandType Application');
     expect(bootstrap).toContain('The global Barlas command is shadowed by another installation');
     expect(bootstrap).not.toContain('(@($PathParts) + $BinDir)');
+    expect(bootstrap).toContain('%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+    expect(bootstrap).not.toContain('`r`npowershell.exe -NoProfile');
+    expect(installer).toContain('%SystemRoot%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+    expect(cli).toContain('System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+    expect(nativeUpdater).toContain('System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+    expect(windowsNode).toContain('System32\\WindowsPowerShell\\v1.0\\powershell.exe');
   });
 
   it("prepares a protected config without printing supplied secrets", async () => {

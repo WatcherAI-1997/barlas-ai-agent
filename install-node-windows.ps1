@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$ExpectedSha256 = "93999a50e01daff9955d020a74a18ec75b9140b6d976abe9e790edd2bf836195"
+$ExpectedSha256 = "9ec84d1fb4b245a38dd95b0429a3961332fd74d01395e243172a302d0298c24b"
 $ExpectedIconSha256 = "4ba86c089b1582361db3fc244d430641c6f66d4121663e0e22a3ef35b577848e"
 $Source = "https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/scripts/windows-node.ps1"
 $IconSource = "https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/assets/brand/barlas-ai-agent-logo-original.png"
@@ -9,6 +9,7 @@ $Destination = Join-Path $InstallRoot "windows-node.ps1"
 $IconDestination = Join-Path $InstallRoot "barlas-icon.png"
 $Temporary = Join-Path ([IO.Path]::GetTempPath()) "barlas-node-$([Guid]::NewGuid().ToString('N')).ps1"
 $TemporaryIcon = Join-Path ([IO.Path]::GetTempPath()) "barlas-icon-$([Guid]::NewGuid().ToString('N')).png"
+$WindowsPowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
 try {
     Write-Host "`n  Barlas Desktop Node" -ForegroundColor White
@@ -26,9 +27,9 @@ try {
     if (-not $Url) { $Url = "http://127.0.0.1:17840" }
     $Code = Read-Host "One-time code from: barlas node-pair"
     if (-not $Code.StartsWith("NODE-")) { throw "Invalid pairing code." }
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $Destination -Configure -BaseUrl $Url -PairingCode $Code
+    & $WindowsPowerShellExe -NoProfile -ExecutionPolicy Bypass -File $Destination -Configure -BaseUrl $Url -PairingCode $Code
     if ($LASTEXITCODE -ne 0) { throw "Desktop node pairing failed." }
-    Start-Process powershell.exe -ArgumentList @("-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$Destination`"")
+    Start-Process $WindowsPowerShellExe -ArgumentList @("-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$Destination`"")
     Write-Host "`nDesktop node installed and started." -ForegroundColor Green
     Write-Host "Its token is protected with Windows DPAPI for your account."
     Write-Host "Revoke it anytime with the Barlas nodes screen or CLI."

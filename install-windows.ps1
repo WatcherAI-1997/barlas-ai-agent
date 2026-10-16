@@ -19,6 +19,8 @@ $InstallLog = Join-Path $LogDir "install.log"
 $NodeDir = Join-Path $RuntimeDir "node"
 $NodeExe = Join-Path $NodeDir "node.exe"
 $NpmCmd = Join-Path $NodeDir "npm.cmd"
+$WindowsPowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+if (-not (Test-Path -LiteralPath $WindowsPowerShellExe -PathType Leaf)) { throw "Windows PowerShell is unavailable at the standard system path." }
 $WorkDir = Join-Path ([IO.Path]::GetTempPath()) ("barlas-install-" + [Guid]::NewGuid().ToString("N"))
 $Archive = Join-Path $WorkDir "barlas.zip"
 $Extracted = Join-Path $WorkDir "source"
@@ -131,7 +133,7 @@ try {
         Copy-Item -LiteralPath $ExistingEnv -Destination (Join-Path $TargetDeploy "native.env")
     }
     $OldStop = Join-Path $AppDir "scripts\stop-native.ps1"
-    if (Test-Path -LiteralPath $OldStop -PathType Leaf) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $OldStop }
+    if (Test-Path -LiteralPath $OldStop -PathType Leaf) { & $WindowsPowerShellExe -NoProfile -ExecutionPolicy Bypass -File $OldStop }
     if (Test-Path -LiteralPath $PreviousDir) { Remove-Item -LiteralPath $PreviousDir -Recurse -Force }
     if (Test-Path -LiteralPath $AppDir) { Move-Item -LiteralPath $AppDir -Destination $PreviousDir }
     Move-Item -LiteralPath $SourceDir.FullName -Destination $AppDir
@@ -164,7 +166,7 @@ try {
         Write-Done "Browser ready"
 
         Write-Step 5 "Personal setup"
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppDir "install-native.ps1")
+        & $WindowsPowerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppDir "install-native.ps1")
         if ($LASTEXITCODE -ne 0) { throw "Barlas setup exited with code $LASTEXITCODE" }
     } catch {
         if (Test-Path -LiteralPath $PreviousDir) {
@@ -176,7 +178,7 @@ try {
             if ((Test-Path -LiteralPath $RestoredStart -PathType Leaf) -and
                 (Test-Path -LiteralPath $RestoredEnv -PathType Leaf) -and
                 (Test-Path -LiteralPath $RestoredBuild -PathType Leaf)) {
-                try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestoredStart }
+                try { & $WindowsPowerShellExe -NoProfile -ExecutionPolicy Bypass -File $RestoredStart }
                 catch { [IO.File]::AppendAllText($InstallLog, "Rollback restart failed: $($_.Exception.Message)`r`n", [Text.Encoding]::UTF8) }
             }
         }
@@ -184,7 +186,7 @@ try {
     }
 
     $Launcher = Join-Path $BinDir "barlas.cmd"
-    $LauncherText = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$AppDir\barlas.ps1`" %*`r`n"
+    $LauncherText = "@echo off`r`n`"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`" -NoProfile -ExecutionPolicy Bypass -File `"$AppDir\barlas.ps1`" %*`r`n"
     [IO.File]::WriteAllText($Launcher, $LauncherText, [Text.Encoding]::ASCII)
 
     # Put Barlas first, not last. A previous Python package or another program
@@ -205,7 +207,7 @@ try {
     Write-Done "Global 'barlas' command installed"
     [IO.File]::WriteAllText((Join-Path $AppDir ".barlas-version"), $ReleaseSha + "`r`n", [Text.Encoding]::ASCII)
 
-    $DashboardUrl = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppDir "scripts\dashboard-url.ps1")
+    $DashboardUrl = & $WindowsPowerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppDir "scripts\dashboard-url.ps1")
     if ($LASTEXITCODE -eq 0 -and $DashboardUrl) { Start-Process ([string]$DashboardUrl).Trim() }
     Write-Host ""
     Write-Host "Barlas is ready - Docker is not used." -ForegroundColor Green

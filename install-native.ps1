@@ -449,7 +449,7 @@ Ensure-Ollama
 $StartupDir = [Environment]::GetFolderPath("Startup")
 $StartupFile = Join-Path $StartupDir "Barlas AI Agent.cmd"
 $StartScript = Join-Path $RootDir "scripts\start-native.ps1"
-$StartupText = "@echo off`r`nstart `"`" /min powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$StartScript`"`r`n"
+$StartupText = "@echo off`r`nstart `"`" /min `"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe`" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$StartScript`"`r`n"
 [IO.File]::WriteAllText($StartupFile, $StartupText, [Text.Encoding]::ASCII)
 
 & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady

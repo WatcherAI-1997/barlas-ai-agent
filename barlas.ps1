@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $NativeEnvFile = Join-Path $RootDir "deploy\native.env"
 $BarlasHome = Join-Path $env:LOCALAPPDATA "Barlas"
+$WindowsPowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 
 function Read-Setting([string]$Path, [string]$Name) {
     $Prefix = "$Name="
@@ -103,7 +104,7 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
         $Pairing = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/v1/nodes/pairing-code" -Headers $Headers -ContentType "application/json" -Body (@{ userId = $Me.principal.id } | ConvertTo-Json -Compress) -TimeoutSec 10
         & $NodeScript -Configure -BaseUrl "http://127.0.0.1:$Port" -PairingCode $Pairing.code
         if (-not $?) { exit 1 }
-        Start-Process powershell.exe -ArgumentList @("-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$NodeScript`"")
+        Start-Process $WindowsPowerShellExe -ArgumentList @("-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$NodeScript`"")
         exit 0
     }
     if ($LocalCommand -in @("gateway", "daemon")) {
