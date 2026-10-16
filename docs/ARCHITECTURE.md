@@ -60,6 +60,9 @@ autonomy.
   Bounded retries recover stale `running` leases, while worker ownership guards
   terminal writes. Visible conversation messages, injected memory context, and
   optional delivery metadata are stored as separate fields.
+- Telegram accounts are joined to web accounts through expiring, single-use,
+  hashed codes. The resolved account ID is applied before memory lookup, quota
+  consumption, tool execution, and approval ownership checks.
 
 ## Data boundaries
 

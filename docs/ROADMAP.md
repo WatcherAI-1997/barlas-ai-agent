@@ -9,6 +9,7 @@
 ## Phase 1 — Private alpha
 
 - Telegram webhook, durable replies, and approval buttons. *(implemented; credentials pending)*
+- One-time Telegram-to-account linking and shared identity. *(implemented)*
 - Persistent conversations and explicit long-term memory. *(implemented)*
 - Web research, files, terminal tools, and task execution. *(SearXNG search, isolated files, and restricted inspection implemented)*
 - Model switching and routing. *(fast/deep/private foundation implemented)*

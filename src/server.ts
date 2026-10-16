@@ -1,5 +1,6 @@
 import { buildApp } from "./app.js";
 import { AuthService } from "./auth/service.js";
+import { TelegramLinkService } from "./auth/telegram-link.js";
 import { TelegramClient } from "./channels/telegram.js";
 import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
@@ -19,6 +20,7 @@ import { ToolExecutor } from "./tools/executor.js";
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
 const authService = new AuthService(database, config.SESSION_TTL_HOURS);
+const telegramLinks = new TelegramLinkService(database);
 if (config.OWNER_EMAIL && config.OWNER_PASSWORD) {
   await authService.bootstrapOwner({
     email: config.OWNER_EMAIL,
@@ -134,6 +136,7 @@ const app = await buildApp({
   skillRegistry,
   governance,
   authService,
+  telegramLinks,
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
   ...(telegram ? { telegram } : {}),

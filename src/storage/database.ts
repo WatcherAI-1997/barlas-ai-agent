@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 
 import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth/service.js";
+import type { TelegramLink, TelegramLinkStore } from "../auth/telegram-link.js";
 import type { AgentMessage, GenerateResult } from "../core/models.js";
 import type { GovernanceStore, QuotaCategory, TraceEvent, TraceStatus } from "../governance/runtime.js";
 import type {
@@ -19,7 +20,7 @@ import type {
   MemoryEntry,
 } from "./types.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -908,6 +909,92 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     await this.pool.query(`delete from user_sessions where token_hash = $1`, [tokenHash]);
   }
 
+  async createTelegramLinkCode(input: {
+    accountId: string;
+    codeHash: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.pool.query(
+      `with invalidated as (
+         update telegram_link_codes set used_at = now()
+         where account_id = $1 and used_at is null
+       )
+       insert into telegram_link_codes (account_id, code_hash, expires_at)
+       values ($1, $2, $3)`,
+      [input.accountId, input.codeHash, input.expiresAt],
+    );
+  }
+
+  async claimTelegramLink(input: {
+    codeHash: string;
+    telegramUserId: number;
+    telegramChatId: number;
+  }): Promise<TelegramLink | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const code = await client.query<{ account_id: string }>(
+        `select account_id from telegram_link_codes
+         where code_hash = $1 and used_at is null and expires_at > now()
+         for update`,
+        [input.codeHash],
+      );
+      const accountId = code.rows[0]?.account_id;
+      if (!accountId) {
+        await client.query("rollback");
+        return null;
+      }
+      const existing = await client.query<{ account_id: string }>(
+        `select account_id from telegram_links where telegram_user_id = $1 for update`,
+        [input.telegramUserId],
+      );
+      if (existing.rows[0] && existing.rows[0].account_id !== accountId) {
+        await client.query("rollback");
+        return null;
+      }
+      await client.query(`delete from telegram_links where account_id = $1`, [accountId]);
+      const linked = await client.query<TelegramLinkRow>(
+        `insert into telegram_links (account_id, telegram_user_id, telegram_chat_id)
+         values ($1, $2, $3)
+         returning account_id, telegram_user_id, telegram_chat_id, created_at`,
+        [accountId, input.telegramUserId, input.telegramChatId],
+      );
+      await client.query(
+        `update telegram_link_codes set used_at = now() where code_hash = $1`,
+        [input.codeHash],
+      );
+      await client.query("commit");
+      return this.mapTelegramLink(linked.rows[0]!);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getTelegramLink(accountId: string): Promise<TelegramLink | null> {
+    const result = await this.pool.query<TelegramLinkRow>(
+      `select account_id, telegram_user_id, telegram_chat_id, created_at
+       from telegram_links where account_id = $1`,
+      [accountId],
+    );
+    return result.rows[0] ? this.mapTelegramLink(result.rows[0]) : null;
+  }
+
+  async resolveTelegramAccount(telegramUserId: number): Promise<string | null> {
+    const result = await this.pool.query<{ account_id: string }>(
+      `select account_id from telegram_links where telegram_user_id = $1`,
+      [telegramUserId],
+    );
+    return result.rows[0]?.account_id ?? null;
+  }
+
+  async deleteTelegramLink(accountId: string): Promise<boolean> {
+    const result = await this.pool.query(`delete from telegram_links where account_id = $1`, [accountId]);
+    return result.rowCount === 1;
+  }
+
   private mapApproval(row: {
     id: string;
     user_id: string;
@@ -1006,6 +1093,22 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       updatedAt: row.updated_at.toISOString(),
     };
   }
+
+  private mapTelegramLink(row: TelegramLinkRow): TelegramLink {
+    return {
+      accountId: row.account_id,
+      telegramUserId: Number(row.telegram_user_id),
+      telegramChatId: Number(row.telegram_chat_id),
+      createdAt: row.created_at.toISOString(),
+    };
+  }
+}
+
+interface TelegramLinkRow {
+  account_id: string;
+  telegram_user_id: string;
+  telegram_chat_id: string;
+  created_at: Date;
 }
 
 interface ApprovalRow {

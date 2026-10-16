@@ -37,7 +37,12 @@
           <button id="users-tab" data-panel="users">Пользователи</button>
         </nav>
 
-        <section id="panel-overview" class="panel"><h2>Состояние системы</h2><div id="overview" class="stats"></div></section>
+        <section id="panel-overview" class="panel">
+          <h2>Состояние системы</h2><div id="overview" class="stats"></div>
+          <h2>Telegram</h2>
+          <div class="actions"><button id="telegram-code">Получить код привязки</button><button id="telegram-unlink" class="reject">Отвязать</button></div>
+          <p id="telegram-status" class="meta"></p>
+        </section>
         <section id="panel-chat" class="panel hidden">
           <div class="chat-layout">
             <aside class="history"><button id="new-chat">+ Новый диалог</button><div id="conversations"></div></aside>

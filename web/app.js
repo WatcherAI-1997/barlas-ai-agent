@@ -163,7 +163,24 @@ async function loadOverview() {
     stat("Оценка расходов", `$${value.estimatedCostUsd.toFixed(4)}`),
     stat("Воркер", data.workerEnabled ? "Включён" : "Выключен"),
   );
+  const telegram = await api("/v1/me/telegram");
+  $("#telegram-status").textContent = telegram.link
+    ? `Привязан Telegram ID ${telegram.link.telegramUserId}`
+    : "Telegram не привязан";
+  $("#telegram-unlink").classList.toggle("hidden", !telegram.link);
 }
+
+$("#telegram-code").addEventListener("click", async () => {
+  try {
+    const data = await api("/v1/me/telegram/code", { method: "POST" });
+    $("#telegram-status").textContent = `Отправьте боту команду: /link ${data.code} (код действует 10 минут)`;
+  } catch (error) { $("#telegram-status").textContent = error.message; }
+});
+
+$("#telegram-unlink").addEventListener("click", async () => {
+  await api("/v1/me/telegram", { method: "DELETE" });
+  await loadOverview();
+});
 
 async function loadApprovals() {
   const items = (await api(`/v1/approvals?userId=${encodeURIComponent(state.account.id)}`)).approvals;

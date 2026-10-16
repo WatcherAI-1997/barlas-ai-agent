@@ -18,6 +18,9 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `POST /auth/login` — exchange email/password for an expiring session.
 - `GET /v1/me` — return the current account and authentication type.
 - `POST /v1/auth/logout` — revoke the current user session.
+- `GET /v1/me/telegram` — return the current account's Telegram link.
+- `POST /v1/me/telegram/code` — issue a ten-minute one-time linking code.
+- `DELETE /v1/me/telegram` — remove the account's Telegram link.
 - `GET /v1/admin/users` — list accounts; owner only.
 - `POST /v1/admin/users` — create an owner or user account; owner only.
 
@@ -150,6 +153,11 @@ When enabled, Telegram messages enqueue the same durable autonomous runtime.
 Results are delivered back to the originating chat. Approval requests use
 inline Allow/Reject buttons whose callback is ownership-checked against the
 Telegram sender before the tool can execute.
+An authenticated web user generates a one-time code and sends `/link CODE` to
+the bot. Only the SHA-256 code hash is stored; codes expire after ten minutes
+and are invalidated after use. Once linked, web and Telegram share the same
+account ID, memory, conversations, quotas, approvals, and permissions. A
+Telegram identity already linked to another account cannot be silently moved.
 
 ## Safety model
 

@@ -15,6 +15,7 @@ import {
 } from "./auth/service.js";
 import type { ModelProvider } from "./core/models.js";
 import type { AgentLoop } from "./core/agent-loop.js";
+import type { TelegramLinkService } from "./auth/telegram-link.js";
 import type { PersistentAgentRuntime } from "./runs/runtime.js";
 import { QuotaExceededError, type RuntimeGovernance } from "./governance/runtime.js";
 import { agentJobSchema } from "./jobs/agent-handler.js";
@@ -152,6 +153,7 @@ export interface AppDependencies {
   skillRegistry?: Pick<SkillRegistry, "list">;
   governance?: RuntimeGovernance;
   authService?: Pick<AuthService, "authenticate" | "login" | "logout" | "listAccounts" | "createAccount">;
+  telegramLinks?: Pick<TelegramLinkService, "createCode" | "claim" | "get" | "resolve" | "unlink">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
   telegram?: {
@@ -320,6 +322,24 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     }
     await dependencies.authService.logout(principal.token);
     return { ok: true };
+  });
+
+  app.get("/v1/me/telegram", async (request, reply) => {
+    const principal = principalFor(request);
+    if (!principal.account || !dependencies.telegramLinks) return reply.notFound();
+    return { link: await dependencies.telegramLinks.get(principal.account.id) };
+  });
+
+  app.post("/v1/me/telegram/code", async (request, reply) => {
+    const principal = principalFor(request);
+    if (!principal.account || !dependencies.telegramLinks) return reply.notFound();
+    return dependencies.telegramLinks.createCode(principal.account.id);
+  });
+
+  app.delete("/v1/me/telegram", async (request, reply) => {
+    const principal = principalFor(request);
+    if (!principal.account || !dependencies.telegramLinks) return reply.notFound();
+    return { unlinked: await dependencies.telegramLinks.unlink(principal.account.id) };
   });
 
   app.get("/v1/admin/users", async (request, reply) => {
@@ -837,7 +857,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const callback = parsed.data.callback_query;
       const match = /^(approve|reject):([0-9a-f-]{36})$/i.exec(callback.data);
       if (!match || !dependencies.toolExecutor) return { ok: true, ignored: true };
-      const userId = `telegram:${callback.from.id}`;
+      const userId = await dependencies.telegramLinks?.resolve(callback.from.id) ?? `telegram:${callback.from.id}`;
       try {
         const decision = await dependencies.toolExecutor.decide({
           approvalId: match[2]!,
@@ -868,8 +888,22 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (!parsed.data.message) return { ok: true, ignored: true };
 
     const message = parsed.data.message;
+    const linkCommand = /^\/link\s+(BARLAS-[A-Z0-9_-]+)$/i.exec(message.text.trim());
+    if (linkCommand && dependencies.telegramLinks) {
+      const link = await dependencies.telegramLinks.claim(
+        linkCommand[1]!,
+        message.from?.id ?? message.chat.id,
+        message.chat.id,
+      );
+      await dependencies.telegram.client.sendMessage(
+        message.chat.id,
+        link ? "Telegram успешно привязан к Barlas AI Agent." : "Код недействителен, истёк или уже использован.",
+      );
+      return { ok: true, linked: Boolean(link) };
+    }
     if (dependencies.agentRuntime) {
-      const userId = `telegram:${message.from?.id ?? message.chat.id}`;
+      const telegramUserId = message.from?.id ?? message.chat.id;
+      const userId = await dependencies.telegramLinks?.resolve(telegramUserId) ?? `telegram:${telegramUserId}`;
       const memories = await dependencies.database.recall(userId, message.text, 5);
       const memoryContext = memories.length > 0 ? [{
         role: "system" as const,
