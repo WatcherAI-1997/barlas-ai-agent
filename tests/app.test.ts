@@ -126,7 +126,7 @@ describe("Barlas AI Agent API", () => {
     const deps = dependencies();
     const extensionCatalog = createBuiltinExtensionCatalog({
       browser: false, github: false, google: false, mcp: false, sandbox: true,
-      telegram: true, discord: false, privateModel: false, deviceNodes: true, modelProvider: "openai",
+      telegram: true, discord: false, slack: false, privateModel: false, deviceNodes: true, modelProvider: "openai",
     });
     const app = await buildApp({ apiToken, ...deps, extensionCatalog });
     const response = await app.inject({
@@ -136,6 +136,7 @@ describe("Barlas AI Agent API", () => {
     expect(response.json().extensions).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "channel.telegram", configured: true }),
       expect.objectContaining({ id: "channel.discord", configured: false }),
+      expect.objectContaining({ id: "channel.slack", configured: false }),
       expect.objectContaining({ id: "runtime.browser", configured: false }),
     ]));
     await app.close();

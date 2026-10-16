@@ -34,6 +34,9 @@ const configSchema = z.object({
   TELEGRAM_MAX_UPLOAD_BYTES: z.coerce.number().int().min(1).max(2_000_000_000).default(50_000_000),
   DISCORD_BOT_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(20).optional()),
   DISCORD_GATEWAY_ENABLED: z.stringbool().default(false),
+  SLACK_BOT_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(20).optional()),
+  SLACK_APP_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(20).optional()),
+  SLACK_SOCKET_MODE_ENABLED: z.stringbool().default(false),
   CONNECTOR_VAULT_KEY: z.string().optional(),
   CONNECTOR_VAULT_KEY_VERSION: z.coerce.number().int().min(1).max(1_000_000).default(1),
   JOB_WORKER_ENABLED: z.stringbool().default(true),
@@ -98,6 +101,9 @@ const configSchema = z.object({
   }
   if (config.DISCORD_GATEWAY_ENABLED && !config.DISCORD_BOT_TOKEN) {
     context.addIssue({ code: "custom", message: "DISCORD_BOT_TOKEN is required when Discord Gateway is enabled" });
+  }
+  if (config.SLACK_SOCKET_MODE_ENABLED && (!config.SLACK_BOT_TOKEN || !config.SLACK_APP_TOKEN)) {
+    context.addIssue({ code: "custom", message: "SLACK_BOT_TOKEN and SLACK_APP_TOKEN are required when Slack Socket Mode is enabled" });
   }
 
   const privateModelFields = [

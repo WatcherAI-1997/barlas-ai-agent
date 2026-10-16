@@ -291,6 +291,14 @@ no inbound port, domain, or webhook is needed. Direct messages are accepted.
 In a guild, the bot responds only when explicitly mentioned. Keep the bot token
 private and grant no Discord permissions beyond reading and sending messages.
 
+## Slack without a domain
+
+Create a Slack app with Socket Mode, an app-level `xapp-` token carrying
+`connections:write`, and a bot `xoxb-` token with only the message scopes the
+workspace needs. Subscribe to `message.im` and `app_mention`, install the app,
+then run `barlas configure channels`. Barlas acknowledges Socket Mode envelopes
+immediately and processes only direct messages or explicit app mentions.
+
 ## After installation
 
 Open the printed web address, sign in as the first owner, verify the selected

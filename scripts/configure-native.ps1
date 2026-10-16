@@ -14,10 +14,10 @@ $AllowedKeys = @(
     "PORT", "BARLAS_HTTP_PORT", "OWNER_EMAIL", "OWNER_DISPLAY_NAME", "OWNER_LANGUAGE",
     "MODEL_PROVIDER", "MODEL_NAME", "MODEL_API_KEY", "OLLAMA_BASE_URL", "DEEP_MODEL_NAME", "MEDIA_API_KEY", "VISION_MODEL",
     "TRANSCRIPTION_MODEL", "SPEECH_MODEL", "EMBEDDING_MODEL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET",
-    "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "AGENT_MAX_STEPS", "AGENT_MAX_TOTAL_TOKENS", "AGENT_MAX_OUTPUT_TOKENS_PER_STEP",
+    "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED", "AGENT_MAX_STEPS", "AGENT_MAX_TOTAL_TOKENS", "AGENT_MAX_OUTPUT_TOKENS_PER_STEP",
     "DAILY_CHAT_QUOTA", "DAILY_TOOL_QUOTA", "DAILY_JOB_QUOTA"
 )
-$SecretKeys = @("MODEL_API_KEY", "MEDIA_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "DISCORD_BOT_TOKEN", "BARLAS_API_TOKEN", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY")
+$SecretKeys = @("MODEL_API_KEY", "MEDIA_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "DISCORD_BOT_TOKEN", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "BARLAS_API_TOKEN", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY")
 
 function Unquote-Value([string]$Raw) {
     if ($Raw.Length -ge 2 -and $Raw[0] -eq "'" -and $Raw[$Raw.Length - 1] -eq "'") { return $Raw.Substring(1, $Raw.Length - 2).Replace("\'", "'") }
@@ -128,6 +128,19 @@ function Configure-Channels {
     } elseif ($DiscordChoice -eq "disable") {
         foreach ($Name in @("DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED")) { $Settings.Remove($Name) }
     } elseif ($DiscordChoice -ne "keep") { throw "Choose keep, configure, or disable" }
+    $SlackConfigured = (Current "SLACK_BOT_TOKEN") -and (Current "SLACK_APP_TOKEN")
+    Write-Host "Slack: $(if ($SlackConfigured) { 'configured (Socket Mode)' } else { 'disabled' })"
+    $SlackChoice = Read-Plain "Slack action: keep, configure, disable" "keep"
+    if ($SlackChoice -eq "configure") {
+        $SlackBotToken = Read-Secret "Slack bot token (xoxb-...)"
+        $SlackAppToken = Read-Secret "Slack app token (xapp-...)"
+        if (-not $SlackBotToken.StartsWith("xoxb-") -or -not $SlackAppToken.StartsWith("xapp-")) { throw "Slack tokens are invalid" }
+        Set-Value "SLACK_BOT_TOKEN" $SlackBotToken
+        Set-Value "SLACK_APP_TOKEN" $SlackAppToken
+        Set-Value "SLACK_SOCKET_MODE_ENABLED" "true"
+    } elseif ($SlackChoice -eq "disable") {
+        foreach ($Name in @("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED")) { $Settings.Remove($Name) }
+    } elseif ($SlackChoice -ne "keep") { throw "Choose keep, configure, or disable" }
 }
 function Configure-Agent {
     Write-Host "`n[Agent]" -ForegroundColor Cyan
@@ -206,6 +219,7 @@ if ($Action -eq "models-status") {
 if ($Action -eq "channels-status") {
     Write-Output "Telegram: $(if (Current 'TELEGRAM_BOT_TOKEN') { 'configured (long polling)' } else { 'disabled' })"
     Write-Output "Discord: $(if (Current 'DISCORD_BOT_TOKEN') { 'configured (Gateway)' } else { 'disabled' })"
+    Write-Output "Slack: $(if ((Current 'SLACK_BOT_TOKEN') -and (Current 'SLACK_APP_TOKEN')) { 'configured (Socket Mode)' } else { 'disabled' })"
     return
 }
 if ($Action -eq "security-audit") {

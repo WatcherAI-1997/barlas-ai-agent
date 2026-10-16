@@ -6,10 +6,11 @@ describe("Barlas extension catalog", () => {
   it("reports built-in capability availability without exposing secrets", () => {
     const catalog = createBuiltinExtensionCatalog({
       browser: true, github: false, google: false, mcp: true, sandbox: true,
-      telegram: true, discord: false, privateModel: false, deviceNodes: true, modelProvider: "openai",
+      telegram: true, discord: false, slack: false, privateModel: false, deviceNodes: true, modelProvider: "openai",
     });
     expect(catalog.get("channel.telegram")).toMatchObject({ configured: true, kind: "channel" });
     expect(catalog.get("channel.discord")).toMatchObject({ configured: false, kind: "channel" });
+    expect(catalog.get("channel.slack")).toMatchObject({ configured: false, kind: "channel" });
     expect(catalog.get("connector.github")).toMatchObject({ configured: false });
     expect(catalog.get("provider.anthropic")).toMatchObject({ configured: false });
     expect(catalog.get("provider.ollama")).toMatchObject({ configured: false, risks: ["none"] });

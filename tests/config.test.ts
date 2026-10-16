@@ -35,4 +35,13 @@ describe("Barlas configuration", () => {
     expect(loadConfig({ ...base, DISCORD_GATEWAY_ENABLED: "true", DISCORD_BOT_TOKEN: "d".repeat(32) }))
       .toMatchObject({ DISCORD_GATEWAY_ENABLED: true, DISCORD_BOT_TOKEN: "d".repeat(32) });
   });
+
+  it("requires both Slack tokens when Socket Mode is enabled", () => {
+    expect(() => loadConfig({ ...base, SLACK_SOCKET_MODE_ENABLED: "true", SLACK_BOT_TOKEN: "xoxb-" + "b".repeat(24) }))
+      .toThrow(/SLACK_APP_TOKEN/u);
+    expect(loadConfig({
+      ...base, SLACK_SOCKET_MODE_ENABLED: "true",
+      SLACK_BOT_TOKEN: "xoxb-" + "b".repeat(24), SLACK_APP_TOKEN: "xapp-" + "a".repeat(24),
+    })).toMatchObject({ SLACK_SOCKET_MODE_ENABLED: true });
+  });
 });

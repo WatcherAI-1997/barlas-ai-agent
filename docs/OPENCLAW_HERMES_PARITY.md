@@ -7,7 +7,7 @@ free, Windows-first agent rather than copied as incompatible subsystems.
 | Product strength | Barlas adaptation | State |
 | --- | --- | --- |
 | OpenClaw gateway lifecycle and nested CLI | `barlas gateway`, onboard/configure, health, logs, update and rollback | Implemented |
-| OpenClaw local channels | Telegram long polling and Discord Gateway; no domain required | Implemented |
+| OpenClaw local channels | Telegram long polling, Discord Gateway, and Slack Socket Mode; no domain required | Implemented |
 | OpenClaw channel safety | Dedicated tokens, mention-gated guild chat, approvals and bounded delivery | Implemented foundation |
 | OpenClaw nodes | One-time pairing, revocable node tokens, heartbeat and approval-gated notifications | Implemented foundation |
 | OpenClaw extension discovery | Typed capability/risk/configuration catalog | Implemented |

@@ -142,6 +142,11 @@ direct messages and only explicitly mentioned guild messages, ignores other
 bots, suppresses outgoing mention expansion, and preserves the same durable
 run and approval boundaries (`!approve ID` / `!reject ID`).
 
+Slack works without a domain through official Socket Mode. Configure an
+`xoxb-` bot token and an `xapp-` app-level token with `connections:write`;
+Barlas accepts direct messages and `app_mention` events without exposing a
+webhook or inbound port.
+
 After installation, work from the terminal without copying a token:
 
 ```bash

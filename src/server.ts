@@ -4,6 +4,7 @@ import { TelegramLinkService } from "./auth/telegram-link.js";
 import { TelegramClient } from "./channels/telegram.js";
 import { TelegramPollingWorker } from "./channels/telegram-polling.js";
 import { DiscordClient, DiscordGatewayWorker } from "./channels/discord.js";
+import { SlackClient, SlackSocketWorker } from "./channels/slack.js";
 import { sendTelegramVoiceReply, telegramVoiceFallbackText } from "./channels/telegram-voice.js";
 import { GitHubConnector } from "./connectors/github.js";
 import { GoogleConnector } from "./connectors/google.js";
@@ -115,6 +116,7 @@ const extensionCatalog = createBuiltinExtensionCatalog({
   sandbox: Boolean(codeSandbox),
   telegram: Boolean(config.TELEGRAM_BOT_TOKEN),
   discord: Boolean(config.DISCORD_BOT_TOKEN && config.DISCORD_GATEWAY_ENABLED),
+  slack: Boolean(config.SLACK_BOT_TOKEN && config.SLACK_APP_TOKEN && config.SLACK_SOCKET_MODE_ENABLED),
   privateModel: Boolean(config.PRIVATE_MODEL_BASE_URL && config.PRIVATE_MODEL_NAME && config.PRIVATE_MODEL_API_KEY),
   deviceNodes: true,
   modelProvider: config.MODEL_PROVIDER,
@@ -186,6 +188,9 @@ const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
   : undefined;
 const discord = config.DISCORD_BOT_TOKEN && config.DISCORD_GATEWAY_ENABLED
   ? { gatewaySecret: config.BARLAS_API_TOKEN, client: new DiscordClient(config.DISCORD_BOT_TOKEN) }
+  : undefined;
+const slack = config.SLACK_BOT_TOKEN && config.SLACK_APP_TOKEN && config.SLACK_SOCKET_MODE_ENABLED
+  ? { socketSecret: config.BARLAS_API_TOKEN, client: new SlackClient(config.SLACK_BOT_TOKEN, config.SLACK_APP_TOKEN) }
   : undefined;
 const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
@@ -273,6 +278,13 @@ const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
         await discord.client.sendMessage(run.delivery.channelId, run.result.text);
       }
     }
+    if (run.delivery?.channel === "slack" && slack) {
+      if (run.status === "waiting_approval" && run.pendingApprovalId) {
+        await slack.client.sendMessage(run.delivery.channelId, `${run.result.text}\n\nДля решения: !approve ${run.pendingApprovalId} или !reject ${run.pendingApprovalId}`);
+      } else {
+        await slack.client.sendMessage(run.delivery.channelId, run.result.text);
+      }
+    }
   },
   onError: (error) => console.error("Barlas AI Agent autonomous run worker error", error),
 });
@@ -313,6 +325,7 @@ const app = await buildApp({
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
   ...(telegram ? { telegram } : {}),
   ...(discord ? { discord } : {}),
+  ...(slack ? { slack } : {}),
   logger: true,
 });
 const telegramPolling = telegram && config.TELEGRAM_POLLING_ENABLED
@@ -345,11 +358,25 @@ const discordGateway = discord && config.DISCORD_BOT_TOKEN
       (error) => app.log.error({ error }, "Barlas AI Agent Discord Gateway error"),
     )
   : undefined;
+const slackSocket = slack
+  ? new SlackSocketWorker(
+      slack.client,
+      async (message) => {
+        const response = await app.inject({
+          method: "POST", url: "/channels/slack/message",
+          headers: { "x-barlas-slack-secret": slack.socketSecret }, payload: message,
+        });
+        if (response.statusCode >= 400) throw new Error(`Local Slack message failed with status ${response.statusCode}`);
+      },
+      (error) => app.log.error({ error }, "Barlas AI Agent Slack Socket Mode error"),
+    )
+  : undefined;
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   app.log.info({ signal }, "Barlas AI Agent is shutting down");
   await telegramPolling?.stop();
   discordGateway?.stop();
+  slackSocket?.stop();
   await jobWorker.stop();
   await agentRunWorker.stop();
   await scheduleWorker.stop();
@@ -364,6 +391,7 @@ process.once("SIGTERM", () => void shutdown("SIGTERM"));
 await app.listen({ host: config.HOST, port: config.PORT });
 await telegramPolling?.start();
 discordGateway?.start();
+await slackSocket?.start();
 if (config.JOB_WORKER_ENABLED) jobWorker.start();
 if (config.AGENT_RUN_WORKER_ENABLED) agentRunWorker.start();
 if (config.JOB_WORKER_ENABLED) scheduleWorker.start();

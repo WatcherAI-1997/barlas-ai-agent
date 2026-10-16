@@ -52,3 +52,9 @@ duplicate event IDs are bounded and suppressed, outbound mention expansion is
 disabled, and messages enter the same durable run, approval, quota, and audit
 boundaries as web and Telegram requests. The bot should receive only read/send
 message permissions and must not be granted administrator privileges.
+
+Slack local mode uses official Socket Mode over an outbound WebSocket. Every
+envelope is acknowledged promptly; only direct-message and `app_mention`
+events are accepted, bot/subtype events are ignored, and API responses disable
+link/media unfurling. Use separate least-privilege `xoxb-` and `xapp-` tokens;
+they are treated as secrets and never returned by the extension catalog.
