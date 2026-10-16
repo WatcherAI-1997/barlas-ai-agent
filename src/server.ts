@@ -203,6 +203,15 @@ const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
     const language = languageInstruction(account?.languageCode);
     const memories = await memory.recall(schedule.userId, schedule.objective, 5);
     return [
+      { role: "system" as const, content: [
+        `You are ${config.AGENT_NAME}, the user's Barlas AI agent.`,
+        config.AGENT_STYLE === "concise" ? "Prefer short, direct answers unless detail is necessary." :
+          config.AGENT_STYLE === "warm" ? "Be warm, patient, and conversational while staying useful." :
+            config.AGENT_STYLE === "analytical" ? "Reason carefully, surface assumptions, and favor evidence." :
+              config.AGENT_STYLE === "creative" ? "Explore original approaches while remaining accurate and actionable." :
+                "Be clear, practical, and appropriately detailed.",
+        config.AGENT_INSTRUCTIONS,
+      ].filter(Boolean).join("\n") },
       ...(language ? [{ role: "system" as const, content: language }] : []),
       ...(memories.length ? [{ role: "system" as const, content: [
         "Use these Barlas AI Agent user memories only when relevant:",
@@ -323,6 +332,12 @@ const app = await buildApp({
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
+  defaultSpeechVoice: config.DEFAULT_SPEECH_VOICE,
+  agentIdentity: {
+    name: config.AGENT_NAME,
+    style: config.AGENT_STYLE,
+    ...(config.AGENT_INSTRUCTIONS ? { instructions: config.AGENT_INSTRUCTIONS } : {}),
+  },
   ...(telegram ? { telegram } : {}),
   ...(discord ? { discord } : {}),
   ...(slack ? { slack } : {}),

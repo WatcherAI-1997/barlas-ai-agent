@@ -36,8 +36,17 @@ The complete Barlas setup and configuration surface is available after install:
 
 ```powershell
 barlas onboard
+barlas onboard private
+barlas onboard developer
+barlas onboard server
+barlas onboard import
+barlas configure identity
 barlas configure models
+barlas configure memory
 barlas configure channels
+barlas configure integrations
+barlas configure automations
+barlas configure security
 barlas config list
 barlas config get MODEL_NAME
 barlas config set MODEL_NAME gpt-5
@@ -67,6 +76,14 @@ lookup. The previous application version is retained for `update rollback`;
 the embedded database and workspaces live outside the application directory.
 Uninstall preserves those data and a protected configuration backup unless
 `--purge` is explicitly selected and confirmed.
+
+The onboarding profiles are starting points, not separate editions. `quick`
+asks only for the essentials; `private` selects local Ollama and disables
+external channels; `developer` raises bounded agent limits and exposes advanced
+sections; `server` applies higher worker quotas while keeping the native Windows
+gateway on loopback; `import` reads only allowlisted keys from an existing
+Barlas `.env` file. Import never evaluates PowerShell, shell syntax, or install
+hooks, and protected runtime tokens are not imported.
 
 An existing `deploy\native.env` is reused and never silently overwritten.
 Windows installation is local-only. Native mode does not expose the

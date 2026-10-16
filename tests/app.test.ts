@@ -236,6 +236,26 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("applies the configured agent identity to real conversations", async () => {
+    const deps = dependencies();
+    const app = await buildApp({
+      apiToken,
+      ...deps,
+      agentIdentity: { name: "Arslan", style: "analytical", instructions: "State uncertainty explicitly." },
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/chat",
+      headers: { authorization: `Bearer ${apiToken}` },
+      payload: { userId: "user-1", messages: [{ role: "user", content: "Hello" }] },
+    });
+    expect(response.statusCode).toBe(200);
+    const messages = vi.mocked(deps.modelProvider.generate).mock.calls[0]?.[0].messages ?? [];
+    expect(messages[0]?.content).toContain("You are Arslan");
+    expect(messages[0]?.content).toContain("State uncertainty explicitly.");
+    await app.close();
+  });
+
   it("continues a saved conversation without duplicating client-supplied history", async () => {
     const deps = dependencies();
     const conversationId = "00000000-0000-4000-8000-000000000099";
@@ -932,7 +952,7 @@ describe("Barlas AI Agent API", () => {
         content: Buffer.from("ID3spoken-answer"), mimeType: "audio/mpeg" as const, voice: "alloy" as const,
       })),
     };
-    const app = await buildApp({ apiToken, ...deps, media });
+    const app = await buildApp({ apiToken, ...deps, media, defaultSpeechVoice: "nova" });
     const boundary = "barlas-voice-boundary";
     const audio = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4]);
     const payload = Buffer.concat([
@@ -946,7 +966,7 @@ describe("Barlas AI Agent API", () => {
       payload,
     });
     const response = await app.inject({
-      method: "POST", url: "/v1/voice/turn?userId=user-1&consent=true&taskClass=fast&voice=alloy",
+      method: "POST", url: "/v1/voice/turn?userId=user-1&consent=true&taskClass=fast",
       headers: { authorization: `Bearer ${apiToken}`, "content-type": `multipart/form-data; boundary=${boundary}` },
       payload,
     });
@@ -959,6 +979,7 @@ describe("Barlas AI Agent API", () => {
       audio: { mimeType: "audio/mpeg", base64: Buffer.from("ID3spoken-answer").toString("base64"), voice: "alloy" },
     });
     expect(media.transcribeUpload).toHaveBeenCalledWith(audio, "voice.webm", "audio/webm", undefined);
+    expect(media.createSpeechBuffer).toHaveBeenCalledWith("Hello from Barlas AI Agent", "nova");
     expect(deps.database.saveTurn).toHaveBeenCalledWith(expect.objectContaining({
       messages: [{ role: "user", content: "Расскажи план" }],
     }));

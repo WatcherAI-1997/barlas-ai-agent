@@ -26,11 +26,18 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
     $LocalCommand = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
     $ConfigureScript = Join-Path $RootDir "scripts\configure-native.ps1"
     if ($LocalCommand -in @("onboard", "configure")) {
-        $Section = if ($LocalCommand -eq "onboard" -or $Arguments.Count -lt 2) { "all" } else { $Arguments[1] }
-        & $ConfigureScript -Action wizard -Section $Section
+        $Profiles = @("quick", "private", "developer", "server", "import")
+        $Requested = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
+        $Section = if ($LocalCommand -eq "onboard" -or $Requested -in $Profiles -or -not $Requested) { "all" } else { $Requested }
+        $Profile = if ($Requested -in $Profiles) { $Requested } else { "" }
+        & $ConfigureScript -Action wizard -Section $Section -Profile $Profile
+        if (-not $?) { exit 1 }
+        & $ConfigureScript -Action validate
         if (-not $?) { exit 1 }
         & (Join-Path $RootDir "scripts\stop-native.ps1")
         & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady
+        & (Join-Path $RootDir "scripts\doctor-native.ps1") -RequireRunning
+        Write-Host "`n[OK] Barlas is configured and ready." -ForegroundColor Green
         exit 0
     }
     if ($LocalCommand -eq "config") {

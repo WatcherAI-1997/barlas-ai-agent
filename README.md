@@ -108,10 +108,12 @@ barlas
 barlas ask "Проверь проект и составь план"
 ```
 
-Run `barlas onboard` for the full setup wizard, `barlas configure models` or
-`barlas configure channels` for a single section, and `barlas gateway restart`
-to manage the local service. `barlas help` lists the complete Barlas command
-surface.
+Run `barlas onboard` for the full guided setup. It offers `quick`, `private`,
+`developer`, `server`, and `import` profiles, then configures the agent identity,
+models and voice, memory, channels, integrations, automations, and security.
+Use commands such as `barlas configure identity`, `barlas configure models`, or
+`barlas configure channels` to revisit one section. The gateway restarts and a
+live diagnostic runs automatically after onboarding.
 
 `barlas` opens a continuous terminal conversation: replies share one stored
 context until `/new` is used. `/sessions` lists earlier conversations and

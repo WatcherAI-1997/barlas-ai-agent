@@ -38,6 +38,11 @@ describe("production installer", () => {
     expect(configure).toContain('"file", "schema", "validate"');
     expect(configure).toContain("Do not put secrets in command history");
     expect(configure).toContain("Protect-File");
+    for (const profile of ["quick", "private", "developer", "server", "import"]) expect(configure).toContain(`\"${profile}\"`);
+    for (const section of ["identity", "memory", "integrations", "automations", "security"]) expect(configure).toContain(`\"${section}\"`);
+    expect(configure).toContain("Import existing Barlas configuration");
+    expect(configure).toContain("Imported $Imported supported settings");
+    expect(cli).toContain("doctor-native.ps1");
     expect(nativeUpdater).toContain('ValidateSet("check", "update", "rollback", "repair")');
     expect(nativeUpdater).toContain("Rollback failed; restoring the current version");
     expect(nativeUpdater).toContain("Protect-File");

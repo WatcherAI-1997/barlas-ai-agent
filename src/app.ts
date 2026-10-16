@@ -44,7 +44,7 @@ import type { SkillManager } from "./skills/manager.js";
 import { parseSignedSkillPackageValue, verifySkillPackage } from "./skills/package.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
-import { MAX_MEDIA_BYTES, speechVoices, type MediaService } from "./tools/media.js";
+import { MAX_MEDIA_BYTES, speechVoices, type MediaService, type SpeechVoice } from "./tools/media.js";
 import { DEFAULT_MAX_WORKSPACE_FILE_BYTES, type FileWorkspace } from "./tools/file-workspace.js";
 import type { ScheduleService } from "./schedules/service.js";
 import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } from "./projects/service.js";
@@ -159,7 +159,7 @@ const voiceTurnQuerySchema = z.object({
   userId: z.string().min(1).max(128),
   conversationId: z.string().uuid().optional(),
   taskClass: z.enum(["fast", "deep", "private"]).default("fast"),
-  voice: z.enum(speechVoices).default("alloy"),
+  voice: z.enum(speechVoices).optional(),
   language: z.string().regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/u).optional(),
   consent: z.literal("true"),
 }).strict();
@@ -373,6 +373,12 @@ export interface AppDependencies {
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
+  defaultSpeechVoice?: SpeechVoice;
+  agentIdentity?: {
+    name: string;
+    style: "balanced" | "concise" | "warm" | "analytical" | "creative";
+    instructions?: string;
+  };
   telegram?: {
     webhookSecret: string;
     client: {
@@ -408,6 +414,27 @@ async function preferredLanguageContext(
   const account = await authService.getAccount(userId);
   const instruction = languageInstruction(account?.languageCode);
   return instruction ? [{ role: "system", content: instruction }] : [];
+}
+
+function agentIdentityContext(
+  identity: AppDependencies["agentIdentity"],
+): Array<{ role: "system"; content: string }> {
+  if (!identity) return [];
+  const styleInstructions = {
+    balanced: "Be clear, practical, and appropriately detailed.",
+    concise: "Prefer short, direct answers unless detail is necessary.",
+    warm: "Be warm, patient, and conversational while staying useful.",
+    analytical: "Reason carefully, surface assumptions, and favor evidence.",
+    creative: "Explore original approaches while remaining accurate and actionable.",
+  } as const;
+  return [{
+    role: "system",
+    content: [
+      `You are ${identity.name}, the user's Barlas AI agent.`,
+      styleInstructions[identity.style],
+      identity.instructions?.trim(),
+    ].filter(Boolean).join("\n"),
+  }];
 }
 
 export async function buildApp(dependencies: AppDependencies): Promise<FastifyInstance> {
@@ -1114,12 +1141,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           ].join("\n"),
         }]
       : [];
+    const identityContext = agentIdentityContext(dependencies.agentIdentity);
     const languageContext = await preferredLanguageContext(input.userId, dependencies.authService);
     try {
       const result = await dependencies.modelProvider.generate({
         userId: input.userId,
         conversationId,
-        messages: [...languageContext, ...memoryContext, ...conversation.modelMessages],
+        messages: [...identityContext, ...languageContext, ...memoryContext, ...conversation.modelMessages],
         taskClass: input.taskClass,
       });
 
@@ -1182,6 +1210,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     mode: "push-to-talk",
     microphoneConsent: "explicit",
     recordingRetention: "none",
+    defaultVoice: dependencies.defaultSpeechVoice ?? "alloy",
   }));
 
   app.post("/v1/voice/turn", async (request, reply) => {
@@ -1211,7 +1240,10 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       taskClass: query.data.taskClass,
     });
     const spokenText = chat.result.text.slice(0, 4_096);
-    const speech = await dependencies.media.createSpeechBuffer(spokenText, query.data.voice);
+    const speech = await dependencies.media.createSpeechBuffer(
+      spokenText,
+      query.data.voice ?? dependencies.defaultSpeechVoice ?? "alloy",
+    );
     await dependencies.database.appendAudit({
       userId,
       eventType: "voice.turn.completed",
@@ -1265,6 +1297,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           ].join("\n"),
         }]
       : [];
+    const identityContext = agentIdentityContext(dependencies.agentIdentity);
     const languageContext = await preferredLanguageContext(userId, dependencies.authService);
     let projectContext: Array<{ role: "system"; content: string }> = [];
     if (parsed.data.projectId) {
@@ -1316,7 +1349,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const loopInput = {
         userId,
         conversationId,
-        messages: [...languageContext, ...projectContext, ...skillContext, ...memoryContext, ...conversation.modelMessages],
+        messages: [...identityContext, ...languageContext, ...projectContext, ...skillContext, ...memoryContext, ...conversation.modelMessages],
         taskClass: parsed.data.taskClass,
         maxSteps: parsed.data.maxSteps,
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),

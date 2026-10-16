@@ -9,6 +9,13 @@ const base = {
 };
 
 describe("Barlas configuration", () => {
+  it("supports a bounded personal agent identity", () => {
+    expect(loadConfig({ ...base })).toMatchObject({ AGENT_NAME: "Barlas", AGENT_STYLE: "balanced", DEFAULT_SPEECH_VOICE: "alloy" });
+    expect(loadConfig({ ...base, AGENT_NAME: "Arslan", AGENT_STYLE: "analytical", AGENT_INSTRUCTIONS: "Challenge assumptions." }))
+      .toMatchObject({ AGENT_NAME: "Arslan", AGENT_STYLE: "analytical", AGENT_INSTRUCTIONS: "Challenge assumptions." });
+    expect(() => loadConfig({ ...base, AGENT_INSTRUCTIONS: "x".repeat(4_001) })).toThrow(/4000/u);
+  });
+
   it("accepts Anthropic as a native text and tool provider", () => {
     expect(loadConfig({ ...base, MODEL_PROVIDER: "anthropic" }).MODEL_PROVIDER).toBe("anthropic");
   });

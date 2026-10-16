@@ -142,6 +142,10 @@ try {
     Write-Host "AI AGENT COMMANDS" -ForegroundColor White
     Write-Host "  barlas onboard" -ForegroundColor Cyan -NoNewline
     Write-Host "                 full setup wizard"
+    Write-Host "  barlas onboard private" -ForegroundColor Cyan -NoNewline
+    Write-Host "         local private profile"
+    Write-Host "  barlas onboard developer" -ForegroundColor Cyan -NoNewline
+    Write-Host "       developer profile"
     Write-Host "  barlas configure" -ForegroundColor Cyan -NoNewline
     Write-Host "               change settings"
     Write-Host "  barlas" -ForegroundColor Cyan -NoNewline
