@@ -106,6 +106,7 @@ async function loadPanel(name) {
   if (name === "jobs") await loadJobs();
   if (name === "traces") renderList("#traces", (await api(`/v1/traces?userId=${encodeURIComponent(state.account.id)}`)).traces, (item) => card(item.operation, `${item.status} · ${new Date(item.createdAt).toLocaleString()}`, item.traceId));
   if (name === "skills") renderList("#skills", (await api("/v1/skills")).skills, (item) => card(item.id, `v${item.version} · ${item.allowedTools.join(", ")}`, item.description));
+  if (name === "organizations") await loadOrganizations();
   if (name === "users") await loadUsers();
 }
 
@@ -258,6 +259,33 @@ async function loadUsers() {
   const users = (await api("/v1/admin/users")).users;
   renderList("#users", users, (user) => card(user.displayName, `${user.email} · ${user.role}`, user.active ? "Активен" : "Отключён"));
 }
+
+async function loadOrganizations() {
+  const items = (await api("/v1/organizations")).organizations;
+  renderList("#organizations", items, (organization) => {
+    const node = card(organization.name, `${organization.slug} · ${organization.plan} · ${organization.role}`);
+    const members = document.createElement("button");
+    members.textContent = "Участники"; members.className = "secondary";
+    members.addEventListener("click", async () => {
+      const data = await api(`/v1/organizations/${organization.id}/members`);
+      alert(data.members.map((member) => `${member.displayName} · ${member.email} · ${member.role}`).join("\n"));
+    });
+    node.append(members);
+    return node;
+  });
+}
+
+$("#organization-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#organization-error").textContent = "";
+  try {
+    await api("/v1/organizations", { method: "POST", body: JSON.stringify({
+      name: $("#organization-name").value,
+      slug: $("#organization-slug").value,
+      plan: $("#organization-plan").value,
+    }) });
+    event.target.reset(); await loadOrganizations();
+  } catch (error) { $("#organization-error").textContent = error.message; }
+});
 
 $("#user-form").addEventListener("submit", async (event) => {
   event.preventDefault(); $("#user-error").textContent = "";

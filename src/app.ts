@@ -19,6 +19,10 @@ import type { TelegramLinkService } from "./auth/telegram-link.js";
 import type { GitHubConnector } from "./connectors/github.js";
 import { connectorProviders, type ConnectorService } from "./connectors/vault.js";
 import type { SemanticMemory } from "./memory/semantic.js";
+import {
+  OrganizationAuthorizationError,
+  type OrganizationService,
+} from "./organizations/service.js";
 import type { PersistentAgentRuntime } from "./runs/runtime.js";
 import { QuotaExceededError, type RuntimeGovernance } from "./governance/runtime.js";
 import { agentJobSchema } from "./jobs/agent-handler.js";
@@ -139,6 +143,19 @@ const githubRepositoriesSchema = z.object({
   connectorId: z.string().uuid(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
 });
+const organizationParamsSchema = z.object({ id: z.string().uuid() });
+const organizationCreateSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  slug: z.string().trim().min(3).max(64),
+  plan: z.enum(["private_alpha", "team", "business"]).default("private_alpha"),
+}).strict();
+const organizationMemberSchema = z.object({
+  accountId: z.string().uuid(),
+  role: z.enum(["admin", "member", "viewer"]),
+}).strict();
+const organizationPlanSchema = z.object({
+  plan: z.enum(["private_alpha", "team", "business"]),
+}).strict();
 
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -174,6 +191,7 @@ export interface AppDependencies {
   connectors?: Pick<ConnectorService, "save" | "list" | "delete">;
   githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
   memory?: Pick<SemanticMemory, "remember" | "recall">;
+  organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
   telegram?: {
@@ -233,6 +251,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     }
     if (error instanceof AccountConflictError) {
       return reply.code(409).send({ error: error.message });
+    }
+    if (error instanceof OrganizationAuthorizationError) {
+      return reply.code(403).send({ error: error.message });
     }
     return reply.send(error);
   });
@@ -383,6 +404,81 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       details: { email: user.email, role: user.role },
     });
     return reply.code(201).send({ user });
+  });
+
+  app.get("/v1/organizations", async (request, reply) => {
+    const principal = principalFor(request);
+    if (!principal.account || !dependencies.organizations) return reply.notFound();
+    return { organizations: await dependencies.organizations.list(principal.account.id) };
+  });
+
+  app.post("/v1/organizations", async (request, reply) => {
+    const principal = principalFor(request);
+    if (!principal.account || !dependencies.organizations) return reply.notFound();
+    const parsed = organizationCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid organization request");
+    const organization = await dependencies.organizations.create({
+      ...parsed.data,
+      ownerId: principal.account.id,
+    });
+    await dependencies.database.appendAudit({
+      userId: principal.account.id,
+      eventType: "organization.created",
+      resourceType: "organization",
+      resourceId: organization.id,
+      details: { slug: organization.slug, plan: organization.plan },
+    });
+    return reply.code(201).send({ organization });
+  });
+
+  app.get("/v1/organizations/:id/members", async (request, reply) => {
+    const principal = principalFor(request);
+    if (!principal.account || !dependencies.organizations) return reply.notFound();
+    const params = organizationParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.badRequest("Invalid organization request");
+    return { members: await dependencies.organizations.members(params.data.id, principal.account.id) };
+  });
+
+  app.post("/v1/organizations/:id/members", async (request, reply) => {
+    const principal = principalFor(request);
+    if (!principal.account || !dependencies.organizations) return reply.notFound();
+    const params = organizationParamsSchema.safeParse(request.params);
+    const body = organizationMemberSchema.safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid organization member request");
+    const member = await dependencies.organizations.addMember({
+      organizationId: params.data.id,
+      actorId: principal.account.id,
+      ...body.data,
+    });
+    await dependencies.database.appendAudit({
+      userId: principal.account.id,
+      eventType: "organization.member.updated",
+      resourceType: "organization",
+      resourceId: params.data.id,
+      details: { accountId: member.accountId, role: member.role },
+    });
+    return reply.code(201).send({ member });
+  });
+
+  app.patch("/v1/organizations/:id/plan", async (request, reply) => {
+    const principal = principalFor(request);
+    if (!principal.account || !dependencies.organizations) return reply.notFound();
+    const params = organizationParamsSchema.safeParse(request.params);
+    const body = organizationPlanSchema.safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid organization plan request");
+    await dependencies.organizations.changePlan({
+      organizationId: params.data.id,
+      actorId: principal.account.id,
+      plan: body.data.plan,
+    });
+    await dependencies.database.appendAudit({
+      userId: principal.account.id,
+      eventType: "organization.plan.changed",
+      resourceType: "organization",
+      resourceId: params.data.id,
+      details: { plan: body.data.plan },
+    });
+    return { updated: true };
   });
 
   app.get("/v1/connectors", async (request, reply) => {

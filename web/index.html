@@ -34,6 +34,7 @@
           <button data-panel="jobs">Задачи</button>
           <button data-panel="traces">Трассировка</button>
           <button data-panel="skills">Навыки</button>
+          <button data-panel="organizations">Организации</button>
           <button id="users-tab" data-panel="users">Пользователи</button>
         </nav>
 
@@ -64,6 +65,17 @@
         <section id="panel-jobs" class="panel hidden"><h2>Долговременные задачи</h2><div id="jobs" class="grid"></div></section>
         <section id="panel-traces" class="panel hidden"><h2>Трассировка</h2><div id="traces" class="grid"></div></section>
         <section id="panel-skills" class="panel hidden"><h2>Навыки</h2><div id="skills" class="grid"></div></section>
+        <section id="panel-organizations" class="panel hidden">
+          <h2>Организации</h2>
+          <form id="organization-form" class="inline-form">
+            <input id="organization-name" placeholder="Название" minlength="2" required>
+            <input id="organization-slug" placeholder="slug" minlength="3" pattern="[a-z0-9][a-z0-9-]{1,62}[a-z0-9]" required>
+            <select id="organization-plan"><option value="private_alpha">Private alpha</option><option value="team">Team</option><option value="business">Business</option></select>
+            <button type="submit">Создать</button>
+          </form>
+          <p id="organization-error" class="error" role="alert"></p>
+          <div id="organizations" class="grid"></div>
+        </section>
         <section id="panel-users" class="panel hidden">
           <h2>Пользователи</h2>
           <form id="user-form" class="inline-form">

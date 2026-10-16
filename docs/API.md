@@ -23,6 +23,11 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `DELETE /v1/me/telegram` — remove the account's Telegram link.
 - `GET /v1/admin/users` — list accounts; owner only.
 - `POST /v1/admin/users` — create an owner or user account; owner only.
+- `GET /v1/organizations` — list organizations for the current signed-in account.
+- `POST /v1/organizations` — create an organization and its first owner membership.
+- `GET /v1/organizations/:id/members` — list members for an organization member.
+- `POST /v1/organizations/:id/members` — add/update a non-owner member; organization owner/admin only.
+- `PATCH /v1/organizations/:id/plan` — change the plan profile; organization owner only.
 
 - `POST /v1/chat` — generate an answer using `fast`, `deep`, or `private` routing.
 - `POST /v1/agent/run` — enqueue the bounded autonomous tool loop and return HTTP 202.
@@ -118,6 +123,14 @@ administrative scope. Login attempts are bounded per source address.
 The optional initial owner is created from `OWNER_EMAIL`, `OWNER_PASSWORD`, and
 `OWNER_DISPLAY_NAME`; both email and password must be supplied together. The
 bootstrap is idempotent and never writes credentials to source control.
+
+Organizations add a separate team-membership boundary with `owner`, `admin`,
+`member`, and `viewer` roles. Only owners may change the organization plan;
+owners and admins may manage non-owner memberships. Organization membership
+does not automatically expose another account's conversations, memory, files,
+connectors, approvals, or jobs. The `private_alpha`, `team`, and `business`
+values are billing/entitlement foundations only; no payment is charged and no
+paid entitlement is implied until a billing provider is explicitly configured.
 
 ## Connector vault and GitHub
 

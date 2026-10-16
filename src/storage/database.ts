@@ -4,6 +4,13 @@ import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth
 import type { TelegramLink, TelegramLinkStore } from "../auth/telegram-link.js";
 import type { SemanticMemoryStore } from "../memory/semantic.js";
 import type {
+  Organization,
+  OrganizationMember,
+  OrganizationPlan,
+  OrganizationRole,
+  OrganizationStore,
+} from "../organizations/service.js";
+import type {
   ConnectorProvider,
   ConnectorRecord,
   ConnectorStore,
@@ -27,7 +34,7 @@ import type {
   MemoryEntry,
 } from "./types.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -40,6 +47,102 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async ping(): Promise<void> {
     await this.pool.query("select 1");
+  }
+
+  async createOrganization(input: {
+    name: string;
+    slug: string;
+    plan: OrganizationPlan;
+    ownerId: string;
+  }): Promise<Organization> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const created = await client.query<OrganizationRow>(
+        `insert into organizations (name, slug, plan, created_by)
+         values ($1, $2, $3, $4)
+         returning id, name, slug, plan, created_at`,
+        [input.name, input.slug, input.plan, input.ownerId],
+      );
+      const row = created.rows[0];
+      if (!row) throw new Error("Organization insert returned no row");
+      await client.query(
+        `insert into organization_members (organization_id, account_id, role) values ($1, $2, 'owner')`,
+        [row.id, input.ownerId],
+      );
+      await client.query("commit");
+      return mapOrganization(row, "owner");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listOrganizations(accountId: string): Promise<Organization[]> {
+    const result = await this.pool.query<OrganizationRow & { role: OrganizationRole }>(
+      `select organization.id, organization.name, organization.slug, organization.plan,
+              organization.created_at, membership.role
+       from organization_members membership
+       join organizations organization on organization.id = membership.organization_id
+       where membership.account_id = $1
+       order by organization.created_at, organization.id`,
+      [accountId],
+    );
+    return result.rows.map((row) => mapOrganization(row, row.role));
+  }
+
+  async getOrganizationRole(organizationId: string, accountId: string): Promise<OrganizationRole | null> {
+    const result = await this.pool.query<{ role: OrganizationRole }>(
+      `select role from organization_members where organization_id = $1 and account_id = $2`,
+      [organizationId, accountId],
+    );
+    return result.rows[0]?.role ?? null;
+  }
+
+  async listOrganizationMembers(organizationId: string): Promise<OrganizationMember[]> {
+    const result = await this.pool.query<OrganizationMemberRow>(
+      `select account.id as account_id, account.email, account.display_name,
+              membership.role, membership.created_at
+       from organization_members membership
+       join user_accounts account on account.id = membership.account_id
+       where membership.organization_id = $1
+       order by membership.created_at, account.id`,
+      [organizationId],
+    );
+    return result.rows.map(mapOrganizationMember);
+  }
+
+  async upsertOrganizationMember(input: {
+    organizationId: string;
+    accountId: string;
+    role: Exclude<OrganizationRole, "owner">;
+  }): Promise<OrganizationMember> {
+    const result = await this.pool.query<OrganizationMemberRow>(
+      `with membership as (
+         insert into organization_members (organization_id, account_id, role)
+         values ($1, $2, $3)
+         on conflict (organization_id, account_id) do update set
+           role = excluded.role, updated_at = now()
+         returning account_id, role, created_at
+       )
+       select membership.account_id, account.email, account.display_name,
+              membership.role, membership.created_at
+       from membership join user_accounts account on account.id = membership.account_id`,
+      [input.organizationId, input.accountId, input.role],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Organization member upsert returned no row");
+    return mapOrganizationMember(row);
+  }
+
+  async updateOrganizationPlan(organizationId: string, plan: OrganizationPlan): Promise<void> {
+    const result = await this.pool.query(
+      `update organizations set plan = $2, updated_at = now() where id = $1`,
+      [organizationId, plan],
+    );
+    if (result.rowCount !== 1) throw new Error("Organization not found");
   }
 
   async upsertConnector(input: {
@@ -1240,6 +1343,43 @@ interface MemoryRow {
   category: string;
   importance: number;
   created_at: Date;
+}
+
+interface OrganizationRow {
+  id: string;
+  name: string;
+  slug: string;
+  plan: OrganizationPlan;
+  created_at: Date;
+}
+
+interface OrganizationMemberRow {
+  account_id: string;
+  email: string;
+  display_name: string;
+  role: OrganizationRole;
+  created_at: Date;
+}
+
+function mapOrganization(row: OrganizationRow, role: OrganizationRole): Organization {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    plan: row.plan,
+    role,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+function mapOrganizationMember(row: OrganizationMemberRow): OrganizationMember {
+  return {
+    accountId: row.account_id,
+    email: row.email,
+    displayName: row.display_name,
+    role: row.role,
+    createdAt: row.created_at.toISOString(),
+  };
 }
 
 function mapMemory(row: MemoryRow): MemoryEntry {
