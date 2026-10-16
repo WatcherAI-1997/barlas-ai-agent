@@ -106,14 +106,17 @@ try {
         Push-Location $AppDir
         try {
             Invoke-NativeCommand $NpmCmd @("ci", "--include=dev", "--ignore-scripts", "--no-fund", "--no-audit") "Dependency installation failed"
-            Invoke-NativeCommand $NpmCmd @("run", "build") "Barlas build failed"
+            $TypeScriptCli = Join-Path $AppDir "node_modules\typescript\bin\tsc"
+            if (-not (Test-Path -LiteralPath $TypeScriptCli -PathType Leaf)) { throw "TypeScript compiler was not installed. Details: $InstallLog" }
+            Invoke-NativeCommand $NodeExe @($TypeScriptCli, "-p", "tsconfig.json") "Barlas build failed"
         } finally { Pop-Location }
         Write-Done "Application ready"
 
         Write-Step 4 "Preparing browser"
-        $Playwright = Join-Path $AppDir "node_modules\.bin\playwright-core.cmd"
+        $Playwright = Join-Path $AppDir "node_modules\playwright-core\cli.js"
+        if (-not (Test-Path -LiteralPath $Playwright -PathType Leaf)) { throw "Browser installer was not installed. Details: $InstallLog" }
         Push-Location $AppDir
-        try { Invoke-NativeCommand $Playwright @("install", "chromium") "Browser installation failed" }
+        try { Invoke-NativeCommand $NodeExe @($Playwright, "install", "chromium") "Browser installation failed" }
         finally { Pop-Location }
         Write-Done "Browser ready"
 
