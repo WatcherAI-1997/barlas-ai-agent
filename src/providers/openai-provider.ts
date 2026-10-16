@@ -72,6 +72,7 @@ export class OpenAIProvider implements ToolCapableModelProvider {
         parameters: tool.parameters,
         strict: false,
       })),
+      parallel_tool_calls: false,
       ...(request.maxOutputTokens ? { max_output_tokens: request.maxOutputTokens } : {}),
       ...(request.previousResponseId ? { previous_response_id: request.previousResponseId } : {}),
       metadata: {

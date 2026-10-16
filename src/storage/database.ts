@@ -4,6 +4,12 @@ import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth
 import type { AgentMessage, GenerateResult } from "../core/models.js";
 import type { GovernanceStore, QuotaCategory, TraceEvent, TraceStatus } from "../governance/runtime.js";
 import type {
+  AgentRunEvent,
+  AgentRunRecord,
+  AgentRunStatus,
+  AgentRunStore,
+} from "../runs/types.js";
+import type {
   AgentStore,
   ApprovalRequest,
   ConversationDetail,
@@ -13,7 +19,7 @@ import type {
   MemoryEntry,
 } from "./types.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -268,18 +274,18 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
     return row ? this.mapApproval(row) : null;
   }
 
-  async markApprovalExecuted(id: string, succeeded: boolean): Promise<void> {
+  async markApprovalExecuted(id: string, succeeded: boolean, output?: unknown): Promise<void> {
     await this.pool.query(
       `update approval_requests
-       set status = $2, executed_at = now()
+       set status = $2, executed_at = now(), output = $3::jsonb
        where id = $1 and status = 'approved'`,
-      [id, succeeded ? "executed" : "failed"],
+      [id, succeeded ? "executed" : "failed", JSON.stringify(output ?? null)],
     );
   }
 
   async listApprovals(userId: string, limit: number): Promise<ApprovalRequest[]> {
     const result = await this.pool.query<ApprovalRow>(
-      `select id, user_id, tool_name, risk, summary, input, status, created_at
+      `select id, user_id, tool_name, risk, summary, input, status, created_at, output
        from approval_requests where user_id = $1
        order by (status = 'pending') desc, created_at desc limit $2`,
       [userId, limit],
@@ -498,6 +504,180 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
     return result.rows[0]?.status ?? null;
   }
 
+  async createAgentRun(input: {
+    userId: string;
+    conversationId: string;
+    messages: AgentRunRecord["messages"];
+    taskClass: AgentRunRecord["taskClass"];
+    allowedTools?: string[];
+    maxSteps: number;
+    maxTotalTokens?: number;
+  }): Promise<AgentRunRecord> {
+    const result = await this.pool.query<AgentRunRow>(
+      `insert into agent_runs
+        (user_id, conversation_id, messages, task_class, allowed_tools, max_steps, max_total_tokens)
+       values ($1, $2, $3::jsonb, $4, $5::jsonb, $6, $7)
+       returning *`,
+      [
+        input.userId,
+        input.conversationId,
+        JSON.stringify(input.messages),
+        input.taskClass,
+        input.allowedTools ? JSON.stringify(input.allowedTools) : null,
+        input.maxSteps,
+        input.maxTotalTokens ?? null,
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Agent run insert returned no row");
+    return this.mapAgentRun(row);
+  }
+
+  async getAgentRun(userId: string, id: string): Promise<AgentRunRecord | null> {
+    const result = await this.pool.query<AgentRunRow>(
+      `select * from agent_runs where id = $1 and user_id = $2`,
+      [id, userId],
+    );
+    return result.rows[0] ? this.mapAgentRun(result.rows[0]) : null;
+  }
+
+  async findAgentRunByApproval(userId: string, approvalId: string): Promise<AgentRunRecord | null> {
+    const result = await this.pool.query<AgentRunRow>(
+      `select * from agent_runs where pending_approval_id = $1 and user_id = $2`,
+      [approvalId, userId],
+    );
+    return result.rows[0] ? this.mapAgentRun(result.rows[0]) : null;
+  }
+
+  async listAgentRuns(userId: string, limit: number): Promise<AgentRunRecord[]> {
+    const result = await this.pool.query<AgentRunRow>(
+      `select * from agent_runs where user_id = $1 order by created_at desc limit $2`,
+      [userId, limit],
+    );
+    return result.rows.map((row) => this.mapAgentRun(row));
+  }
+
+  async updateAgentRun(input: {
+    id: string;
+    userId: string;
+    status: AgentRunStatus;
+    continuation?: AgentRunRecord["continuation"];
+    pendingApprovalId?: string;
+    result?: AgentRunRecord["result"];
+    error?: string;
+  }): Promise<AgentRunRecord | null> {
+    const result = await this.pool.query<AgentRunRow>(
+      `update agent_runs
+       set status = $3,
+           continuation = case
+             when $3 in ('running', 'waiting_approval') then coalesce($4::jsonb, continuation)
+             else null end,
+           pending_approval_id = case when $3 = 'waiting_approval' then $5::uuid else null end,
+           result = $6::jsonb, error = $7, updated_at = now()
+       where id = $1 and user_id = $2
+         and status <> 'cancelled'
+         and (status = 'running' or (status = 'waiting_approval' and $3 = 'running'))
+       returning *`,
+      [
+        input.id,
+        input.userId,
+        input.status,
+        input.continuation ? JSON.stringify(input.continuation) : null,
+        input.pendingApprovalId ?? null,
+        input.result ? JSON.stringify(input.result) : null,
+        input.error ?? null,
+      ],
+    );
+    return result.rows[0] ? this.mapAgentRun(result.rows[0]) : null;
+  }
+
+  async cancelAgentRun(userId: string, id: string): Promise<AgentRunRecord | null> {
+    const result = await this.pool.query<AgentRunRow>(
+      `with target as (
+         select id, pending_approval_id from agent_runs
+         where id = $1 and user_id = $2 and status in ('running', 'waiting_approval')
+         for update
+       ), rejected as (
+         update approval_requests approval
+         set status = 'rejected', decided_at = now()
+         from target
+         where approval.id = target.pending_approval_id and approval.status = 'pending'
+       )
+       update agent_runs run
+       set status = 'cancelled', pending_approval_id = null, updated_at = now()
+       from target
+       where run.id = target.id
+       returning run.*`,
+      [id, userId],
+    );
+    return result.rows[0] ? this.mapAgentRun(result.rows[0]) : null;
+  }
+
+  async appendAgentRunEvent(input: {
+    runId: string;
+    step: number;
+    eventType: string;
+    details?: unknown;
+  }): Promise<void> {
+    await this.pool.query(
+      `insert into agent_run_events (run_id, step, event_type, details)
+       values ($1, $2, $3, $4::jsonb)`,
+      [input.runId, input.step, input.eventType, JSON.stringify(input.details ?? {})],
+    );
+  }
+
+  async listAgentRunEvents(userId: string, runId: string): Promise<AgentRunEvent[]> {
+    const result = await this.pool.query<{
+      id: string;
+      run_id: string;
+      step: number;
+      event_type: string;
+      details: unknown;
+      created_at: Date;
+    }>(
+      `select event.id, event.run_id, event.step, event.event_type, event.details, event.created_at
+       from agent_run_events event
+       join agent_runs run on run.id = event.run_id
+       where event.run_id = $1 and run.user_id = $2
+       order by event.id`,
+      [runId, userId],
+    );
+    return result.rows.map((row) => ({
+      id: Number(row.id),
+      runId: row.run_id,
+      step: row.step,
+      eventType: row.event_type,
+      details: row.details,
+      createdAt: row.created_at.toISOString(),
+    }));
+  }
+
+  async getApprovalOutcome(userId: string, approvalId: string): Promise<{
+    status: ApprovalRequest["status"];
+    output?: unknown;
+  } | null> {
+    const result = await this.pool.query<{ status: ApprovalRequest["status"]; output: unknown | null }>(
+      `select status, output from approval_requests where id = $1 and user_id = $2`,
+      [approvalId, userId],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return row.output === null ? { status: row.status } : { status: row.status, output: row.output };
+  }
+
+  async listReadyAgentRuns(limit: number): Promise<AgentRunRecord[]> {
+    const result = await this.pool.query<AgentRunRow>(
+      `select run.*
+       from agent_runs run
+       join approval_requests approval on approval.id = run.pending_approval_id
+       where run.status = 'waiting_approval' and approval.status in ('executed', 'rejected')
+       order by run.updated_at
+       limit $1`,
+      [limit],
+    );
+    return result.rows.map((row) => this.mapAgentRun(row));
+  }
+
   async consumeQuota(input: {
     userId: string;
     category: QuotaCategory;
@@ -638,8 +818,9 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
     input: unknown;
     status: ApprovalRequest["status"];
     created_at: Date;
+    output?: unknown | null;
   }): ApprovalRequest {
-    return {
+    const approval: ApprovalRequest = {
       id: row.id,
       userId: row.user_id,
       toolName: row.tool_name,
@@ -649,6 +830,29 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
       status: row.status,
       createdAt: row.created_at.toISOString(),
     };
+    if (row.output !== undefined && row.output !== null) approval.output = row.output;
+    return approval;
+  }
+
+  private mapAgentRun(row: AgentRunRow): AgentRunRecord {
+    const run: AgentRunRecord = {
+      id: row.id,
+      userId: row.user_id,
+      conversationId: row.conversation_id,
+      status: row.status,
+      messages: row.messages,
+      taskClass: row.task_class,
+      maxSteps: row.max_steps,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    };
+    if (row.allowed_tools) run.allowedTools = row.allowed_tools;
+    if (row.max_total_tokens !== null) run.maxTotalTokens = row.max_total_tokens;
+    if (row.continuation) run.continuation = row.continuation;
+    if (row.pending_approval_id) run.pendingApprovalId = row.pending_approval_id;
+    if (row.result) run.result = row.result;
+    if (row.error) run.error = row.error;
+    return run;
   }
 
   private mapJob(row: JobRow): DurableJob {
@@ -708,6 +912,25 @@ interface ApprovalRow {
   input: unknown;
   status: ApprovalRequest["status"];
   created_at: Date;
+  output?: unknown | null;
+}
+
+interface AgentRunRow {
+  id: string;
+  user_id: string;
+  conversation_id: string;
+  status: AgentRunStatus;
+  messages: AgentRunRecord["messages"];
+  task_class: AgentRunRecord["taskClass"];
+  allowed_tools: string[] | null;
+  max_steps: number;
+  max_total_tokens: number | null;
+  continuation: AgentRunRecord["continuation"] | null;
+  pending_approval_id: string | null;
+  result: AgentRunRecord["result"] | null;
+  error: string | null;
+  created_at: Date;
+  updated_at: Date;
 }
 
 interface ConversationRow {

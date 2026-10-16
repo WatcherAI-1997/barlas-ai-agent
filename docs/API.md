@@ -23,6 +23,11 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 
 - `POST /v1/chat` — generate an answer using `fast`, `deep`, or `private` routing.
 - `POST /v1/agent/run` — run the bounded autonomous tool loop.
+- `GET /v1/agent-runs` — list durable autonomous runs for one user.
+- `GET /v1/agent-runs/:id` — inspect one owned run.
+- `GET /v1/agent-runs/:id/events` — load its ordered, content-safe step journal.
+- `POST /v1/agent-runs/:id/cancel` — cancel a running or approval-waiting run.
+- `POST /v1/agent-runs/:id/resume` — recover a waiting run after its approval was decided.
 - `GET /v1/conversations` — list a user's stored conversations.
 - `GET /v1/conversations/:id` — load ordered messages from one conversation.
 - `POST /v1/memory` — save an explicit long-term memory.
@@ -99,10 +104,20 @@ allowed tools. Each returned call is mapped back to the registry and validated
 again before execution. Read-only results are returned to the model for the
 next step. A write, external, or destructive call stops the loop with
 `waiting_approval` and an approval ID; it is never represented to the model as
-completed. At most four calls are accepted in one model step, tool output is
+completed. Exactly one sequential call is accepted in a model step, tool output is
 bounded, and total model steps have a hard ceiling of twelve. Execution stops
 before another tool call when the total token budget is reached; output per
 model step is capped by `AGENT_MAX_OUTPUT_TOKENS_PER_STEP`.
+
+Every autonomous invocation is persisted before the first model call. Its
+conversation, limits, provider continuation ID, aggregate usage, pending call,
+approval link, terminal result, error, and timestamps live in PostgreSQL. Step
+events contain operation names and IDs but not prompts, file bodies, or tool
+outputs. Approving or rejecting a linked action resumes that exact run
+automatically. If the service stops after the tool decision but before the next
+model step, startup recovery finds the executed/rejected approval and continues
+from the saved provider response and call ID. Conditional state transitions
+prevent a cancelled run from being overwritten by a late model response.
 
 Conversation IDs are ownership-checked inside the database transaction. A
 client cannot attach messages to another user's conversation even if it learns

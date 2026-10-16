@@ -51,6 +51,11 @@ autonomy.
   IDs, and every argument is validated at the executor boundary. Tool results
   are fed back through the provider protocol until a final answer, approval
   pause, or hard step limit is reached.
+- Autonomous run checkpoints and content-safe step events are durable. Pending
+  approvals are linked one-to-one with the exact model call; decisions trigger
+  continuation, and startup recovery resumes decisions committed immediately
+  before a process interruption. Cancellation wins over late completion through
+  conditional PostgreSQL updates.
 
 ## Data boundaries
 

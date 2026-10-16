@@ -17,6 +17,7 @@
 ## Phase 2 — Agent capabilities
 
 - Native autonomous tool loop with bounded steps and approval pauses. *(implemented)*
+- Durable run checkpoints, approval continuation, recovery, cancellation, and step journal. *(implemented)*
 - Durable long-running job storage and schedules. *(worker, leases, retries implemented)*
 - Isolated subagents and resumable workflows. *(bounded sequential workflows implemented)*
 - Versioned skills with evaluation and rollback. *(versioned registry implemented; evaluation/rollback pending)*

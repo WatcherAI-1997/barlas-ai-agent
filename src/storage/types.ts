@@ -18,6 +18,7 @@ export interface ApprovalRequest {
   input: unknown;
   status: "pending" | "approved" | "rejected" | "executed" | "failed";
   createdAt: string;
+  output?: unknown;
 }
 
 export interface DurableJob {
@@ -95,7 +96,7 @@ export interface AgentStore {
     userId: string;
     approved: boolean;
   }): Promise<ApprovalRequest | null>;
-  markApprovalExecuted(id: string, succeeded: boolean): Promise<void>;
+  markApprovalExecuted(id: string, succeeded: boolean, output?: unknown): Promise<void>;
   listApprovals(userId: string, limit: number): Promise<ApprovalRequest[]>;
   appendAudit(input: {
     userId: string;

@@ -15,6 +15,7 @@ import {
 } from "./auth/service.js";
 import type { ModelProvider } from "./core/models.js";
 import type { AgentLoop } from "./core/agent-loop.js";
+import type { PersistentAgentRuntime } from "./runs/runtime.js";
 import { QuotaExceededError, type RuntimeGovernance } from "./governance/runtime.js";
 import { agentJobSchema } from "./jobs/agent-handler.js";
 import { workflowJobSchema } from "./jobs/workflow-handler.js";
@@ -112,6 +113,7 @@ const userListSchema = z.object({
 });
 const conversationParamsSchema = z.object({ id: z.string().uuid() });
 const jobParamsSchema = z.object({ id: z.string().uuid() });
+const agentRunParamsSchema = z.object({ id: z.string().uuid() });
 const dashboardQuerySchema = z.object({ userId: z.string().min(1).max(128).optional() });
 
 const loginSchema = z.object({
@@ -139,6 +141,7 @@ export interface AppDependencies {
   database: AgentStore;
   modelProvider: ModelProvider;
   agentLoop?: Pick<AgentLoop, "run">;
+  agentRuntime?: Pick<PersistentAgentRuntime, "start" | "resume" | "resumeByApproval" | "get" | "list" | "events" | "cancel">;
   toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
   skillRegistry?: Pick<SkillRegistry, "list">;
   governance?: RuntimeGovernance;
@@ -420,7 +423,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   app.post("/v1/agent/run", async (request, reply) => {
-    if (!dependencies.agentLoop) return reply.notFound();
+    if (!dependencies.agentRuntime && !dependencies.agentLoop) return reply.notFound();
     const parsed = agentRunBodySchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid agent run request");
     const userId = authorizeUser(request, parsed.data.userId);
@@ -450,7 +453,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       });
     }
     try {
-      const result = await dependencies.agentLoop.run({
+      const loopInput = {
         userId,
         conversationId,
         messages: [...memoryContext, ...parsed.data.messages],
@@ -458,7 +461,16 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         maxSteps: parsed.data.maxSteps,
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
         ...(parsed.data.allowedTools ? { allowedTools: parsed.data.allowedTools } : {}),
-      });
+      };
+      const run = dependencies.agentRuntime ? await dependencies.agentRuntime.start(loopInput) : null;
+      if (run && !run.result) {
+        return reply.code(run.status === "cancelled" ? 409 : 500).send({
+          runId: run.id,
+          status: run.status,
+          error: run.error ?? "Agent run did not produce a result",
+        });
+      }
+      const result = run?.result ?? await dependencies.agentLoop!.run(loopInput);
       await dependencies.database.saveTurn({
         userId,
         conversationId,
@@ -480,6 +492,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         });
       }
       return {
+        runId: run?.id,
         conversationId,
         status: result.status,
         message: { role: "assistant", content: result.text },
@@ -503,6 +516,74 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       }
       throw error;
     }
+  });
+
+  app.get("/v1/agent-runs", async (request, reply) => {
+    if (!dependencies.agentRuntime) return reply.notFound();
+    const parsed = userListSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid agent runs query");
+    return { runs: await dependencies.agentRuntime.list(authorizeUser(request, parsed.data.userId), parsed.data.limit) };
+  });
+
+  app.get("/v1/agent-runs/:id", async (request, reply) => {
+    if (!dependencies.agentRuntime) return reply.notFound();
+    const params = agentRunParamsSchema.safeParse(request.params);
+    const query = z.object({ userId: z.string().min(1).max(128) }).safeParse(request.query);
+    if (!params.success || !query.success) return reply.badRequest("Invalid agent run request");
+    const userId = authorizeUser(request, query.data.userId);
+    const run = await dependencies.agentRuntime.get(userId, params.data.id);
+    if (!run) return reply.notFound("Agent run not found");
+    return { run };
+  });
+
+  app.get("/v1/agent-runs/:id/events", async (request, reply) => {
+    if (!dependencies.agentRuntime) return reply.notFound();
+    const params = agentRunParamsSchema.safeParse(request.params);
+    const query = z.object({ userId: z.string().min(1).max(128) }).safeParse(request.query);
+    if (!params.success || !query.success) return reply.badRequest("Invalid agent run events request");
+    const userId = authorizeUser(request, query.data.userId);
+    const run = await dependencies.agentRuntime.get(userId, params.data.id);
+    if (!run) return reply.notFound("Agent run not found");
+    return { events: await dependencies.agentRuntime.events(userId, run.id) };
+  });
+
+  app.post("/v1/agent-runs/:id/cancel", async (request, reply) => {
+    if (!dependencies.agentRuntime) return reply.notFound();
+    const params = agentRunParamsSchema.safeParse(request.params);
+    const body = z.object({ userId: z.string().min(1).max(128) }).strict().safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid agent run cancellation");
+    const userId = authorizeUser(request, body.data.userId);
+    const run = await dependencies.agentRuntime.cancel(userId, params.data.id);
+    if (!run) return reply.conflict("Only running or waiting agent runs can be cancelled");
+    await dependencies.database.appendAudit({
+      userId,
+      eventType: "agent_run.cancelled",
+      resourceType: "agent_run",
+      resourceId: run.id,
+    });
+    return { run };
+  });
+
+  app.post("/v1/agent-runs/:id/resume", async (request, reply) => {
+    if (!dependencies.agentRuntime) return reply.notFound();
+    const params = agentRunParamsSchema.safeParse(request.params);
+    const body = z.object({ userId: z.string().min(1).max(128) }).strict().safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid agent run resume request");
+    const userId = authorizeUser(request, body.data.userId);
+    const existing = await dependencies.agentRuntime.get(userId, params.data.id);
+    if (!existing) return reply.notFound("Agent run not found");
+    if (existing.status !== "waiting_approval") return reply.conflict("Only a waiting agent run can be resumed");
+    const run = await dependencies.agentRuntime.resume(userId, params.data.id);
+    if (!run) return reply.conflict("Agent run could not be resumed");
+    if (run.result && run.status !== "waiting_approval") {
+      await dependencies.database.saveTurn({
+        userId,
+        conversationId: run.conversationId,
+        messages: [],
+        result: run.result.result,
+      });
+    }
+    return { run };
   });
 
   app.post("/v1/memory", async (request, reply) => {
@@ -587,11 +668,29 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const body = approvalDecisionSchema.safeParse(request.body);
     if (!params.success || !body.success) return reply.badRequest("Invalid approval decision");
     try {
-      return await dependencies.toolExecutor.decide({
+      const decision = await dependencies.toolExecutor.decide({
         approvalId: params.data.id,
         userId: authorizeUser(request, body.data.userId),
         approved: body.data.approved,
       });
+      const userId = authorizeUser(request, body.data.userId);
+      const resumedRun = dependencies.agentRuntime
+        ? await dependencies.agentRuntime.resumeByApproval({
+            userId,
+            approvalId: params.data.id,
+            output: decision.status === "completed" ? decision.output : null,
+            rejected: decision.status === "rejected",
+          })
+        : null;
+      if (resumedRun?.result && resumedRun.status !== "waiting_approval") {
+        await dependencies.database.saveTurn({
+          userId,
+          conversationId: resumedRun.conversationId,
+          messages: [],
+          result: resumedRun.result.result,
+        });
+      }
+      return { ...decision, resumedRun };
     } catch (error) {
       if (error instanceof Error && error.message.includes("not found")) {
         return reply.notFound(error.message);

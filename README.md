@@ -24,7 +24,8 @@ memory storage, an authenticated Telegram webhook, approval policy primitives,
 an auditable tool executor, durable job storage, container hardening, and
 automated tests. The private-alpha core also includes versioned skills, bounded
 subagent workflows, per-user file workspaces, and a native autonomous tool loop
-with hard step limits and approval pauses. It also includes optional SearXNG
+with hard step limits, durable checkpoints, approval continuation, restart
+recovery, cancellation, and a content-safe step journal. It also includes optional SearXNG
 web search, a no-shell read-only terminal inspector,
 atomic per-user quotas, execution traces, secure owner/user accounts, and a
 branded web cabinet with conversation history, approvals, job controls, and

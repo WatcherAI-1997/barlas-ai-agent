@@ -146,7 +146,7 @@ export class ToolExecutor {
     const parsedInput = tool.inputSchema.parse(approval.input);
     try {
       const output = await tool.execute(parsedInput, { userId: input.userId });
-      await this.store.markApprovalExecuted(approval.id, true);
+      await this.store.markApprovalExecuted(approval.id, true, output);
       await this.store.appendAudit({
         userId: input.userId,
         eventType: "approval.executed",

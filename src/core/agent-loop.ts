@@ -8,15 +8,27 @@ import type { ToolExecutionResult } from "../tools/executor.js";
 import type { ModelToolDefinition } from "../tools/registry.js";
 
 const MAX_OUTPUT_CHARS = 40_000;
-const MAX_CALLS_PER_STEP = 4;
+const MAX_CALLS_PER_STEP = 1;
 
 export interface AgentLoopResult {
-  status: "completed" | "waiting_approval" | "step_limit" | "budget_limit";
+  status: "completed" | "waiting_approval" | "step_limit" | "budget_limit" | "cancelled";
   text: string;
   steps: number;
   toolExecutions: number;
   approvalIds: string[];
   result: GenerateResult;
+  continuation?: AgentLoopContinuation;
+}
+
+export interface AgentLoopContinuation {
+  previousResponseId: string;
+  pendingCallId?: string;
+  steps: number;
+  toolExecutions: number;
+  approvalIds: string[];
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; costUsd: number };
+  last: GenerateResult;
+  completedToolOutputs?: ModelToolOutput[];
 }
 
 export interface AgentLoopTools {
@@ -46,6 +58,10 @@ export class AgentLoop {
     maxSteps?: number;
     maxTotalTokens?: number;
     allowedTools?: string[];
+    continuation?: AgentLoopContinuation;
+    toolOutputs?: ModelToolOutput[];
+    shouldCancel?: () => Promise<boolean>;
+    onStep?: (event: { step: number; type: string; details?: unknown }) => Promise<void>;
   }): Promise<AgentLoopResult> {
     const maxSteps = Math.min(Math.max(input.maxSteps ?? this.defaultMaxSteps, 1), 12);
     const tokenBudget = Math.min(Math.max(input.maxTotalTokens ?? this.hardTokenBudget, 1_000), this.hardTokenBudget);
@@ -64,14 +80,17 @@ export class AgentLoop {
         "Risky tools pause for explicit user approval. If a tool is unnecessary, answer directly.",
       ].join(" "),
     }, ...input.messages];
-    let previousResponseId: string | undefined;
-    let toolOutputs: ModelToolOutput[] | undefined;
-    let toolExecutions = 0;
-    const approvalIds: string[] = [];
-    let aggregateUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 };
-    let last: GenerateResult = { text: "", provider: this.model.name, model: "unknown" };
+    let previousResponseId = input.continuation?.previousResponseId;
+    let toolOutputs = input.toolOutputs;
+    let toolExecutions = input.continuation?.toolExecutions ?? 0;
+    const approvalIds = [...(input.continuation?.approvalIds ?? [])];
+    let aggregateUsage = input.continuation?.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 };
+    let last: GenerateResult = input.continuation?.last ?? { text: "", provider: this.model.name, model: "unknown" };
 
-    for (let step = 1; step <= maxSteps; step += 1) {
+    for (let step = (input.continuation?.steps ?? 0) + 1; step <= maxSteps; step += 1) {
+      if (await input.shouldCancel?.()) {
+        return this.finish("cancelled", "Автономный запуск отменён.", step - 1, toolExecutions, approvalIds, last, aggregateUsage);
+      }
       const response = await this.model.generateWithTools({
         userId: input.userId,
         conversationId: input.conversationId,
@@ -83,11 +102,19 @@ export class AgentLoop {
         ...(toolOutputs ? { toolOutputs } : {}),
       });
       last = response;
+      await input.onStep?.({
+        step,
+        type: response.toolCalls.length > 0 ? "model.tool_calls" : "model.completed",
+        details: { toolCount: response.toolCalls.length, provider: response.provider, model: response.model },
+      });
       if (response.usage) {
         aggregateUsage.inputTokens += response.usage.inputTokens;
         aggregateUsage.outputTokens += response.usage.outputTokens;
         aggregateUsage.totalTokens += response.usage.totalTokens;
         aggregateUsage.costUsd += response.usage.costUsd ?? 0;
+      }
+      if (await input.shouldCancel?.()) {
+        return this.finish("cancelled", "Автономный запуск отменён.", step, toolExecutions, approvalIds, last, aggregateUsage);
       }
       if (response.toolCalls.length === 0) {
         return this.finish("completed", response.text || "Задача завершена.", step, toolExecutions, approvalIds, last, aggregateUsage);
@@ -120,7 +147,7 @@ export class AgentLoop {
         toolExecutions += 1;
         if (execution.status === "pending_approval") {
           approvalIds.push(execution.approvalId);
-          return this.finish(
+          const result = this.finish(
             "waiting_approval",
             `Действие «${definition.toolName}» ожидает вашего подтверждения.`,
             step,
@@ -129,11 +156,29 @@ export class AgentLoop {
             last,
             aggregateUsage,
           );
+          if (!previousResponseId) throw new Error("Model response ID is required for approval continuation");
+          result.continuation = {
+            previousResponseId,
+            pendingCallId: call.callId,
+            steps: step,
+            toolExecutions,
+            approvalIds,
+            usage: aggregateUsage,
+            last,
+            ...(toolOutputs.length > 0 ? { completedToolOutputs: [...toolOutputs] } : {}),
+          };
+          await input.onStep?.({
+            step,
+            type: "approval.pending",
+            details: { approvalId: execution.approvalId, toolName: definition.toolName },
+          });
+          return result;
         }
         const output = execution.status === "completed"
           ? JSON.stringify(execution.output)
           : JSON.stringify({ rejected: true });
         toolOutputs.push({ callId: call.callId, output: (output ?? "null").slice(0, MAX_OUTPUT_CHARS) });
+        await input.onStep?.({ step, type: "tool.completed", details: { toolName: definition.toolName } });
       }
     }
     return this.finish(

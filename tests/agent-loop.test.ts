@@ -78,7 +78,40 @@ describe("Barlas AI Agent autonomous loop", () => {
 
     expect(result.status).toBe("waiting_approval");
     expect(result.approvalIds).toEqual(["00000000-0000-4000-8000-000000000009"]);
+    expect(result.continuation).toMatchObject({
+      previousResponseId: "response-1",
+      pendingCallId: "call-1",
+      steps: 1,
+    });
     expect(model.generateWithTools).toHaveBeenCalledOnce();
+  });
+
+  it("continues from a persisted approval checkpoint", async () => {
+    const model = provider([{ text: "Write completed." }]);
+    const execute = vi.fn();
+    const loop = new AgentLoop(model, tools(execute));
+    const continuation = {
+      previousResponseId: "response-before-restart",
+      pendingCallId: "call-write",
+      steps: 1,
+      toolExecutions: 1,
+      approvalIds: ["00000000-0000-4000-8000-000000000009"],
+      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, costUsd: 0.01 },
+      last: { text: "", provider: "test", model: "test-model", responseId: "response-before-restart" },
+    };
+
+    const result = await loop.run({
+      ...request,
+      continuation,
+      toolOutputs: [{ callId: "call-write", output: '{"written":true}' }],
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.steps).toBe(2);
+    expect(model.generateWithTools).toHaveBeenCalledWith(expect.objectContaining({
+      previousResponseId: "response-before-restart",
+      toolOutputs: [{ callId: "call-write", output: '{"written":true}' }],
+    }));
   });
 
   it("stops at the configured step limit", async () => {
@@ -101,6 +134,18 @@ describe("Barlas AI Agent autonomous loop", () => {
 
     expect(result.status).toBe("budget_limit");
     expect(result.toolExecutions).toBe(0);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("honors cancellation that arrives while the model is responding", async () => {
+    const model = provider([{ calls: [{ callId: "call-1", name: "system_time", arguments: {} }] }]);
+    const execute = vi.fn(async () => ({ status: "completed" as const, output: { ok: true } }));
+    const shouldCancel = vi.fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const result = await new AgentLoop(model, tools(execute)).run({ ...request, shouldCancel });
+
+    expect(result.status).toBe("cancelled");
     expect(execute).not.toHaveBeenCalled();
   });
 

@@ -74,6 +74,7 @@ async function loadPanel(name) {
   if (name === "overview") await loadOverview();
   if (name === "chat") await loadConversations();
   if (name === "approvals") await loadApprovals();
+  if (name === "runs") await loadRuns();
   if (name === "jobs") await loadJobs();
   if (name === "traces") renderList("#traces", (await api(`/v1/traces?userId=${encodeURIComponent(state.account.id)}`)).traces, (item) => card(item.operation, `${item.status} · ${new Date(item.createdAt).toLocaleString()}`, item.traceId));
   if (name === "skills") renderList("#skills", (await api("/v1/skills")).skills, (item) => card(item.id, `v${item.version} · ${item.allowedTools.join(", ")}`, item.description));
@@ -153,8 +154,38 @@ async function loadApprovals() {
 }
 
 async function decideApproval(id, approved) {
-  await api(`/v1/approvals/${id}/decision`, { method: "POST", body: JSON.stringify({ userId: state.account.id, approved }) });
+  const data = await api(`/v1/approvals/${id}/decision`, { method: "POST", body: JSON.stringify({ userId: state.account.id, approved }) });
+  if (data.resumedRun?.result?.text) {
+    state.conversationId = data.resumedRun.conversationId;
+    addMessage("agent", data.resumedRun.result.text);
+    await loadConversations();
+  }
   await loadApprovals();
+}
+
+async function loadRuns() {
+  const items = (await api(`/v1/agent-runs?userId=${encodeURIComponent(state.account.id)}`)).runs;
+  renderList("#runs", items, (item) => {
+    const result = item.result?.text || item.error || "";
+    const node = card(`Запуск ${item.id.slice(0, 8)}`, `${item.status} · ${new Date(item.updatedAt).toLocaleString()}`, result);
+    const actions = document.createElement("div"); actions.className = "actions";
+    const events = document.createElement("button"); events.textContent = "Шаги"; events.className = "secondary";
+    events.addEventListener("click", async () => {
+      const data = await api(`/v1/agent-runs/${item.id}/events?userId=${encodeURIComponent(state.account.id)}`);
+      const text = data.events.map((event) => `${event.step}. ${event.eventType}`).join("\n") || "Событий пока нет";
+      alert(text);
+    });
+    actions.append(events);
+    if (["running", "waiting_approval"].includes(item.status)) {
+      const cancel = document.createElement("button"); cancel.textContent = "Отменить"; cancel.className = "reject";
+      cancel.addEventListener("click", async () => {
+        await api(`/v1/agent-runs/${item.id}/cancel`, { method: "POST", body: JSON.stringify({ userId: state.account.id }) });
+        await loadRuns();
+      });
+      actions.append(cancel);
+    }
+    node.append(actions); return node;
+  });
 }
 
 async function loadJobs() {

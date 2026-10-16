@@ -184,6 +184,51 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("returns a durable run ID when persistent runtime is enabled", async () => {
+    const deps = dependencies();
+    const loopResult = {
+      status: "completed" as const,
+      text: "Durable result",
+      steps: 1,
+      toolExecutions: 0,
+      approvalIds: [],
+      result: { text: "Durable result", provider: "test", model: "test-model" },
+    };
+    const record = {
+      id: "00000000-0000-4000-8000-000000000010",
+      userId: "user-1",
+      conversationId: "00000000-0000-4000-8000-000000000001",
+      status: "completed" as const,
+      messages: [{ role: "user" as const, content: "Run durably" }],
+      taskClass: "fast" as const,
+      maxSteps: 8,
+      result: loopResult,
+      createdAt: "2026-10-16T00:00:00.000Z",
+      updatedAt: "2026-10-16T00:00:01.000Z",
+    };
+    const agentRuntime = {
+      start: vi.fn(async () => record),
+      resume: vi.fn(async () => record),
+      resumeByApproval: vi.fn(async () => record),
+      get: vi.fn(async () => record),
+      list: vi.fn(async () => [record]),
+      events: vi.fn(async () => []),
+      cancel: vi.fn(async () => ({ ...record, status: "cancelled" as const })),
+    };
+    const app = await buildApp({ apiToken, ...deps, agentRuntime });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/agent/run",
+      headers: { authorization: `Bearer ${apiToken}` },
+      payload: { userId: "user-1", messages: [{ role: "user", content: "Run durably" }] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ runId: record.id, status: "completed" });
+    expect(agentRuntime.start).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
   it("stores explicit long-term memory", async () => {
     const deps = dependencies();
     const app = await buildApp({ apiToken, ...deps });

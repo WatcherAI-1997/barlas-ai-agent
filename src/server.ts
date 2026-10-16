@@ -4,6 +4,7 @@ import { TelegramClient } from "./channels/telegram.js";
 import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
 import { AgentLoop } from "./core/agent-loop.js";
+import { PersistentAgentRuntime } from "./runs/runtime.js";
 import { RuntimeGovernance } from "./governance/runtime.js";
 import { createAgentJobHandler } from "./jobs/agent-handler.js";
 import { JobWorker } from "./jobs/worker.js";
@@ -70,6 +71,17 @@ const agentLoop = new AgentLoop(
   config.AGENT_MAX_TOTAL_TOKENS,
   config.AGENT_MAX_OUTPUT_TOKENS_PER_STEP,
 );
+const agentRuntime = new PersistentAgentRuntime(agentLoop, database);
+for (const recovered of await agentRuntime.recoverReady()) {
+  if (recovered.result && recovered.status !== "waiting_approval") {
+    await database.saveTurn({
+      userId: recovered.userId,
+      conversationId: recovered.conversationId,
+      messages: [],
+      result: recovered.result.result,
+    });
+  }
+}
 const jobWorker = new JobWorker(database, {
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
   batchSize: config.JOB_WORKER_BATCH_SIZE,
@@ -90,6 +102,7 @@ const app = await buildApp({
   database,
   modelProvider,
   agentLoop,
+  agentRuntime,
   toolExecutor,
   skillRegistry,
   governance,
