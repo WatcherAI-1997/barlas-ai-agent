@@ -34,6 +34,9 @@
 - Installer tests verify Bash syntax, discoverable help, non-interactive
   prepare-only operation, `0600` secret storage, placeholder removal, and that
   supplied secrets never appear in installer output.
+- The public repository reports `private=false`; the one-command Windows
+  bootstrap on `raw.githubusercontent.com/.../main/install-windows.ps1` returns
+  HTTP 200 without GitHub authentication.
 - The live agent evaluation suite validates scenario definitions and scores
   persisted statuses, tools, content-safe events, output constraints, steps,
   tokens, and cost without model self-grading. Credentialed baseline results
