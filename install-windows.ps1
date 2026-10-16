@@ -55,32 +55,29 @@ function Show-PixelBanner {
     Write-Host ""
     $Mark = @(
         " ▄██▄  ▄██▄ ",
-        " ████  ████ ",
         " ▀██▀  ▀██▀ ",
         "            ",
         "    ▄██▄    ",
-        "    ████    ",
         "    ▀██▀    "
     )
     $Word = @(
-        "                                   ",
-        "████  ███  ████  █     ███  ████",
-        "█   █ █  █ █   █ █    █   █ █   ",
-        "████  ████ ████  █    █████ ████",
-        "█   █ █  █ █  █  █    █   █    █",
-        "████  █  █ █   █ ████ █   █ ████",
-        "                                   "
+        "                             ",
+        "█▀▀▄ ▄▀▀▄ █▀▀▄ █    ▄▀▀▄ ▄▀▀▀",
+        "█▀▀▄ █▀▀█ █▀█  █    █▀▀█  ▀▀▄",
+        "▀▀▀  ▀  ▀ ▀  ▀ ▀▀▀▀ ▀  ▀ ▀▀▀ ",
+        "                             "
     )
+    $Gap = "  "
     for ($Row = 0; $Row -lt $Mark.Count; $Row++) {
-        Write-Host $Mark[$Row] -ForegroundColor Red -NoNewline
+        Write-Host ($Mark[$Row] + $Gap) -ForegroundColor Red -NoNewline
         Write-Host $Word[$Row] -ForegroundColor White
     }
-    Write-Host "           A I   A G E N T" -ForegroundColor DarkGray
+    Write-Host "              A I   A G E N T" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  WINDOWS 10/11" -ForegroundColor Red -NoNewline
     Write-Host "  /  PERSONAL AI INSTALLER" -ForegroundColor White
-    Write-Host "  Private local setup  |  No Docker  |  No WSL  |  No admin rights" -ForegroundColor DarkGray
-    Write-Host "  ───────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host "  Local/private  |  No Docker/WSL  |  No admin" -ForegroundColor DarkGray
+    Write-Host "  ───────────────────────────────────────────" -ForegroundColor DarkGray
 }
 
 Show-PixelBanner
