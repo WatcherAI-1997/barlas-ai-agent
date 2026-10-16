@@ -44,6 +44,8 @@ describe("production installer", () => {
       "barlas.cmd",
       'Start-Process ([string]$DashboardUrl).Trim()',
       'cmd.exe /d /c "docker info >nul 2>nul"',
+      '"Docker\\Docker\\Docker Desktop.exe"',
+      "Docker Desktop did not become ready within three minutes",
     ]) expect(bootstrap).toContain(required);
     expect(bootstrap).not.toContain("gh auth");
     expect(installer).toContain('$ErrorActionPreference = "Continue"');

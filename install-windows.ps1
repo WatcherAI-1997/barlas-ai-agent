@@ -38,7 +38,21 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 
 & cmd.exe /d /c "docker info >nul 2>nul"
 if ($LASTEXITCODE -ne 0) {
-    throw "Docker Desktop is installed but its Linux engine is not running. Start Docker Desktop, wait until it is ready, then run this command again."
+    $DockerDesktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
+    if (Test-Path -LiteralPath $DockerDesktop -PathType Leaf) {
+        Write-Step "Start Docker Desktop"
+        Start-Process -FilePath $DockerDesktop | Out-Null
+        $DockerReady = $false
+        for ($Attempt = 0; $Attempt -lt 60; $Attempt++) {
+            Start-Sleep -Seconds 3
+            & cmd.exe /d /c "docker info >nul 2>nul"
+            if ($LASTEXITCODE -eq 0) { $DockerReady = $true; break }
+        }
+        if ($DockerReady) { Write-Done "Docker Desktop is ready" }
+        else { throw "Docker Desktop did not become ready within three minutes. Open it, finish any WSL 2 setup it requests, then run this command again." }
+    } else {
+        throw "Docker Desktop is installed but its Linux engine is not running. Start Docker Desktop, wait until it is ready, then run this command again."
+    }
 }
 
 New-Item -ItemType Directory -Force -Path $WorkDir, $Extracted, $BarlasHome, $BinDir | Out-Null
