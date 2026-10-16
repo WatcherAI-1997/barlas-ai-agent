@@ -3,12 +3,18 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 71 automated tests across 23 files pass.
+- 80 automated tests across 25 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
-- All fourteen SQL migrations apply twice to a clean PostgreSQL 17 database.
+- All fifteen SQL migrations apply twice to a clean PostgreSQL 17 database.
 - The production Docker image builds and runs read-only with dropped capabilities.
+- The pinned Playwright sidecar builds separately, runs read-only as an
+  unprivileged user with all capabilities dropped, and completed a live public
+  page navigation through the managed-browser client.
+- PDF/DOCX extraction and Unicode DOCX creation are bounded by workspace,
+  regular-file, size, and output limits; DOCX CRC and expanded XML size are
+  checked before text is returned.
 - An isolated live load smoke completed 1,000 `/health` and `/ready` requests at
   concurrency 50 with zero failures and 37.7 ms p95 latency on the test host.
 - A PostgreSQL custom dump restored into a separate disposable PostgreSQL 17
@@ -37,3 +43,5 @@ pass but was not installed during this run.
 
 Public launch remains intentionally blocked until final credentials and the
 operator-selected domain/bot are supplied; no existing working agent is reused.
+The privacy/terms/acceptable-use/security documents are operational templates,
+not legal advice, and require counsel review for the selected jurisdiction.

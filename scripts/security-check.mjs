@@ -29,4 +29,21 @@ for (const required of [".env", "*.key", "secrets/"]) {
   if (!gitignore.includes(required)) throw new Error(`.gitignore must cover ${required}`);
 }
 
+const browser = await readFile("src/tools/managed-browser.ts", "utf8");
+for (const required of ["assertPublicUrl", "serviceWorkers: \"block\"", "acceptDownloads: false", "MAX_ACTIONS = 8"]) {
+  if (!browser.includes(required)) throw new Error(`Managed browser hardening is missing: ${required}`);
+}
+const browserService = productionCompose.match(/\n  browser:\n([\s\S]*?)\n  database:/u)?.[1] ?? "";
+if (!browserService || browserService.includes("\n    ports:")) {
+  throw new Error("Production browser must exist without a published port");
+}
+for (const legalFile of [
+  "docs/PRIVACY_POLICY_TEMPLATE.md",
+  "docs/TERMS_OF_USE_TEMPLATE.md",
+  "docs/ACCEPTABLE_USE.md",
+  "docs/SECURITY.md",
+]) {
+  if (!files.includes(legalFile)) throw new Error(`Release document is missing: ${legalFile}`);
+}
+
 console.log(`Barlas AI Agent security baseline passed for ${textFiles.length} repository text files.`);

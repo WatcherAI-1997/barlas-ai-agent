@@ -21,6 +21,7 @@ import { Database } from "./storage/database.js";
 import { createBuiltinSkillRegistry } from "./skills/registry.js";
 import { createBuiltinToolRegistry } from "./tools/builtins.js";
 import { ToolExecutor } from "./tools/executor.js";
+import { ManagedBrowser } from "./tools/managed-browser.js";
 
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
@@ -87,6 +88,7 @@ const governance = new RuntimeGovernance(database, {
 const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   workspaceRoot: config.WORKSPACE_ROOT,
   ...(config.SEARXNG_BASE_URL ? { searxngBaseUrl: config.SEARXNG_BASE_URL } : {}),
+  ...(config.BROWSER_WS_ENDPOINT ? { managedBrowser: new ManagedBrowser(config.BROWSER_WS_ENDPOINT) } : {}),
   ...(githubConnector ? { githubConnector } : {}),
   ...(googleConnector ? { googleConnector } : {}),
 }), database, governance);

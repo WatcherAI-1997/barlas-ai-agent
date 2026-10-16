@@ -52,9 +52,40 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  browser:
+    build:
+      context: .
+      dockerfile: deploy/browser/Dockerfile
+    image: barlas-ai-agent-browser:development
+    profiles: ["browser"]
+    restart: unless-stopped
+    init: true
+    user: pwuser
+    expose:
+      - "3000"
+    networks:
+      - barlas-ai-agent
+      - barlas-browser-egress
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,nosuid,nodev
+    shm_size: "1gb"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
 networks:
   barlas-ai-agent:
     name: barlas-ai-agent-net
+  barlas-browser-egress:
+    name: barlas-ai-agent-browser-egress
 
 volumes:
   barlas-ai-agent-db:

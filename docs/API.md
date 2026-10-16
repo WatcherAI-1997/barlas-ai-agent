@@ -100,11 +100,22 @@ oversized workflows are rejected before execution.
   to standard ports, DNS-checked and connection-pinned against private,
   loopback, link-local, reserved, and metadata-network destinations. Responses
   time out after ten seconds and are capped at 2 MB / 100,000 output characters.
+- `browser.interact` is registered only when `BROWSER_WS_ENDPOINT` is set. It
+  connects to the isolated Playwright sidecar, executes at most eight bounded
+  navigation/click/fill/select/key/wait actions in an ephemeral context, runs
+  page JavaScript, and returns bounded text and public links. Every resource is
+  checked against the public-network policy; local networks, metadata targets,
+  nonstandard ports, downloads, popups, service workers, persistent cookies,
+  and credential-like fields are blocked. Interactive browsing is an external
+  action and always waits for explicit approval.
 
 ## Documents
 
-- `documents.create` writes Markdown (`.md`), plain text (`.txt`), or CSV
-  (`.csv`) only inside the current user's isolated workspace.
+- `documents.create` writes Markdown (`.md`), plain text (`.txt`), CSV (`.csv`),
+  or Unicode DOCX (`.docx`) only inside the current user's isolated workspace.
+- `documents.extract` reads bounded text from PDF and DOCX files up to 10 MB.
+  Extraction is read-only, output is capped at 100,000 characters, DOCX ZIP CRC
+  is checked, and active document content is never executed.
 - Document creation is a write action and therefore waits for explicit user
   approval. CSV cells are escaped server-side; paths retain the same traversal,
   symlink, size, and ownership protections as the other file tools.

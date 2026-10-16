@@ -5,6 +5,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 const MAX_READ_BYTES = 1_000_000;
 const MAX_WRITE_BYTES = 1_000_000;
+const MAX_DOCUMENT_BYTES = 10_000_000;
 
 export class FileWorkspace {
   constructor(private readonly root: string) {}
@@ -41,9 +42,29 @@ export class FileWorkspace {
     return { userRoot, absolutePath: target, relativePath: relative(userRoot, target) };
   }
 
+  async readBuffer(userId: string, path: string, maxBytes = MAX_DOCUMENT_BYTES): Promise<{
+    path: string;
+    content: Buffer;
+  }> {
+    const { userRoot, target } = await this.resolveExisting(userId, path);
+    const info = await lstat(target);
+    if (!info.isFile() || info.isSymbolicLink()) throw new Error("Only regular files can be read");
+    if (info.size > maxBytes) throw new Error(`File exceeds the ${Math.floor(maxBytes / 1_000_000)} MB document limit`);
+    return { path: relative(userRoot, target), content: await readFile(target) };
+  }
+
   async write(userId: string, path: string, content: string): Promise<{ path: string; bytes: number }> {
     const bytes = Buffer.byteLength(content);
     if (bytes > MAX_WRITE_BYTES) throw new Error("Content exceeds the 1 MB write limit");
+    return this.writeData(userId, path, Buffer.from(content, "utf8"));
+  }
+
+  async writeBuffer(userId: string, path: string, content: Buffer): Promise<{ path: string; bytes: number }> {
+    if (content.byteLength > MAX_DOCUMENT_BYTES) throw new Error("Document exceeds the 10 MB write limit");
+    return this.writeData(userId, path, content);
+  }
+
+  private async writeData(userId: string, path: string, content: Buffer): Promise<{ path: string; bytes: number }> {
     const userRoot = await this.ensureUserRoot(userId);
     const target = this.resolveRelative(userRoot, path);
     await this.ensureSafeParent(userRoot, dirname(target));
@@ -61,11 +82,11 @@ export class FileWorkspace {
       0o600,
     );
     try {
-      await handle.writeFile(content, "utf8");
+      await handle.writeFile(content);
     } finally {
       await handle.close();
     }
-    return { path: relative(userRoot, target), bytes };
+    return { path: relative(userRoot, target), bytes: content.byteLength };
   }
 
   private async resolveExisting(userId: string, path: string) {

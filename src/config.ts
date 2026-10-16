@@ -28,6 +28,10 @@ const configSchema = z.object({
   JOB_LEASE_SECONDS: z.coerce.number().int().min(30).max(3_600).default(300),
   WORKSPACE_ROOT: z.string().min(1).default("/var/lib/barlas/workspaces"),
   SEARXNG_BASE_URL: z.string().url().optional(),
+  BROWSER_WS_ENDPOINT: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(1).optional(),
+  ),
   DAILY_CHAT_QUOTA: z.coerce.number().int().min(1).max(100_000).default(500),
   DAILY_TOOL_QUOTA: z.coerce.number().int().min(1).max(100_000).default(1_000),
   DAILY_JOB_QUOTA: z.coerce.number().int().min(1).max(10_000).default(100),

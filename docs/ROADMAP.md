@@ -11,7 +11,7 @@
 - Telegram webhook, durable replies, and approval buttons. *(implemented; credentials pending)*
 - One-time Telegram-to-account linking and shared identity. *(implemented)*
 - Persistent conversations and explicit long-term memory. *(implemented with optional semantic embeddings and lexical fallback)*
-- Web research, files, documents, terminal tools, and task execution. *(SearXNG search, SSRF-protected page reader, Markdown/TXT/CSV creation, isolated files, and restricted inspection implemented)*
+- Web research, files, documents, terminal tools, and task execution. *(SearXNG search, SSRF-protected page reader, isolated Playwright interaction, Markdown/TXT/CSV/DOCX creation, PDF/DOCX extraction, isolated files, and restricted inspection implemented)*
 - Model switching and routing. *(fast/deep/private foundation implemented)*
 - Approval gates, audit trail, and usage limits. *(implemented foundation)*
 
@@ -34,4 +34,4 @@
 - Multi-user organizations, roles, and billing foundations. *(organizations, owner/admin/member/viewer memberships, plan profiles, owner-led onboarding, and one-time account recovery implemented; payment processing pending)*
 - Connector catalog and deployment automation. *(encrypted per-user vault plus read-only GitHub, Drive, Gmail, and Calendar metadata connectors implemented; production OAuth credentials pending)*
 - Isolated production Compose, HTTPS proxy, database backups, restore guard, and smoke test. *(implemented; credentials and deployment pending)*
-- Security review, recovery drill, and staged release. *(internal baseline, load test, database recovery drill, repeatable verification commands, and staged gates implemented; independent external review and credentialed release pending)*
+- Security review, recovery drill, and staged release. *(internal baseline, load test, database recovery drill, repeatable verification commands, staged gates, privacy/terms/acceptable-use/security templates implemented; independent external/legal review and credentialed release pending)*

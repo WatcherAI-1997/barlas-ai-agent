@@ -79,7 +79,7 @@ export class SafeWebReader {
   }
 }
 
-function parsePublicUrl(rawUrl: string): URL {
+export function parsePublicUrl(rawUrl: string): URL {
   const url = new URL(rawUrl);
   if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Only HTTP and HTTPS URLs are allowed");
   if (url.username || url.password) throw new Error("Credentials in URLs are not allowed");
@@ -91,7 +91,7 @@ function parsePublicUrl(rawUrl: string): URL {
   return url;
 }
 
-async function assertPublicHost(hostname: string): Promise<void> {
+export async function assertPublicHost(hostname: string): Promise<void> {
   const normalized = hostname.toLowerCase().replace(/\.$/u, "");
   if (normalized === "localhost" || normalized.endsWith(".localhost") || normalized.endsWith(".local")) {
     throw new Error("Local network destinations are not allowed");
@@ -102,6 +102,12 @@ async function assertPublicHost(hostname: string): Promise<void> {
   if (addresses.length === 0 || addresses.some(({ address }) => !isPublicAddress(address))) {
     throw new Error("Local or non-public network destinations are not allowed");
   }
+}
+
+export async function assertPublicUrl(rawUrl: string): Promise<URL> {
+  const url = parsePublicUrl(rawUrl);
+  await assertPublicHost(url.hostname);
+  return url;
 }
 
 export function isPublicAddress(address: string): boolean {

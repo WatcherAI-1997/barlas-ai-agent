@@ -5,7 +5,8 @@ import { FileWorkspace } from "./file-workspace.js";
 import { RestrictedTerminal } from "./terminal.js";
 import { SearxngSearchClient } from "./web-search.js";
 import { SafeWebReader } from "./safe-web.js";
-import { DocumentWriter } from "./documents.js";
+import { DocumentReader, DocumentWriter } from "./documents.js";
+import type { ManagedBrowser } from "./managed-browser.js";
 import type { GitHubConnector } from "../connectors/github.js";
 import type { GoogleConnector } from "../connectors/google.js";
 
@@ -14,6 +15,7 @@ export function createBuiltinToolRegistry(options: {
   searxngBaseUrl?: string;
   githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
   googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
+  managedBrowser?: Pick<ManagedBrowser, "run">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
@@ -45,6 +47,7 @@ export function createBuiltinToolRegistry(options: {
     const workspace = new FileWorkspace(options.workspaceRoot);
     const terminal = new RestrictedTerminal(workspace);
     const documents = new DocumentWriter(workspace);
+    const documentReader = new DocumentReader(workspace);
     registry.register({
       name: "files.list",
       description: "List regular files and directories in the current user's isolated workspace.",
@@ -110,11 +113,23 @@ export function createBuiltinToolRegistry(options: {
           path: z.string().min(1).max(1_000),
           rows: z.array(z.array(z.string().max(10_000)).max(50)).max(1_000),
         }).strict(),
+        z.object({
+          format: z.literal("docx"),
+          path: z.string().min(1).max(1_000),
+          content: z.string().max(1_000_000),
+        }).strict(),
       ]),
       execute: async (input, context) => documents.create({
         userId: context.userId,
-        ...(input as { path: string; format: "markdown" | "text" | "csv"; content?: string; rows?: string[][] }),
+        ...(input as { path: string; format: "markdown" | "text" | "csv" | "docx"; content?: string; rows?: string[][] }),
       }),
+    });
+    registry.register({
+      name: "documents.extract",
+      description: "Extract bounded plain text from a PDF or DOCX document in the current user's isolated workspace.",
+      risk: "read",
+      inputSchema: z.object({ path: z.string().min(1).max(1_000) }).strict(),
+      execute: async (input, context) => documentReader.extract(context.userId, (input as { path: string }).path),
     });
   }
 
@@ -126,6 +141,34 @@ export function createBuiltinToolRegistry(options: {
     inputSchema: z.object({ url: z.string().url().max(2_000) }).strict(),
     execute: async (input) => webReader.open((input as { url: string }).url),
   });
+
+  if (options.managedBrowser) {
+    const actionSchema = z.discriminatedUnion("type", [
+      z.object({ type: z.literal("navigate"), url: z.string().url().max(2_000) }).strict(),
+      z.object({ type: z.literal("click"), selector: z.string().min(1).max(1_000) }).strict(),
+      z.object({ type: z.literal("fill"), selector: z.string().min(1).max(1_000), value: z.string().max(10_000) }).strict(),
+      z.object({ type: z.literal("select"), selector: z.string().min(1).max(1_000), value: z.string().max(1_000) }).strict(),
+      z.object({
+        type: z.literal("press"),
+        selector: z.string().min(1).max(1_000),
+        key: z.enum(["Enter", "Tab", "Escape", "ArrowDown", "ArrowUp"]),
+      }).strict(),
+      z.object({ type: z.literal("wait"), milliseconds: z.number().int().min(0).max(5_000) }).strict(),
+    ]);
+    registry.register({
+      name: "browser.interact",
+      description: "Open and interact with a public JavaScript website in an ephemeral browser. Credentials, downloads, popups, local networks, and nonstandard ports are blocked.",
+      risk: "external",
+      inputSchema: z.object({
+        url: z.string().url().max(2_000),
+        actions: z.array(actionSchema).max(8).default([]),
+      }).strict(),
+      execute: async (input) => options.managedBrowser!.run(input as {
+        url: string;
+        actions: import("./managed-browser.js").BrowserAction[];
+      }),
+    });
+  }
 
   if (options.githubConnector) {
     registry.register({

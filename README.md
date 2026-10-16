@@ -44,6 +44,8 @@ with hard step limits, durable checkpoints, approval continuation, restart
 recovery, cancellation, an asynchronous lease worker, live progress, Telegram
 delivery, approval buttons, and a content-safe step journal. It also includes optional SearXNG
 web search, a no-shell read-only terminal inspector,
+an isolated approval-gated JavaScript browser, PDF/DOCX extraction, Unicode
+DOCX creation,
 atomic per-user quotas, execution traces, secure owner/user accounts, and a
 branded web cabinet with conversation history, approvals, job controls, and
 token/cost monitoring. First-login onboarding and account settings provide a
@@ -75,3 +77,7 @@ and replace every placeholder secret before starting the containers.
 - [Backup and recovery](docs/BACKUP_RECOVERY.md)
 - [Release readiness](docs/RELEASE_READINESS.md)
 - [Product overview in 38 languages](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md)
+- [Privacy policy template](docs/PRIVACY_POLICY_TEMPLATE.md)
+- [Terms of use template](docs/TERMS_OF_USE_TEMPLATE.md)
+- [Acceptable use](docs/ACCEPTABLE_USE.md)
+- [Security policy](docs/SECURITY.md)

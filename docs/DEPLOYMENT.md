@@ -33,6 +33,12 @@ configured and the webhook is registered to this deployment's domain.
 Semantic memory remains optional; set `EMBEDDING_MODEL` to an embedding model
 available through the dedicated model API key to enable it.
 
+The production stack includes an unexposed Playwright browser sidecar. Keep
+`BROWSER_WS_ENDPOINT=ws://browser:3000/`; never publish port 3000. The browser
+has a separate egress network while the database remains on the internal
+backend network. Interactive actions remain approval-gated. Local development
+may start the same optional sidecar with `docker compose --profile browser up`.
+
 The one-shot `migrate` service applies the ordered, idempotent SQL files after
 PostgreSQL becomes healthy and before the API is allowed to start.
 

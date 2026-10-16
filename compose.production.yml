@@ -23,6 +23,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+      browser:
+        condition: service_healthy
     networks:
       - frontend
       - backend
@@ -41,6 +43,39 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+
+  browser:
+    build:
+      context: .
+      dockerfile: deploy/browser/Dockerfile
+    image: barlas-ai-agent-browser:${BARLAS_IMAGE_TAG:-production}
+    restart: unless-stopped
+    init: true
+    user: pwuser
+    expose:
+      - "3000"
+    networks:
+      - backend
+      - browser_egress
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,nosuid,nodev
+    shm_size: "1gb"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     deploy:
       resources:
         limits:
@@ -145,6 +180,8 @@ networks:
   backend:
     name: barlas-ai-agent-production-backend
     internal: true
+  browser_egress:
+    name: barlas-ai-agent-production-browser-egress
 
 volumes:
   database:

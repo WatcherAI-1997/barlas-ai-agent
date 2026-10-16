@@ -30,6 +30,11 @@ autonomy.
   claim that it performed external actions.
 - Web search uses a separately configured open-source SearXNG endpoint. It is
   disabled by default and remains subject to the external-action approval gate.
+- Interactive JavaScript browsing runs in a separate Playwright container with
+  no published port and an ephemeral context per call. The API validates every
+  requested resource against the public-network policy before allowing it.
+- PDF/DOCX extraction and DOCX creation operate only on per-user workspace
+  files with bounded input/output and no macros or active content execution.
 - The terminal surface has no arbitrary command or shell entry point. It exposes
   only bounded read-only file inspection operations.
 - Per-user UTC-day counters and execution traces live in the isolated PostgreSQL
