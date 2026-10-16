@@ -403,6 +403,7 @@ function help(): void {
   tools                             доступные инструменты
   nodes | devices                   подключённые устройства
   node-pair                         код подключения
+  node install|uninstall            Windows tray node (нативная установка)
   audit                             журнал действий
 
 Система Windows:

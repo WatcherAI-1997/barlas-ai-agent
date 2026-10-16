@@ -309,3 +309,28 @@ and confirm that it stops in `waiting_approval` before execution. Register the
 Telegram webhook only after its dedicated bot and public HTTPS endpoint are
 ready. Complete every gate in [Release readiness](RELEASE_READINESS.md) before
 admitting private-alpha users.
+
+## Windows desktop node
+
+After the native Windows gateway is running:
+
+```powershell
+barlas node install
+```
+
+The command creates a one-time pairing code internally, pairs a separate node
+token, protects it with current-user Windows DPAPI, registers current-user
+autostart, and launches a tray icon. The client advertises only the
+`notifications` capability and rejects every other command kind. It does not
+request elevation and contains no remote shell. Use `barlas node uninstall`
+and revoke the node record to remove access completely.
+
+For a separate Windows device, first run `barlas node-pair` on the owner
+installation, then on that device run:
+
+```powershell
+irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-node-windows.ps1 | iex
+```
+
+The bootstrap verifies the pinned SHA-256 of the downloaded client before it
+asks for the one-time code.

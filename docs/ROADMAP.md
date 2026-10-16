@@ -55,7 +55,8 @@
 - Desktop/mobile node protocol foundation with one-time pairing, hashed and
   independently revocable device tokens, heartbeat/capability discovery, and
   approval-gated notification delivery. *(implemented; signed native clients,
-  camera/screen capture, and OS automation remain pending)*
+  camera/screen capture, and OS automation remain pending; Windows tray client
+  with DPAPI token, current-user autostart, and notifications-only execution implemented)*
 
 - Branded web application. *(responsive authenticated cabinet, mobile
   navigation, accessible feedback/dialogs, and isolated file manager implemented)*

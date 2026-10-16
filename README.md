@@ -159,6 +159,22 @@ After installation, work from the terminal without copying a token:
 ./barlas node-pair           # one-time pairing code
 ```
 
+On native Windows, install the least-privilege tray node with:
+
+```powershell
+barlas node install
+```
+
+It runs only for the current Windows user, stores its independent revocable
+token with Windows DPAPI, advertises only `notifications`, and cannot execute
+shell commands. Remove it with `barlas node uninstall`; revoke its token from
+`barlas nodes` or the web cabinet. A standalone checksum-pinned bootstrap is
+also available as `install-node-windows.ps1` for a different Windows device.
+
+```powershell
+irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-node-windows.ps1 | iex
+```
+
 The installation includes 30 active built-in skills. The core pack covers
 grounded and academic research, code inspection and delivery, debugging, TDD,
 GitHub, browser operation, architecture diagrams, DOCX/PDF, Markdown notes,

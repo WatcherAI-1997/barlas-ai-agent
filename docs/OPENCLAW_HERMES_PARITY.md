@@ -21,7 +21,7 @@ free, Windows-first agent rather than copied as incompatible subsystems.
 | Multi-agent execution | Bounded parallel workflows and non-recursive analytical subagents | Implemented |
 | Multimodal work | Images, PDF/DOCX, audio transcription and speech replies | Implemented; provider-dependent |
 | Wider channel ecosystem | Additional adapters such as Slack/Matrix/WhatsApp where official APIs allow safe local operation | Planned |
-| Desktop/mobile control | Signed native clients and narrowly scoped camera/screen/OS capabilities | Planned |
+| Desktop/mobile control | Windows tray node with DPAPI token, current-user autostart, notifications only, and no remote shell | Implemented foundation; Authenticode/mobile/camera/screen pending |
 | Realtime duplex voice | Provider-neutral realtime session with explicit microphone consent | Planned |
 | Marketplace | Signed declarative index with publisher reputation and revocation | Planned |
 

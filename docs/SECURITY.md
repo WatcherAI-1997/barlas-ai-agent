@@ -58,3 +58,12 @@ envelope is acknowledged promptly; only direct-message and `app_mention`
 events are accepted, bot/subtype events are ignored, and API responses disable
 link/media unfurling. Use separate least-privilege `xoxb-` and `xapp-` tokens;
 they are treated as secrets and never returned by the extension catalog.
+
+The Windows desktop node is deliberately not a remote administration agent.
+It advertises only `notifications`, rejects every other command kind, never
+invokes a shell, stores its independent revocable token with current-user
+DPAPI, uses only current-user autostart, and accepts plain HTTP only on a
+loopback address. Remote gateways require HTTPS. The standalone bootstrap pins
+the downloaded client SHA-256. Authenticode signing still requires an external
+publisher certificate and must not be claimed until release artifacts are
+actually signed and verified in CI.

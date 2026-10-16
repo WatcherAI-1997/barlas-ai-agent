@@ -67,6 +67,17 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
         & $ConfigureScript -Action security-audit
         exit $LASTEXITCODE
     }
+    if ($LocalCommand -eq "node" -and $Arguments.Count -gt 1 -and $Arguments[1] -in @("install", "uninstall")) {
+        $NodeScript = Join-Path $RootDir "scripts\windows-node.ps1"
+        if ($Arguments[1] -eq "uninstall") { & $NodeScript -Uninstall; exit $LASTEXITCODE }
+        $Headers = @{ Authorization = "Bearer $Token" }
+        $Me = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/v1/me" -Headers $Headers -TimeoutSec 10
+        $Pairing = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$Port/v1/nodes/pairing-code" -Headers $Headers -ContentType "application/json" -Body (@{ userId = $Me.principal.id } | ConvertTo-Json -Compress) -TimeoutSec 10
+        & $NodeScript -Configure -BaseUrl "http://127.0.0.1:$Port" -PairingCode $Pairing.code
+        if (-not $?) { exit 1 }
+        Start-Process powershell.exe -ArgumentList @("-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", "`"$NodeScript`"")
+        exit 0
+    }
     if ($LocalCommand -in @("gateway", "daemon")) {
         $GatewayCommand = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "status" }
         if ($GatewayCommand -in @("start", "run", "stop", "restart")) {
