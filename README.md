@@ -52,7 +52,9 @@ encrypted GitHub/Drive/Gmail/Calendar connections with approval-gated writes,
 and SSRF-protected remote MCP Streamable HTTP tools,
 atomic per-user quotas, execution traces, secure owner/user accounts, and a
 branded web cabinet with conversation history, approvals, job controls, and
-token/cost monitoring. First-login onboarding and account settings provide a
+token/cost monitoring. A reproducible live evaluation suite scores persisted
+status, tool use, events, output constraints, steps, tokens, and cost without
+letting the model grade itself. First-login onboarding and account settings provide a
 broad Turkic-language catalogue, Mongolian, Russian/English fallbacks, RTL
 handling, and a persisted response-language preference shared with linked
 Telegram. No production agent, token,
@@ -77,6 +79,7 @@ and replace every placeholder secret before starting the containers.
 - [API](docs/API.md)
 - [Isolation policy](docs/ISOLATION.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Agent evaluation](docs/AGENT_EVALUATION.md)
 - [Production deployment](docs/DEPLOYMENT.md)
 - [Backup and recovery](docs/BACKUP_RECOVERY.md)
 - [Release readiness](docs/RELEASE_READINESS.md)

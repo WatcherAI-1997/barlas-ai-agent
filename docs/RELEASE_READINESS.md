@@ -3,7 +3,7 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 101 automated tests across 30 files pass.
+- 105 automated tests across 31 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -18,6 +18,10 @@
 - Media tests verify binary-signature/MIME/extension agreement, rejection of
   SVG and unknown content, per-user isolation, bounded upload, and external-risk
   registration for every vision, PDF, transcription, and speech tool.
+- The live agent evaluation suite validates scenario definitions and scores
+  persisted statuses, tools, content-safe events, output constraints, steps,
+  tokens, and cost without model self-grading. Credentialed baseline results
+  and the staging restart drill remain release requirements.
 - An isolated live load smoke completed 1,000 `/health` and `/ready` requests at
   concurrency 50 with zero failures and 37.7 ms p95 latency on the test host.
 - A PostgreSQL custom dump restored into a separate disposable PostgreSQL 17
@@ -43,6 +47,8 @@ pass but was not installed during this run.
 6. Admit only named private-alpha users; monitor errors, queue leases, token cost,
    disk, backup age, and authentication failures for at least 48 hours.
 7. Expand gradually only after the independent security review and recovery drill.
+8. Run `npm run eval:agent` against the pinned production-candidate models and
+   retain the reviewed report with the deployed commit and model IDs.
 
 Public launch remains intentionally blocked until final credentials and the
 operator-selected domain/bot are supplied; no existing working agent is reused.

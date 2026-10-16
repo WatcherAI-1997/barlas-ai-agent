@@ -112,6 +112,11 @@ const mediaTools = await readFile("src/tools/media.ts", "utf8");
 for (const required of ["MAX_MEDIA_BYTES = 10_000_000", "detectMedia", "File extension does not match", "Unsupported or unrecognized", "workspace.readBuffer", "workspace.writeBuffer"]) {
   if (!mediaTools.includes(required)) throw new Error(`Media boundary is missing: ${required}`);
 }
+const evaluationRunner = await readFile("scripts/run-agent-evals.mjs", "utf8");
+if (evaluationRunner.includes("approved: true")) throw new Error("Agent evaluation must never auto-approve an action");
+for (const required of ["approved: false", "parseEvaluationScenarios", "BARLAS_EVAL_TOKEN"]) {
+  if (!evaluationRunner.includes(required)) throw new Error(`Agent evaluation safety boundary is missing: ${required}`);
+}
 const mcpConnector = await readFile("src/connectors/mcp.ts", "utf8");
 for (const required of ["assertPublicUrl", "publicNetworkFetch", "redirectPolicy: \"same-origin\"", "MAX_RESULT_BYTES = 1_000_000"]) {
   if (!mcpConnector.includes(required)) throw new Error(`MCP boundary is missing: ${required}`);

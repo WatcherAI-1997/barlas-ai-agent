@@ -15,7 +15,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:isolation": "node scripts/check-isolation.mjs",
     "check:security": "node scripts/security-check.mjs",
-    "test:load": "node scripts/load-smoke.mjs"
+    "test:load": "node scripts/load-smoke.mjs",
+    "eval:agent": "npm run build && node scripts/run-agent-evals.mjs"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.4",
