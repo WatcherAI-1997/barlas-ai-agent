@@ -43,8 +43,11 @@ describe("production installer", () => {
       "local.env",
       "barlas.cmd",
       'Start-Process ([string]$DashboardUrl).Trim()',
+      'cmd.exe /d /c "docker info >nul 2>nul"',
     ]) expect(bootstrap).toContain(required);
     expect(bootstrap).not.toContain("gh auth");
+    expect(installer).toContain('$ErrorActionPreference = "Continue"');
+    expect(installer).toContain("$CommandExitCode");
   });
 
   it("prepares a protected config without printing supplied secrets", async () => {

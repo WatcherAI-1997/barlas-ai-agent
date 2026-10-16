@@ -95,12 +95,20 @@ function Invoke-Logged([string]$Label, [string[]]$Arguments) {
     Write-Info $Label
     $LogDirectory = Split-Path -Parent $InstallLog
     New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
-    if ($VerboseOutput) {
-        & docker @Arguments 2>&1 | Tee-Object -FilePath $InstallLog -Append
-    } else {
-        & docker @Arguments *>> $InstallLog
+    $PreviousPreference = $ErrorActionPreference
+    $CommandExitCode = 1
+    try {
+        $ErrorActionPreference = "Continue"
+        if ($VerboseOutput) {
+            & docker @Arguments 2>&1 | Tee-Object -FilePath $InstallLog -Append
+        } else {
+            & docker @Arguments *>> $InstallLog
+        }
+        $CommandExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $PreviousPreference
     }
-    if ($LASTEXITCODE -ne 0) {
+    if ($CommandExitCode -ne 0) {
         if (Test-Path -LiteralPath $InstallLog) { Get-Content -LiteralPath $InstallLog -Tail 25 | Write-Host }
         Stop-Install "$Label failed. Full log: $InstallLog"
     }
@@ -110,9 +118,9 @@ function Invoke-Logged([string]$Label, [string[]]$Arguments) {
 Show-Banner
 if ($env:OS -ne "Windows_NT") { Stop-Install "This installer is for Windows 10/11. Use ./install.sh --local on Linux." }
 if (-not (Test-Command "docker")) { Stop-Install "Docker Desktop is missing. Install Docker Desktop with WSL 2, start it, then run this installer again." }
-& docker compose version *> $null
+& cmd.exe /d /c "docker compose version >nul 2>nul"
 if ($LASTEXITCODE -ne 0) { Stop-Install "Docker Compose v2 is required. Update Docker Desktop and enable WSL 2 based Linux containers." }
-& docker info *> $null
+& cmd.exe /d /c "docker info >nul 2>nul"
 if ($LASTEXITCODE -ne 0 -and -not $PrepareOnly) { Stop-Install "Docker Desktop is not running. Start it and wait until the engine is ready." }
 if (-not (Test-Path -LiteralPath (Join-Path $RootDir "compose.production.yml") -PathType Leaf)) { Stop-Install "Run install.ps1 from a complete Barlas AI Agent checkout." }
 if (-not (Test-Path -LiteralPath (Join-Path $RootDir "compose.local.yml") -PathType Leaf)) { Stop-Install "Local Compose override is missing." }

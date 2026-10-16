@@ -36,7 +36,7 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw "Install and start Docker Desktop, then run the Barlas command again."
 }
 
-& docker info *> $null
+& cmd.exe /d /c "docker info >nul 2>nul"
 if ($LASTEXITCODE -ne 0) {
     throw "Docker Desktop is installed but its Linux engine is not running. Start Docker Desktop, wait until it is ready, then run this command again."
 }
