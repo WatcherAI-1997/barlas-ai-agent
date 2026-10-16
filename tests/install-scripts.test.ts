@@ -21,6 +21,8 @@ describe("production installer", () => {
     const installer = await readFile(join(root, "install-native.ps1"), "utf8");
     const doctor = await readFile(join(root, "scripts", "doctor-native.ps1"), "utf8");
     const configure = await readFile(join(root, "scripts", "configure-native.ps1"), "utf8");
+    const nativeUpdater = await readFile(join(root, "scripts", "update-native.ps1"), "utf8");
+    const nativeUninstaller = await readFile(join(root, "scripts", "uninstall-native.ps1"), "utf8");
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
     const cli = await readFile(join(root, "barlas.ps1"), "utf8");
 
@@ -36,10 +38,18 @@ describe("production installer", () => {
     expect(configure).toContain('"file", "schema", "validate"');
     expect(configure).toContain("Do not put secrets in command history");
     expect(configure).toContain("Protect-File");
+    expect(nativeUpdater).toContain('ValidateSet("check", "update", "rollback", "repair")');
+    expect(nativeUpdater).toContain("Rollback failed; restoring the current version");
+    expect(nativeUpdater).toContain("Protect-File");
+    expect(nativeUninstaller).toContain("Type UNINSTALL to continue");
+    expect(nativeUninstaller).toContain("uninstalled-native.env");
+    expect(nativeUninstaller).toContain("Protect-File");
     expect(dashboard).toContain("#token=$Token");
     expect(cli).toContain("dist/src/cli.js");
     for (const required of [
-      "archive/refs/heads/main.zip",
+      "commits/main",
+      'archive/$ReleaseSha.zip',
+      ".barlas-version",
       'Join-Path $env:LOCALAPPDATA "Barlas"',
       "native.env",
       "barlas.cmd",

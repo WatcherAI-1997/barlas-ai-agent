@@ -50,12 +50,23 @@ barlas channels status
 barlas channels add telegram
 barlas security audit
 barlas gateway restart
+barlas update check
+barlas update
+barlas update rollback
+barlas repair
+barlas uninstall
+barlas uninstall --purge
 ```
 
 Secret values are redacted by `config list/get`. Setting a secret on the command
 line is refused so it cannot leak into PowerShell history; the secure wizard
 prompts for it instead. Configuration changes are written atomically, the
 Windows ACL is reapplied, and the local Gateway is restarted when required.
+Updates are pinned to the exact public GitHub commit returned by the release
+lookup. The previous application version is retained for `update rollback`;
+the embedded database and workspaces live outside the application directory.
+Uninstall preserves those data and a protected configuration backup unless
+`--purge` is explicitly selected and confirmed.
 
 An existing `deploy\native.env` is reused and never silently overwritten.
 Windows installation is local-only. Native mode does not expose the

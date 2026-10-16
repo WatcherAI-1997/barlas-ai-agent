@@ -60,6 +60,8 @@ for (const required of [
   "scripts/doctor.ps1",
   "scripts/doctor-native.ps1",
   "scripts/configure-native.ps1",
+  "scripts/update-native.ps1",
+  "scripts/uninstall-native.ps1",
   "scripts/start-native.ps1",
   "scripts/stop-native.ps1",
   "scripts/dashboard-url.sh",
@@ -93,7 +95,7 @@ for (const required of ["Windows_NT", "Docker Desktop", "BARLAS_INSTALL_MODE = \
 for (const required of ["BARLAS_INSTALL_MODE = \"native\"", "RandomNumberGenerator", "Protect-SecretFile", "BROWSER_WS_ENDPOINT = \"local://chromium\"", "start-native.ps1"]) {
   if (!nativeWindowsInstaller.includes(required)) throw new Error(`Native Windows installer boundary is missing: ${required}`);
 }
-for (const required of ["main.zip", "LOCALAPPDATA", "native.env", "barlas.cmd", "ExecutionPolicy Bypass", "nodejs.org", "playwright-core.cmd", "no Docker or WSL required"]) {
+for (const required of ["commits/main", "archive/$ReleaseSha.zip", ".barlas-version", "LOCALAPPDATA", "native.env", "barlas.cmd", "ExecutionPolicy Bypass", "nodejs.org", "playwright-core.cmd", "no Docker or WSL required"]) {
   if (!windowsBootstrap.includes(required)) throw new Error(`Windows bootstrap boundary is missing: ${required}`);
 }
 for (const forbidden of ["docker info", "Docker.DockerDesktop", "compose.local.yml"]) {

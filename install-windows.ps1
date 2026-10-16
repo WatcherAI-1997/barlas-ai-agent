@@ -5,7 +5,7 @@ if ($env:OS -ne "Windows_NT") { throw "This bootstrap is for Windows 10/11. Use 
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $NodeVersion = "24.18.0"
-$ArchiveUrl = "https://github.com/WatcherAI-1997/barlas-ai-agent/archive/refs/heads/main.zip"
+$ReleaseApiUrl = "https://api.github.com/repos/WatcherAI-1997/barlas-ai-agent/commits/main"
 $BarlasHome = Join-Path $env:LOCALAPPDATA "Barlas"
 $AppDir = Join-Path $BarlasHome "app"
 $BinDir = Join-Path $BarlasHome "bin"
@@ -51,6 +51,10 @@ Write-Host ""
 New-Item -ItemType Directory -Force -Path $WorkDir, $Extracted, $BarlasHome, $BinDir, $RuntimeDir, $LogDir | Out-Null
 [IO.File]::WriteAllText($InstallLog, "Barlas Windows installation log`r`n", [Text.Encoding]::UTF8)
 try {
+    $Release = Invoke-RestMethod -UseBasicParsing -Uri $ReleaseApiUrl
+    $ReleaseSha = [string]$Release.sha
+    if ($ReleaseSha -notmatch '^[a-f0-9]{40}$') { throw "GitHub returned an invalid release identifier" }
+    $ArchiveUrl = "https://github.com/WatcherAI-1997/barlas-ai-agent/archive/$ReleaseSha.zip"
     if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) {
         $Architecture = switch ($env:PROCESSOR_ARCHITECTURE) {
             "AMD64" { "x64" }
@@ -128,6 +132,7 @@ try {
     if ($PathParts -notcontains $BinDir) { [Environment]::SetEnvironmentVariable("Path", ((@($PathParts) + $BinDir) -join ';'), "User") }
     if (($env:Path -split ';') -notcontains $BinDir) { $env:Path = "$env:Path;$BinDir" }
     Write-Done "Global 'barlas' command installed"
+    [IO.File]::WriteAllText((Join-Path $AppDir ".barlas-version"), $ReleaseSha + "`r`n", [Text.Encoding]::ASCII)
 
     $DashboardUrl = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppDir "scripts\dashboard-url.ps1")
     if ($LASTEXITCODE -eq 0 -and $DashboardUrl) { Start-Process ([string]$DashboardUrl).Trim() }
@@ -157,6 +162,10 @@ try {
     Write-Host "                    all commands"
     Write-Host "  barlas update" -ForegroundColor Cyan -NoNewline
     Write-Host "                  update Barlas"
+    Write-Host "  barlas update rollback" -ForegroundColor Cyan -NoNewline
+    Write-Host "         roll back application"
+    Write-Host "  barlas repair" -ForegroundColor Cyan -NoNewline
+    Write-Host "                  repair installation"
     Write-Host ""
     Write-Host "Start now: barlas" -ForegroundColor Green
     if (Test-Path -LiteralPath $PreviousDir) { Write-Host "Previous application source is preserved at: $PreviousDir" -ForegroundColor DarkGray }

@@ -205,7 +205,59 @@ async function ask(ctx: CliContext, prompt: string): Promise<void> {
 }
 
 function help(): void {
-  output.write(`Barlas CLI — команды в стиле OpenClaw\n\nНастройка (Windows):\n  onboard                           полный мастер настройки\n  configure [section]               изменить all/general/models/channels/agent\n  config list|get|set|unset         управление конфигурацией\n  models status|configure           модели и ключи\n  channels status|add|configure     каналы связи\n  security audit                    локальная проверка безопасности\n\nАгент:\n  chat | tui | terminal             интерактивный чат\n  agent <запрос> | ask <запрос>     автономная задача\n  status | health | doctor          состояние и диагностика\n  dashboard                         открыть кабинет (Windows)\n\nРабота:\n  runs                              последние запуски\n  runs cancel <id>                  отменить запуск\n  jobs                              фоновые задачи\n  jobs cancel|retry <id>            управление задачей\n  tasks                             запуски и фоновые задачи\n  cron | schedules                  расписания\n  cron pause|resume|disable <id>    управление расписанием\n  approvals                         подтверждения\n  approve|reject <id>               принять или отклонить\n  projects                          проекты\n\nЗнания и расширения:\n  memory search <запрос>            поиск памяти\n  sessions | transcripts            диалоги\n  skills                            установленные навыки\n  plugins | extensions              расширения\n  models                            провайдеры моделей\n  channels                          каналы связи\n  tools                             доступные инструменты\n  nodes | devices                   подключённые устройства\n  node-pair                         код подключения\n  audit                             журнал действий\n\nСистема Windows:\n  gateway status                    состояние Gateway\n  gateway start|stop|restart        управление Gateway\n  gateway health                    диагностика Gateway\n  gateway logs [--follow]           логи Gateway\n  daemon ...                        алиас для gateway\n  start | stop | restart            короткие алиасы\n  logs                              последние логи\n  update                            обновление\n  help                              эта справка\n`);
+  output.write(`Barlas CLI — команды в стиле OpenClaw
+
+Настройка (Windows):
+  onboard                           полный мастер настройки
+  configure [section]               изменить all/general/models/channels/agent
+  config list|get|set|unset         управление конфигурацией
+  models status|configure           модели и ключи
+  channels status|add|configure     каналы связи
+  security audit                    локальная проверка безопасности
+
+Агент:
+  chat | tui | terminal             интерактивный чат
+  agent <запрос> | ask <запрос>     автономная задача
+  status | health | doctor          состояние и диагностика
+  dashboard                         открыть кабинет (Windows)
+
+Работа:
+  runs                              последние запуски
+  runs cancel <id>                  отменить запуск
+  jobs                              фоновые задачи
+  jobs cancel|retry <id>            управление задачей
+  tasks                             запуски и фоновые задачи
+  cron | schedules                  расписания
+  cron pause|resume|disable <id>    управление расписанием
+  approvals                         подтверждения
+  approve|reject <id>               принять или отклонить
+  projects                          проекты
+
+Знания и расширения:
+  memory search <запрос>            поиск памяти
+  sessions | transcripts            диалоги
+  skills                            установленные навыки
+  plugins | extensions              расширения
+  models                            провайдеры моделей
+  channels                          каналы связи
+  tools                             доступные инструменты
+  nodes | devices                   подключённые устройства
+  node-pair                         код подключения
+  audit                             журнал действий
+
+Система Windows:
+  gateway status                    состояние Gateway
+  gateway start|stop|restart        управление Gateway
+  gateway health                    диагностика Gateway
+  gateway logs [--follow]           логи Gateway
+  daemon ...                        алиас для gateway
+  start | stop | restart            короткие алиасы
+  logs                              последние логи
+  update [check|rollback|repair]    обновление и откат
+  repair                            восстановить установку
+  uninstall [--purge]               удалить; данные сохраняются по умолчанию
+  help                              эта справка
+`);
 }
 
 async function tui(ctx: CliContext): Promise<void> {

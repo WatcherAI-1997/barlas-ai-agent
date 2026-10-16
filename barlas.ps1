@@ -111,12 +111,18 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
         exit 0
     }
     if ($LocalCommand -eq "update") {
-        $UpdateScript = Join-Path ([IO.Path]::GetTempPath()) ("barlas-update-" + [Guid]::NewGuid().ToString("N") + ".ps1")
-        try {
-            Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-windows.ps1" -OutFile $UpdateScript
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $UpdateScript
-            exit $LASTEXITCODE
-        } finally { Remove-Item -LiteralPath $UpdateScript -Force -ErrorAction SilentlyContinue }
+        $UpdateAction = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "update" }
+        & (Join-Path $RootDir "scripts\update-native.ps1") -Action $UpdateAction
+        exit $LASTEXITCODE
+    }
+    if ($LocalCommand -eq "repair") {
+        & (Join-Path $RootDir "scripts\update-native.ps1") -Action repair
+        exit $LASTEXITCODE
+    }
+    if ($LocalCommand -eq "uninstall") {
+        $Purge = $Arguments -contains "--purge"
+        & (Join-Path $RootDir "scripts\uninstall-native.ps1") -PurgeData:$Purge
+        exit $LASTEXITCODE
     }
     $env:BARLAS_URL = "http://127.0.0.1:$Port"
     $env:BARLAS_GATEWAY_TOKEN = $Token
