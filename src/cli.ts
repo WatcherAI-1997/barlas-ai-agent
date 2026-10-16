@@ -730,6 +730,8 @@ function help(): void {
   gateway status                    состояние Gateway
   gateway start|stop|restart        управление Gateway
   gateway health                    диагностика Gateway
+  web test                          проверить поиск, чтение и Chromium
+  web repair                        скачать Chromium и повторить проверку
   gateway logs [--follow]           логи Gateway
   daemon ...                        алиас для gateway
   start | stop | restart            короткие алиасы

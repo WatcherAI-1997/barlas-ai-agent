@@ -36,11 +36,14 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
     $LocalCommand = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
     $ConfigureScript = Join-Path $RootDir "scripts\configure-native.ps1"
     if ($LocalCommand -in @("onboard", "configure")) {
+        if (-not (Test-Path -LiteralPath $ConfigureScript -PathType Leaf)) { throw "Barlas onboarding script is missing. Repair the installation first." }
         $Profiles = @("complete", "quick", "private", "developer", "server", "import")
         $Requested = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
         $Section = if ($LocalCommand -eq "onboard" -or $Requested -in $Profiles -or -not $Requested) { "all" } else { $Requested }
         $Profile = if ($Requested -in $Profiles) { $Requested } else { "" }
-        & $ConfigureScript -Action wizard -Section $Section -Profile $Profile
+        $WizardArguments = @{ Action = "wizard"; Section = $Section }
+        if ($Profile) { $WizardArguments["Profile"] = $Profile }
+        & $ConfigureScript @WizardArguments
         if (-not $?) { exit 1 }
         & $ConfigureScript -Action validate
         if (-not $?) { exit 1 }
@@ -142,6 +145,16 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
     if ($LocalCommand -eq "voice" -and $Arguments.Count -gt 1 -and $Arguments[1] -eq "test") {
         Open-VoiceTest
         exit 0
+    }
+    if ($LocalCommand -eq "web" -and $Arguments.Count -gt 1 -and $Arguments[1] -in @("test", "repair")) {
+        if ($Arguments[1] -eq "repair") {
+            $Playwright = Join-Path $RootDir "node_modules\playwright-core\cli.js"
+            if (-not (Test-Path -LiteralPath $Playwright -PathType Leaf)) { throw "Playwright is missing. Repair the Barlas installation first." }
+            & $NodeExe $Playwright install chromium
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        & $NodeExe (Join-Path $RootDir "scripts\web-diagnostic.mjs")
+        exit $LASTEXITCODE
     }
     if ($LocalCommand -eq "backup") {
         $BackupAction = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "create" }

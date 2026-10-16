@@ -65,6 +65,14 @@ describe("subagent tool registration", () => {
   });
 });
 
+describe("built-in public web tools", () => {
+  it("always exposes safe search and page reading without separate infrastructure", () => {
+    const tools = createBuiltinToolRegistry().list();
+    expect(tools).toContainEqual(expect.objectContaining({ name: "web.search", risk: "read" }));
+    expect(tools).toContainEqual(expect.objectContaining({ name: "browser.open", risk: "read" }));
+  });
+});
+
 describe("sandbox tool registration", () => {
   it("requires approval and is absent unless the isolated runner is configured", () => {
     expect(createBuiltinToolRegistry().list().some((tool) => tool.name === "code.run")).toBe(false);

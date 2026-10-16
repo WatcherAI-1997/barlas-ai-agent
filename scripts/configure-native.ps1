@@ -294,7 +294,8 @@ function Configure-Tools {
     $BrowserMode = Read-MappedChoice "Managed browser" @("enabled", "disabled") @("Enabled - browser actions remain approval-bound", "Disabled") "$(if (Current 'BROWSER_WS_ENDPOINT') { 'enabled' } else { 'disabled' })"
     if ($BrowserMode -eq "enabled") { Set-Value "BROWSER_WS_ENDPOINT" "local://chromium" }
     else { $Settings.Remove("BROWSER_WS_ENDPOINT") }
-    $SearchMode = Read-MappedChoice "Private web search endpoint" @("keep", "configure", "disable") @("Keep current setting", "Configure a SearXNG HTTPS endpoint", "Disable dedicated search endpoint") "keep"
+    Write-Host "Built-in public web search: ready (no API key required)" -ForegroundColor Green
+    $SearchMode = Read-MappedChoice "Optional private search endpoint" @("keep", "configure", "disable") @("Use built-in search / keep current setting", "Prefer a private SearXNG HTTPS endpoint", "Remove the private endpoint and use built-in search") "keep"
     if ($SearchMode -eq "configure") {
         $Endpoint = Read-ValidatedPlain "SearXNG URL" (Current "SEARXNG_BASE_URL" "https://search.example.com") {
             param($Candidate) [Uri]::IsWellFormedUriString([string]$Candidate, [UriKind]::Absolute) -and ([Uri]$Candidate).Scheme -eq "https"

@@ -24,6 +24,7 @@ describe("production installer", () => {
     const nativeUpdater = await readFile(join(root, "scripts", "update-native.ps1"), "utf8");
     const nativeUninstaller = await readFile(join(root, "scripts", "uninstall-native.ps1"), "utf8");
     const modelAuth = await readFile(join(root, "scripts", "model-auth-native.ps1"), "utf8");
+    const webDiagnostic = await readFile(join(root, "scripts", "web-diagnostic.mjs"), "utf8");
     const windowsNode = await readFile(join(root, "scripts", "windows-node.ps1"), "utf8");
     const installerMenuTest = await readFile(join(root, "tests", "powershell-installer-menu.ps1"), "utf8");
     const configureMenuTest = await readFile(join(root, "tests", "powershell-configure-menu.ps1"), "utf8");
@@ -85,6 +86,11 @@ describe("production installer", () => {
     expect(cli).toContain('$RequiresStoppedGateway');
     expect(cli).toContain('$env:BARLAS_NATIVE_DATA');
     expect(cli).toContain("Open the private microphone and voice check now?");
+    expect(cli).toContain('$LocalCommand -eq "web"');
+    expect(cli).toContain('$Arguments[1] -in @("test", "repair")');
+    expect(cli).toContain("WizardArguments");
+    expect(webDiagnostic).toContain("WebSearchClient");
+    expect(webDiagnostic).toContain("ManagedBrowser");
     expect(windowsNode).toContain("barlas-ai-agent-logo-original.png");
     expect(windowsNode).toContain("barlas-icon.png");
     expect(windowsNode).toContain("BarlasNativeIcon");
@@ -139,6 +145,8 @@ describe("production installer", () => {
       "nodejs.org/dist",
       "node_modules\\playwright-core\\cli.js",
       "install-native.ps1",
+      'param([string]$SourceArchive = "")',
+      "Get-FileHash -LiteralPath $OfflineArchive",
       "UTF8Encoding($true)",
       'Get-ChildItem -LiteralPath $AppDir -Filter "*.ps1" -File -Recurse',
     ]) expect(bootstrap).toContain(required);

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ToolRegistry } from "./registry.js";
 import { FileWorkspace } from "./file-workspace.js";
 import { RestrictedTerminal } from "./terminal.js";
-import { SearxngSearchClient } from "./web-search.js";
+import { WebSearchClient } from "./web-search.js";
 import { SafeWebReader } from "./safe-web.js";
 import { DocumentReader, DocumentWriter } from "./documents.js";
 import type { ManagedBrowser } from "./managed-browser.js";
@@ -149,7 +149,7 @@ export function createBuiltinToolRegistry(options: {
   registry.register({
     name: "browser.open",
     description: "Read a public HTTP or HTTPS page as bounded plain text without scripts, cookies, or browser state.",
-    risk: "external",
+    risk: "read",
     inputSchema: z.object({ url: z.string().url().max(2_000) }).strict(),
     execute: async (input) => webReader.open((input as { url: string }).url),
   });
@@ -632,22 +632,20 @@ export function createBuiltinToolRegistry(options: {
     });
   }
 
-  if (options.searxngBaseUrl) {
-    const search = new SearxngSearchClient(options.searxngBaseUrl);
-    registry.register({
-      name: "web.search",
-      description: "Search the web through the deployment's isolated SearXNG provider.",
-      risk: "external",
-      inputSchema: z.object({
-        query: z.string().min(2).max(500),
-        limit: z.number().int().min(1).max(10).default(5),
-      }).strict(),
-      execute: async (input) => {
-        const value = input as { query: string; limit: number };
-        return search.search(value.query, value.limit);
-      },
-    });
-  }
+  const search = new WebSearchClient(options.searxngBaseUrl);
+  registry.register({
+    name: "web.search",
+    description: "Search the public web with bounded results. Uses a configured private SearXNG endpoint when available and a built-in safe fallback otherwise.",
+    risk: "read",
+    inputSchema: z.object({
+      query: z.string().min(2).max(500),
+      limit: z.number().int().min(1).max(10).default(5),
+    }).strict(),
+    execute: async (input) => {
+      const value = input as { query: string; limit: number };
+      return search.search(value.query, value.limit);
+    },
+  });
 
   return registry;
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { SearxngSearchClient } from "../src/tools/web-search.js";
+import { DuckDuckGoSearchClient, SearxngSearchClient, WebSearchClient } from "../src/tools/web-search.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -27,5 +27,32 @@ describe("Barlas AI Agent web search", () => {
     })));
     const client = new SearxngSearchClient("https://search.example.test");
     await expect(client.search("query", 1)).rejects.toThrow("exceeds 2 MB");
+  });
+
+  it("provides bounded built-in search without a key or separate service", async () => {
+    const html = `
+      <div class="result">
+        <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fnews&amp;rut=ignored">Example &amp; News</a>
+        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fnews">A <b>verified</b> result.</a>
+      </div>`;
+    const request = vi.fn<(input: string | URL, init?: RequestInit) => Promise<Response>>(
+      async () => new Response(html, { status: 200, headers: { "content-type": "text/html" } }),
+    );
+    const client = new DuckDuckGoSearchClient(request);
+
+    await expect(client.search("latest example", 5)).resolves.toEqual([{
+      title: "Example & News",
+      url: "https://example.com/news",
+      snippet: "A verified result.",
+    }]);
+    expect(new URL(String(request.mock.calls[0]?.[0])).searchParams.get("q")).toBe("latest example");
+  });
+
+  it("falls back when a configured private provider is unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unavailable", { status: 503 })));
+    const fallback = { search: vi.fn(async () => [{ title: "Fallback", url: "https://example.com", snippet: "ok" }]) };
+    const client = new WebSearchClient("https://search.example.test", fallback);
+    await expect(client.search("query", 1)).resolves.toEqual([{ title: "Fallback", url: "https://example.com", snippet: "ok" }]);
+    expect(fallback.search).toHaveBeenCalledWith("query", 1);
   });
 });

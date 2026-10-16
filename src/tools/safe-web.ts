@@ -77,15 +77,7 @@ export class SafeWebReader {
     let url = parsePublicUrl(rawUrl);
     for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
       await assertPublicHost(url.hostname);
-      const response = await fetch(url, {
-        headers: {
-          Accept: "text/html, text/plain, application/json;q=0.8",
-          "User-Agent": "Barlas-AI-Agent/0.1 (+managed-reader)",
-        },
-        redirect: "manual",
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        dispatcher: publicNetworkAgent,
-      });
+      const response = await fetchReadablePage(url);
 
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
@@ -115,6 +107,26 @@ export class SafeWebReader {
     }
     throw new Error("Web reader reached an invalid state");
   }
+}
+
+async function fetchReadablePage(url: URL): Promise<Awaited<ReturnType<typeof fetch>>> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await fetch(url, {
+        headers: {
+          Accept: "text/html, text/plain, application/json;q=0.8",
+          "User-Agent": "Barlas-AI-Agent/0.1 (+managed-reader)",
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        dispatcher: publicNetworkAgent,
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 export function parsePublicUrl(rawUrl: string): URL {

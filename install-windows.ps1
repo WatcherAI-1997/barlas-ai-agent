@@ -1,7 +1,11 @@
+[CmdletBinding()]
+param([string]$SourceArchive = "")
+
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 if ($env:OS -ne "Windows_NT") { throw "This bootstrap is for Windows 10/11. Use install.sh on Linux." }
+$OfflineArchive = if ($SourceArchive) { (Resolve-Path -LiteralPath $SourceArchive -ErrorAction Stop).Path } else { "" }
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $NodeVersion = "24.18.0"
@@ -84,10 +88,15 @@ Write-Host ""
 New-Item -ItemType Directory -Force -Path $WorkDir, $Extracted, $BarlasHome, $BinDir, $RuntimeDir, $LogDir | Out-Null
 [IO.File]::WriteAllText($InstallLog, "Barlas Windows installation log`r`n", [Text.Encoding]::UTF8)
 try {
-    $Release = Invoke-RestMethod -UseBasicParsing -Uri $ReleaseApiUrl
-    $ReleaseSha = [string]$Release.sha
-    if ($ReleaseSha -notmatch '^[a-f0-9]{40}$') { throw "GitHub returned an invalid release identifier" }
-    $ArchiveUrl = "https://github.com/WatcherAI-1997/barlas-ai-agent/archive/$ReleaseSha.zip"
+    if ($OfflineArchive) {
+        $ReleaseSha = (Get-FileHash -LiteralPath $OfflineArchive -Algorithm SHA256).Hash.ToLowerInvariant().Substring(0, 40)
+        $ArchiveUrl = ""
+    } else {
+        $Release = Invoke-RestMethod -UseBasicParsing -Uri $ReleaseApiUrl
+        $ReleaseSha = [string]$Release.sha
+        if ($ReleaseSha -notmatch '^[a-f0-9]{40}$') { throw "GitHub returned an invalid release identifier" }
+        $ArchiveUrl = "https://github.com/WatcherAI-1997/barlas-ai-agent/archive/$ReleaseSha.zip"
+    }
     if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) {
         $Architecture = switch ($env:PROCESSOR_ARCHITECTURE) {
             "AMD64" { "x64" }
@@ -107,8 +116,9 @@ try {
         Write-Done "Runtime ready"
     } else { Write-Step 1 "Runtime already ready" }
 
-    Write-Step 2 "Downloading Barlas"
-    Invoke-WebRequest -UseBasicParsing -Uri $ArchiveUrl -OutFile $Archive
+    Write-Step 2 "Loading Barlas"
+    if ($OfflineArchive) { Copy-Item -LiteralPath $OfflineArchive -Destination $Archive }
+    else { Invoke-WebRequest -UseBasicParsing -Uri $ArchiveUrl -OutFile $Archive }
     Expand-Archive -LiteralPath $Archive -DestinationPath $Extracted -Force
     $SourceDir = Get-ChildItem -LiteralPath $Extracted -Directory | Select-Object -First 1
     if (-not $SourceDir -or -not (Test-Path -LiteralPath (Join-Path $SourceDir.FullName "install-native.ps1") -PathType Leaf)) { throw "Downloaded archive is incomplete" }
