@@ -38,7 +38,7 @@ describe("production installer", () => {
       },
     });
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("⬤ ⬤");
+    expect(result.stdout).toContain("⬤  ⬤");
     expect(result.stdout).toContain("Barlas");
     expect(result.stdout).toContain("AI AGENT");
     expect(`${result.stdout}${result.stderr}`).not.toContain("installer-$ecret");
