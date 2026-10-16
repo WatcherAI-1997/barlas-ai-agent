@@ -19,7 +19,10 @@ const configSchema = z.object({
   ),
   TRANSCRIPTION_MODEL: z.string().min(1).default("gpt-4o-mini-transcribe"),
   SPEECH_MODEL: z.string().min(1).default("gpt-4o-mini-tts"),
-  EMBEDDING_MODEL: z.string().min(1).optional(),
+  EMBEDDING_MODEL: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(1).optional(),
+  ),
   DEEP_MODEL_NAME: z.string().min(1).optional(),
   PRIVATE_MODEL_BASE_URL: z.string().url().optional(),
   PRIVATE_MODEL_NAME: z.string().min(1).optional(),
@@ -58,8 +61,12 @@ const configSchema = z.object({
   AGENT_RUN_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(16).default(2),
   AGENT_RUN_LEASE_SECONDS: z.coerce.number().int().min(30).max(3_600).default(300),
   OWNER_EMAIL: z.string().email().optional(),
-  OWNER_PASSWORD: z.string().min(12).max(256).optional(),
-  OWNER_DISPLAY_NAME: z.string().min(2).max(100).default("Barlas Owner"),
+  OPENAI_OAUTH_CLIENT_ID: z.string().startsWith("oaiapp_").optional(),
+  OPENAI_OAUTH_CLIENT_SECRET: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(16).optional(),
+  ),
+  OPENAI_OAUTH_REDIRECT_URI: z.string().url().optional(),
   OWNER_LANGUAGE: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string()
@@ -95,11 +102,19 @@ const configSchema = z.object({
     });
   }
 
-  if (Boolean(config.OWNER_EMAIL) !== Boolean(config.OWNER_PASSWORD)) {
+  const oauthFields = [config.OPENAI_OAUTH_CLIENT_ID, config.OPENAI_OAUTH_REDIRECT_URI];
+  if (oauthFields.some(Boolean) && !oauthFields.every(Boolean)) {
     context.addIssue({
       code: "custom",
-      message: "OWNER_EMAIL and OWNER_PASSWORD must be configured together",
+      message: "OPENAI_OAUTH_CLIENT_ID and OPENAI_OAUTH_REDIRECT_URI must be configured together",
     });
+  }
+
+  if (config.APP_ENV === "production" && (!config.OWNER_EMAIL || !oauthFields.every(Boolean))) {
+    context.addIssue({ code: "custom", message: "OWNER_EMAIL and Sign in with ChatGPT OAuth settings are required in production" });
+  }
+  if (config.APP_ENV === "production" && config.OPENAI_OAUTH_REDIRECT_URI && !config.OPENAI_OAUTH_REDIRECT_URI.startsWith("https://")) {
+    context.addIssue({ code: "custom", message: "Sign in with ChatGPT callback must use HTTPS in production" });
   }
 
   if (Boolean(config.SANDBOX_SOCKET_PATH) !== Boolean(config.SANDBOX_SHARED_TOKEN)) {

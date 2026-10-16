@@ -72,9 +72,11 @@ autonomy.
   directory or the root-owned runner token.
 - Per-user UTC-day counters and execution traces live in the isolated PostgreSQL
   database. Quota consumption is atomic under concurrent requests.
-- Human authentication uses scrypt password hashes and opaque, expiring,
-  revocable server-side sessions. Roles are enforced in the API before user IDs
-  reach storage, tools, quotas, or model calls.
+- Human authentication uses the official Sign in with ChatGPT Authorization
+  Code + PKCE and OIDC flow. Signed identity tokens are verified server-side;
+  the browser receives only an opaque, expiring, revocable HttpOnly Barlas
+  session. Roles are enforced before user IDs reach storage, tools, quotas, or
+  model calls.
 - The branded web cabinet is served from immutable container assets with a
   restrictive Content Security Policy, no third-party browser scripts, and no
   access to the service automation token.

@@ -1,9 +1,8 @@
-const state = { token: sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [] };
+const state = { account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [] };
 const $ = (selector) => document.querySelector(selector);
 
 async function api(path, options = {}) {
   const headers = { "content-type": "application/json", ...(options.headers || {}) };
-  if (state.token) headers.authorization = `Bearer ${state.token}`;
   const response = await fetch(path, { ...options, headers });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || body.message || `HTTP ${response.status}`);
@@ -12,7 +11,6 @@ async function api(path, options = {}) {
 
 async function upload(path, formData) {
   const headers = {};
-  if (state.token) headers.authorization = `Bearer ${state.token}`;
   const response = await fetch(path, { method: "POST", headers, body: formData });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || body.message || `HTTP ${response.status}`);
@@ -100,18 +98,9 @@ function addMessage(kind, text) {
 }
 
 async function restore() {
-  if (!state.token) return;
   try { const data = await api("/v1/me"); await showApp(data.principal); }
-  catch { sessionStorage.removeItem("barlasToken"); state.token = null; }
+  catch { /* Signed-out view remains visible. */ }
 }
-
-$("#login-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); $("#login-error").textContent = "";
-  try {
-    const data = await api("/auth/login", { method: "POST", body: JSON.stringify({ email: $("#email").value, password: $("#password").value }) });
-    state.token = data.token; sessionStorage.setItem("barlasToken", data.token); await showApp(data.account);
-  } catch (error) { $("#login-error").textContent = error.message; }
-});
 
 $("#language-setup-form").addEventListener("submit", async (event) => {
   event.preventDefault(); $("#language-setup-error").textContent = "";
@@ -124,20 +113,9 @@ $("#language-setup-form").addEventListener("submit", async (event) => {
   } catch (error) { $("#language-setup-error").textContent = error.message; }
 });
 
-$("#password-reset-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); $("#password-reset-error").textContent = "";
-  try {
-    await api("/auth/password-reset", { method: "POST", body: JSON.stringify({
-      code: $("#password-reset-code").value.trim(),
-      password: $("#password-reset-password").value,
-    }) });
-    event.target.reset(); $("#password-reset-error").textContent = "Пароль изменён. Теперь войдите.";
-  } catch (error) { $("#password-reset-error").textContent = error.message; }
-});
-
 $("#logout").addEventListener("click", async () => {
   try { await api("/v1/auth/logout", { method: "POST" }); } catch {}
-  sessionStorage.removeItem("barlasToken"); location.reload();
+  location.reload();
 });
 
 $("#chat-form").addEventListener("submit", async (event) => {
@@ -558,13 +536,11 @@ $("#schedule-form").addEventListener("submit", async (event) => {
 async function loadUsers() {
   const users = (await api("/v1/admin/users")).users;
   renderList("#users", users, (user) => {
-    const node = card(user.displayName, `${user.email} · ${user.role}`, user.active ? "Активен" : "Отключён");
-    const reset = document.createElement("button"); reset.textContent = "Код сброса"; reset.className = "secondary";
-    reset.addEventListener("click", async () => {
-      const data = await api(`/v1/admin/users/${user.id}/password-reset`, { method: "POST" });
-      alert(`Одноразовый код (15 минут):\n${data.code}`);
-    });
-    node.append(reset); return node;
+    return card(
+      user.displayName,
+      `${user.email} · ${user.role}`,
+      user.active ? "Вход через ChatGPT разрешён" : "Отключён",
+    );
   });
 }
 
@@ -642,7 +618,6 @@ $("#user-form").addEventListener("submit", async (event) => {
     await api("/v1/admin/users", { method: "POST", body: JSON.stringify({
       displayName: $("#new-name").value,
       email: $("#new-email").value,
-      password: $("#new-password").value,
       role: $("#new-role").value,
       ...(languageCode ? { languageCode } : {}),
     }) });

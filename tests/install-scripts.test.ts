@@ -31,7 +31,9 @@ describe("production installer", () => {
         PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
         BARLAS_DOMAIN: "agent.barlas.test",
         OWNER_EMAIL: "owner@barlas.test",
-        OWNER_PASSWORD: "installer-$ecret-#-password",
+        OPENAI_OAUTH_CLIENT_ID: "oaiapp_installer-test-client",
+        OPENAI_OAUTH_CLIENT_SECRET: "installer-$ecret-#-oauth-secret",
+        OPENAI_OAUTH_REDIRECT_URI: "https://agent.barlas.test/auth/openai/callback",
         OWNER_LANGUAGE: "mn",
         MODEL_NAME: "fast-test-model",
         DEEP_MODEL_NAME: "deep-test-model",
@@ -44,7 +46,9 @@ describe("production installer", () => {
     const environment = await readFile(envFile, "utf8");
     expect(environment).toContain("BARLAS_DOMAIN='agent.barlas.test'");
     expect(environment).toContain("OWNER_LANGUAGE='mn'");
-    expect(environment).toContain("OWNER_PASSWORD='installer-$ecret-#-password'");
+    expect(environment).toContain("OPENAI_OAUTH_CLIENT_ID='oaiapp_installer-test-client'");
+    expect(environment).toContain("OPENAI_OAUTH_REDIRECT_URI='https://agent.barlas.test/auth/openai/callback'");
+    expect(environment).not.toContain("OWNER_PASSWORD");
     expect(environment).not.toContain("replace-with-");
     await rm(temporary, { recursive: true, force: true });
   });

@@ -1,5 +1,6 @@
 import { buildApp } from "./app.js";
 import { AuthService } from "./auth/service.js";
+import { OpenAiOidcService } from "./auth/openai-oidc.js";
 import { TelegramLinkService } from "./auth/telegram-link.js";
 import { TelegramClient } from "./channels/telegram.js";
 import { GitHubConnector } from "./connectors/github.js";
@@ -36,6 +37,9 @@ import { languageInstruction } from "./i18n/languages.js";
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
 const authService = new AuthService(database, config.SESSION_TTL_HOURS);
+const openAiOidc = config.OPENAI_OAUTH_CLIENT_ID && config.OPENAI_OAUTH_REDIRECT_URI
+  ? new OpenAiOidcService(database, config.OPENAI_OAUTH_CLIENT_ID, config.OPENAI_OAUTH_CLIENT_SECRET)
+  : undefined;
 const telegramLinks = new TelegramLinkService(database);
 const connectors = config.CONNECTOR_VAULT_KEY
   ? new ConnectorService(
@@ -46,14 +50,6 @@ const connectors = config.CONNECTOR_VAULT_KEY
 const githubConnector = connectors ? new GitHubConnector(connectors) : undefined;
 const googleConnector = connectors ? new GoogleConnector(connectors) : undefined;
 const mcpConnector = connectors ? new McpConnector(connectors) : undefined;
-if (config.OWNER_EMAIL && config.OWNER_PASSWORD) {
-  await authService.bootstrapOwner({
-    email: config.OWNER_EMAIL,
-    password: config.OWNER_PASSWORD,
-    displayName: config.OWNER_DISPLAY_NAME,
-    ...(config.OWNER_LANGUAGE ? { languageCode: config.OWNER_LANGUAGE } : {}),
-  });
-}
 const fastProvider = new OpenAIProvider({
   apiKey: config.MODEL_API_KEY,
   model: config.MODEL_NAME,
@@ -223,6 +219,9 @@ const app = await buildApp({
   skillManager,
   governance,
   authService,
+  ...(openAiOidc ? { openAiOidc } : {}),
+  ...(config.OWNER_EMAIL ? { ownerEmail: config.OWNER_EMAIL } : {}),
+  ...(config.OPENAI_OAUTH_REDIRECT_URI ? { oauthRedirectUri: config.OPENAI_OAUTH_REDIRECT_URI } : {}),
   telegramLinks,
   memory,
   organizations,

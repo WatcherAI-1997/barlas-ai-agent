@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 
-import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth/service.js";
+import type { AccountRole, AuthStore, StoredAccount, UserAccount, VerifiedExternalIdentity } from "../auth/service.js";
+import type { OidcTransactionStore } from "../auth/openai-oidc.js";
 import type { SupportedLanguageCode } from "../i18n/languages.js";
 import type { TelegramLink, TelegramLinkStore } from "../auth/telegram-link.js";
 import type { SemanticMemoryStore } from "../memory/semantic.js";
@@ -38,7 +39,7 @@ import type {
 import type { AgentSchedule } from "../schedules/types.js";
 import type { ArtifactVersion, GoalStatus, PlanStepStatus, Project, ProjectCheckpoint, ProjectGoal, ProjectPlanStep, ProjectResource, ProjectResourceType, ProjectStore } from "../projects/service.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, OidcTransactionStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -1397,17 +1398,17 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async findAccountByEmail(email: string): Promise<StoredAccount | null> {
     const result = await this.pool.query<AccountRow>(
-      `select id, email, display_name, role, password_hash, password_salt, active, language_code, created_at
+      `select id, email, display_name, role, active, language_code, created_at
        from user_accounts where email = $1`,
       [email],
     );
     const row = result.rows[0];
-    return row ? this.mapStoredAccount(row) : null;
+    return row ? this.mapAccount(row) : null;
   }
 
   async findAccountById(id: string): Promise<UserAccount | null> {
     const result = await this.pool.query<AccountRow>(
-      `select id, email, display_name, role, password_hash, password_salt, active, language_code, created_at
+      `select id, email, display_name, role, active, language_code, created_at
        from user_accounts where id = $1 and active = true`,
       [id],
     );
@@ -1419,15 +1420,13 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     email: string;
     displayName: string;
     role: AccountRole;
-    passwordHash: string;
-    passwordSalt: string;
     languageCode?: SupportedLanguageCode;
   }): Promise<UserAccount> {
     const result = await this.pool.query<AccountRow>(
-      `insert into user_accounts (email, display_name, role, password_hash, password_salt, language_code)
-       values ($1, $2, $3, $4, $5, $6)
-       returning id, email, display_name, role, password_hash, password_salt, active, language_code, created_at`,
-      [input.email, input.displayName, input.role, input.passwordHash, input.passwordSalt, input.languageCode ?? null],
+      `insert into user_accounts (email, display_name, role, language_code)
+       values ($1, $2, $3, $4)
+       returning id, email, display_name, role, active, language_code, created_at`,
+      [input.email, input.displayName, input.role, input.languageCode ?? null],
     );
     const row = result.rows[0];
     if (!row) throw new Error("Account insert returned no row");
@@ -1436,7 +1435,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async listAccounts(): Promise<UserAccount[]> {
     const result = await this.pool.query<AccountRow>(
-      `select id, email, display_name, role, password_hash, password_salt, active, language_code, created_at
+      `select id, email, display_name, role, active, language_code, created_at
        from user_accounts order by created_at`,
     );
     return result.rows.map((row) => this.mapAccount(row));
@@ -1446,60 +1445,50 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     const result = await this.pool.query<AccountRow>(
       `update user_accounts set language_code = $2, updated_at = now()
        where id = $1 and active = true
-       returning id, email, display_name, role, password_hash, password_salt, active, language_code, created_at`,
+       returning id, email, display_name, role, active, language_code, created_at`,
       [accountId, languageCode],
     );
     const row = result.rows[0];
     return row ? this.mapAccount(row) : null;
   }
 
-  async createPasswordReset(input: { accountId: string; codeHash: string; expiresAt: Date }): Promise<boolean> {
-    const result = await this.pool.query(
-      `with invalidated as (
-         update password_reset_codes set used_at = now()
-         where account_id = $1 and used_at is null
-       )
-       insert into password_reset_codes (account_id, code_hash, expires_at)
-       select id, $2, $3 from user_accounts where id = $1`,
-      [input.accountId, input.codeHash, input.expiresAt],
+  async findAccountByExternalIdentity(input: Pick<VerifiedExternalIdentity, "provider" | "issuer" | "clientId" | "subject">): Promise<UserAccount | null> {
+    const result = await this.pool.query<AccountRow>(
+      `select account.id, account.email, account.display_name, account.role,
+              account.active,
+              account.language_code, account.created_at
+       from external_identities identity join user_accounts account on account.id = identity.account_id
+       where identity.provider = $1 and identity.issuer = $2 and identity.client_id = $3 and identity.subject = $4`,
+      [input.provider, input.issuer, input.clientId, input.subject],
     );
-    return result.rowCount === 1;
+    return result.rows[0] ? this.mapAccount(result.rows[0]) : null;
   }
 
-  async consumePasswordReset(input: {
-    codeHash: string;
-    passwordHash: string;
-    passwordSalt: string;
-  }): Promise<boolean> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("begin");
-      const reset = await client.query<{ id: string; account_id: string }>(
-        `select id, account_id from password_reset_codes
-         where code_hash = $1 and used_at is null and expires_at > now()
-         for update`,
-        [input.codeHash],
-      );
-      const row = reset.rows[0];
-      if (!row) {
-        await client.query("rollback");
-        return false;
-      }
-      await client.query(
-        `update user_accounts set password_hash = $2, password_salt = $3, updated_at = now()
-         where id = $1`,
-        [row.account_id, input.passwordHash, input.passwordSalt],
-      );
-      await client.query(`update password_reset_codes set used_at = now() where id = $1`, [row.id]);
-      await client.query(`delete from user_sessions where account_id = $1`, [row.account_id]);
-      await client.query("commit");
-      return true;
-    } catch (error) {
-      await client.query("rollback");
-      throw error;
-    } finally {
-      client.release();
-    }
+  async linkExternalIdentity(accountId: string, input: VerifiedExternalIdentity): Promise<void> {
+    await this.pool.query(
+      `insert into external_identities (provider, issuer, client_id, subject, account_id, email)
+       values ($1, $2, $3, $4, $5, $6)`,
+      [input.provider, input.issuer, input.clientId, input.subject, accountId, input.email],
+    );
+  }
+
+  async createOidcTransaction(input: { stateHash: string; browserHash: string; codeVerifier: string; nonce: string; redirectUri: string; expiresAt: Date }): Promise<void> {
+    await this.pool.query(`delete from oidc_transactions where expires_at <= now()`);
+    await this.pool.query(
+      `insert into oidc_transactions (state_hash, browser_hash, code_verifier, nonce, redirect_uri, expires_at)
+       values ($1, $2, $3, $4, $5, $6)`,
+      [input.stateHash, input.browserHash, input.codeVerifier, input.nonce, input.redirectUri, input.expiresAt],
+    );
+  }
+
+  async consumeOidcTransaction(input: { stateHash: string; browserHash: string }): Promise<{ codeVerifier: string; nonce: string; redirectUri: string } | null> {
+    const result = await this.pool.query<{ code_verifier: string; nonce: string; redirect_uri: string }>(
+      `delete from oidc_transactions where state_hash = $1 and browser_hash = $2 and expires_at > now()
+       returning code_verifier, nonce, redirect_uri`,
+      [input.stateHash, input.browserHash],
+    );
+    const row = result.rows[0];
+    return row ? { codeVerifier: row.code_verifier, nonce: row.nonce, redirectUri: row.redirect_uri } : null;
   }
 
   async createSession(input: { accountId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
@@ -1517,7 +1506,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
          returning account_id
        )
        select account.id, account.email, account.display_name, account.role,
-              account.password_hash, account.password_salt, account.active,
+              account.active,
               account.language_code, account.created_at
        from touched
        join user_accounts account on account.id = touched.account_id
@@ -1714,14 +1703,6 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     };
   }
 
-  private mapStoredAccount(row: AccountRow): StoredAccount {
-    return {
-      ...this.mapAccount(row),
-      passwordHash: row.password_hash,
-      passwordSalt: row.password_salt,
-    };
-  }
-
   private mapConversation(row: ConversationRow): ConversationSummary {
     return {
       id: row.id,
@@ -1905,8 +1886,6 @@ interface AccountRow {
   email: string;
   display_name: string;
   role: AccountRole;
-  password_hash: string;
-  password_salt: string;
   active: boolean;
   language_code: SupportedLanguageCode | null;
   created_at: Date;

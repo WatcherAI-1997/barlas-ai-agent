@@ -96,6 +96,50 @@ function dependencies() {
 }
 
 describe("Barlas AI Agent API", () => {
+  it("redirects through Sign in with ChatGPT and returns only an HttpOnly Barlas session", async () => {
+    const deps = dependencies();
+    const account = { id: "00000000-0000-4000-8000-000000000099", email: "owner@example.com", displayName: "Owner", role: "owner" as const, active: true, languageCode: null, languageConfigured: false, createdAt: "2026-10-16T00:00:00.000Z" };
+    const openAiOidc = {
+      begin: vi.fn(async () => ({ authorizationUrl: "https://auth.openai.com/api/accounts/authorize?state=state", browserToken: "browser-token" })),
+      complete: vi.fn(async () => ({ provider: "openai" as const, issuer: "https://auth.openai.com", clientId: "oaiapp_test", subject: "subject", email: account.email, emailVerified: true, displayName: account.displayName })),
+    };
+    const authService = {
+      authenticate: vi.fn(), logout: vi.fn(), listAccounts: vi.fn(), createAccount: vi.fn(), getAccount: vi.fn(), setLanguage: vi.fn(),
+      completeExternalLogin: vi.fn(async () => ({ token: "opaque-local-session-token", account, expiresAt: "2026-10-23T00:00:00.000Z" })),
+    };
+    const app = await buildApp({ apiToken, ...deps, authService, openAiOidc, ownerEmail: account.email, oauthRedirectUri: "https://agent.barlas.test/auth/openai/callback" });
+
+    const started = await app.inject({ method: "GET", url: "/auth/openai" });
+    expect(started.statusCode).toBe(302);
+    expect(started.headers.location).toContain("auth.openai.com");
+    expect(started.headers["set-cookie"]).toContain("barlas_oidc=browser-token");
+    expect(started.headers["set-cookie"]).toContain("HttpOnly");
+    expect(started.headers["set-cookie"]).toContain("Secure");
+
+    const callback = await app.inject({ method: "GET", url: `/auth/openai/callback?state=${"s".repeat(20)}&code=${"c".repeat(10)}`, headers: { cookie: "barlas_oidc=browser-token" } });
+    expect(callback.statusCode).toBe(302);
+    expect(callback.headers.location).toBe("/ui/index.html");
+    const cookies = String(callback.headers["set-cookie"]);
+    expect(cookies).toContain("barlas_session=opaque-local-session-token");
+    expect(cookies).toContain("HttpOnly");
+    expect(cookies).not.toContain("id_token");
+    expect(openAiOidc.complete).toHaveBeenCalledWith({ state: "s".repeat(20), code: "c".repeat(10), browserToken: "browser-token" });
+    await app.close();
+  });
+
+  it("rejects cross-origin mutations authenticated by the browser session cookie", async () => {
+    const deps = dependencies();
+    const authService = {
+      authenticate: vi.fn(async () => ({ id: "account-1", email: "user@example.com", displayName: "User", role: "user" as const, active: true, languageCode: null, languageConfigured: false, createdAt: "2026-10-16T00:00:00.000Z" })),
+      logout: vi.fn(), listAccounts: vi.fn(), createAccount: vi.fn(), getAccount: vi.fn(), setLanguage: vi.fn(),
+    };
+    const app = await buildApp({ apiToken, ...deps, authService });
+    const response = await app.inject({ method: "POST", url: "/v1/chat", headers: { cookie: `barlas_session=${"s".repeat(40)}`, origin: "https://evil.example" }, payload: { userId: "account-1", messages: [{ role: "user", content: "Hello" }] } });
+    expect(response.statusCode).toBe(403);
+    expect(deps.modelProvider.generate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("returns branded health information", async () => {
     const deps = dependencies();
     const app = await buildApp({ apiToken, ...deps });

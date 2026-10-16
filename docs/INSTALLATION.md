@@ -24,7 +24,8 @@ the safer and more honest installation path.
 The interactive wizard asks for:
 
 - the dedicated domain and non-conflicting host ports;
-- the first owner's email, display name, password, and optional language code;
+- the first owner's email and optional language code;
+- the official Sign in with ChatGPT client ID, exact callback URL, and optional confidential-client secret;
 - fast, deep, vision, transcription, speech, and optional embedding models;
 - one dedicated model API key;
 - an optional dedicated Telegram bot token.
@@ -64,16 +65,38 @@ Automation may provide configuration through its secret manager and then run:
 ```
 
 Required environment variables are `BARLAS_DOMAIN`, `OWNER_EMAIL`,
-`OWNER_PASSWORD`, `MODEL_NAME`, and `MODEL_API_KEY`. Optional variables include
+`OPENAI_OAUTH_CLIENT_ID`, `OPENAI_OAUTH_REDIRECT_URI`, `MODEL_NAME`, and
+`MODEL_API_KEY`. Optional variables include
 `DEEP_MODEL_NAME`, `VISION_MODEL`, `TRANSCRIPTION_MODEL`, `SPEECH_MODEL`,
-`EMBEDDING_MODEL`, `OWNER_DISPLAY_NAME`, `OWNER_LANGUAGE`,
-`TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `BARLAS_HTTP_PORT`, and
-`BARLAS_HTTPS_PORT`.
+`EMBEDDING_MODEL`, `OWNER_LANGUAGE`,
+`OPENAI_OAUTH_CLIENT_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
+`BARLAS_HTTP_PORT`, and `BARLAS_HTTPS_PORT`.
 
 Pass secrets through the deployment platform's protected environment or secret
 store, not as literal command-line arguments. `--verbose` streams build output;
 without it, interactive installs write detailed command output to
 `logs/install.log` and show one status per stage.
+
+## Register Sign in with ChatGPT
+
+Create a Sign in with ChatGPT OAuth client and register this callback exactly:
+
+```text
+https://YOUR_DOMAIN/auth/openai/callback
+```
+
+Set the issued `oaiapp_...` identifier as `OPENAI_OAUTH_CLIENT_ID`. Set
+`OPENAI_OAUTH_CLIENT_SECRET` only when OpenAI issued a confidential-client
+secret. The browser uses Authorization Code with PKCE and OIDC; Barlas verifies
+the signed ID token, maps its stable OpenAI subject to the invited local
+account, and then creates its own revocable HttpOnly session. OpenAI tokens are
+never placed in browser storage. The first verified login whose email exactly
+matches `OWNER_EMAIL` creates the owner account; every later email must first be
+invited by an owner.
+
+Official references: [Sign in with ChatGPT](https://developers.openai.com/siwc),
+[quickstart](https://developers.openai.com/siwc/quickstart.md), and
+[website integration](https://developers.openai.com/siwc/website.md).
 
 ## Prerequisites and layout
 
@@ -145,6 +168,11 @@ The existing protected configuration is reused. Compose rebuilds the reviewed
 source, ordered migrations run before the API starts, and named volumes remain
 intact. Database rollback and restore remain separate explicit operations; see
 [Backup and recovery](BACKUP_RECOVERY.md).
+
+The passwordless-authentication migration preserves accounts, roles, language
+choices, projects, and user data, but deliberately revokes all pre-migration
+sessions and removes legacy password hashes. Every human signs in again through
+ChatGPT after the upgrade.
 
 ## After installation
 
