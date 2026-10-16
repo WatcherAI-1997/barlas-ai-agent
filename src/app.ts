@@ -43,7 +43,7 @@ import type { ToolExecutor } from "./tools/executor.js";
 import { MAX_MEDIA_BYTES, type MediaService } from "./tools/media.js";
 import type { FileWorkspace } from "./tools/file-workspace.js";
 import type { ScheduleService } from "./schedules/service.js";
-import type { ProjectService, ProjectResourceType } from "./projects/service.js";
+import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } from "./projects/service.js";
 
 const chatBodySchema = z.object({
   userId: z.string().min(1).max(128),
@@ -127,6 +127,13 @@ const projectResourceSchema = z.object({
 }).strict();
 const artifactSchema = z.object({ userId: z.string().min(1).max(128), path: z.string().min(1).max(1_000) }).strict();
 const artifactParamsSchema = z.object({ id: z.string().uuid(), versionId: z.string().uuid() });
+const projectGoalSchema = z.object({ userId: z.string().min(1).max(128), title: z.string().min(1).max(200), description: z.string().max(4_000).default(""), priority: z.number().int().min(1).max(5).default(3) }).strict();
+const projectGoalParamsSchema = z.object({ id: z.string().uuid(), goalId: z.string().uuid() });
+const projectGoalStatusSchema = z.object({ userId: z.string().min(1).max(128), status: z.enum(["planned", "in_progress", "blocked", "completed"]) }).strict();
+const projectStepSchema = z.object({ userId: z.string().min(1).max(128), title: z.string().min(1).max(300), goalId: z.string().uuid().optional() }).strict();
+const projectStepParamsSchema = z.object({ id: z.string().uuid(), stepId: z.string().uuid() });
+const projectStepStatusSchema = z.object({ userId: z.string().min(1).max(128), status: z.enum(["pending", "in_progress", "blocked", "completed", "skipped"]) }).strict();
+const projectCheckpointSchema = z.object({ userId: z.string().min(1).max(128), title: z.string().min(1).max(200), summary: z.string().min(1).max(10_000), progress: z.number().int().min(0).max(100), goalId: z.string().uuid().optional() }).strict();
 
 function fileSystemCode(error: unknown): string | undefined {
   return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
@@ -302,7 +309,7 @@ export interface AppDependencies {
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
   media?: Pick<MediaService, "saveUpload">;
   workspace?: Pick<FileWorkspace, "list" | "readBuffer" | "writeUpload">;
-  projects?: Pick<ProjectService, "create" | "list" | "detail" | "context" | "attach" | "snapshot" | "restore">;
+  projects?: Pick<ProjectService, "create" | "list" | "detail" | "context" | "attach" | "snapshot" | "restore" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "recordRunResult">;
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
@@ -669,6 +676,61 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (!artifact) return reply.notFound("Artifact version not found");
     await dependencies.database.appendAudit({ userId, eventType: "project.artifact.restored", resourceType: "project", resourceId: params.data.id, details: { path: artifact.path, version: artifact.version, sha256: artifact.sha256, bytes: artifact.bytes } });
     return { artifact };
+  });
+
+  app.post("/v1/projects/:id/goals", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const params = projectParamsSchema.safeParse(request.params); const parsed = projectGoalSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid project goal request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    const goal = await dependencies.projects.createGoal(userId, params.data.id, parsed.data.title, parsed.data.description, parsed.data.priority);
+    if (!goal) return reply.notFound("Project not found");
+    await dependencies.database.appendAudit({ userId, eventType: "project.goal.created", resourceType: "project", resourceId: params.data.id, details: { goalId: goal.id, priority: goal.priority } });
+    return reply.code(201).send({ goal });
+  });
+
+  app.patch("/v1/projects/:id/goals/:goalId", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const params = projectGoalParamsSchema.safeParse(request.params); const parsed = projectGoalStatusSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid project goal update");
+    const userId = authorizeUser(request, parsed.data.userId);
+    const goal = await dependencies.projects.updateGoal(userId, params.data.id, params.data.goalId, parsed.data.status as GoalStatus);
+    if (!goal) return reply.notFound("Project goal not found");
+    await dependencies.database.appendAudit({ userId, eventType: "project.goal.updated", resourceType: "project", resourceId: params.data.id, details: { goalId: goal.id, status: goal.status } });
+    return { goal };
+  });
+
+  app.post("/v1/projects/:id/steps", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const params = projectParamsSchema.safeParse(request.params); const parsed = projectStepSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid project plan step");
+    const userId = authorizeUser(request, parsed.data.userId);
+    const step = await dependencies.projects.createStep(userId, params.data.id, parsed.data.title, parsed.data.goalId);
+    if (!step) return reply.notFound("Project or goal not found");
+    await dependencies.database.appendAudit({ userId, eventType: "project.step.created", resourceType: "project", resourceId: params.data.id, details: { stepId: step.id, position: step.position } });
+    return reply.code(201).send({ step });
+  });
+
+  app.patch("/v1/projects/:id/steps/:stepId", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const params = projectStepParamsSchema.safeParse(request.params); const parsed = projectStepStatusSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid project step update");
+    const userId = authorizeUser(request, parsed.data.userId);
+    const step = await dependencies.projects.updateStep(userId, params.data.id, params.data.stepId, parsed.data.status as PlanStepStatus);
+    if (!step) return reply.notFound("Project step not found");
+    await dependencies.database.appendAudit({ userId, eventType: "project.step.updated", resourceType: "project", resourceId: params.data.id, details: { stepId: step.id, status: step.status } });
+    return { step };
+  });
+
+  app.post("/v1/projects/:id/checkpoints", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const params = projectParamsSchema.safeParse(request.params); const parsed = projectCheckpointSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid project checkpoint");
+    const userId = authorizeUser(request, parsed.data.userId);
+    const checkpoint = await dependencies.projects.checkpoint(userId, params.data.id, parsed.data.title, parsed.data.summary, parsed.data.progress, parsed.data.goalId);
+    if (!checkpoint) return reply.notFound("Project or goal not found");
+    await dependencies.database.appendAudit({ userId, eventType: "project.checkpoint.created", resourceType: "project", resourceId: params.data.id, details: { checkpointId: checkpoint.id, progress: checkpoint.progress } });
+    return reply.code(201).send({ checkpoint });
   });
 
   app.post("/v1/auth/logout", async (request, reply) => {
@@ -1216,6 +1278,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         messages: [],
         result: run.result.result,
       });
+      await dependencies.projects?.recordRunResult(run);
     }
     return { run };
   });
@@ -1378,6 +1441,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           messages: [],
           result: resumedRun.result.result,
         });
+        await dependencies.projects?.recordRunResult(resumedRun);
       }
       return { ...decision, resumedRun };
     } catch (error) {
@@ -1565,6 +1629,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         if (callback.message && resumed?.result) {
           await dependencies.telegram.client.sendMessage(callback.message.chat.id, resumed.result.text);
         }
+        if (resumed) await dependencies.projects?.recordRunResult(resumed);
         return { ok: true };
       } catch (error) {
         await dependencies.telegram.client.answerCallbackQuery?.(

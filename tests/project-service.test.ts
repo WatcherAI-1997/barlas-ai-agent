@@ -21,6 +21,9 @@ function setup() {
     }),
     listArtifactVersions: vi.fn(async () => artifacts.map(({ content: _content, ...item }) => item)),
     getArtifactVersion: vi.fn(async (userId, projectId, id) => userId === project.userId && projectId === project.id ? artifacts.find((item) => item.id === id) ?? null : null),
+    createProjectGoal: vi.fn(), updateProjectGoalStatus: vi.fn(), listProjectGoals: vi.fn(async () => []),
+    createProjectPlanStep: vi.fn(), updateProjectPlanStepStatus: vi.fn(), listProjectPlanSteps: vi.fn(async () => []),
+    saveProjectCheckpoint: vi.fn(), listProjectCheckpoints: vi.fn(async () => []), projectIdsForResource: vi.fn(async () => []),
   };
   const workspace = { readBuffer: vi.fn(async () => ({ path: "results/report.md", content: Buffer.from("version one") })), writeUpload: vi.fn(async () => ({ path: "results/report.md", bytes: 11 })) };
   return { service: new ProjectService(store, workspace), store, workspace, artifacts };
@@ -43,5 +46,13 @@ describe("project service", () => {
   it("does not expose another user's project", async () => {
     const { service } = setup();
     await expect(service.detail("user-2", project.id)).resolves.toBeNull();
+  });
+
+  it("records a completed linked agent run as an idempotent checkpoint request", async () => {
+    const { service, store } = setup();
+    vi.mocked(store.projectIdsForResource).mockResolvedValue([project.id]);
+    vi.mocked(store.saveProjectCheckpoint).mockResolvedValue({ id: "00000000-0000-4000-8000-000000000211", projectId: project.id, kind: "agent_run", title: "Agent run completed", summary: "Delivered", progress: 100, agentRunId: "00000000-0000-4000-8000-000000000210", createdAt: project.createdAt, updatedAt: project.updatedAt });
+    await service.recordRunResult({ id: "00000000-0000-4000-8000-000000000210", userId: "user-1", conversationId: "00000000-0000-4000-8000-000000000001", status: "completed", messages: [], conversationMessages: [], taskClass: "deep", maxSteps: 8, scheduledFor: project.createdAt, attempts: 1, maxAttempts: 3, result: { status: "completed", text: "Delivered", steps: 2, toolExecutions: 1, approvalIds: [], result: { text: "Delivered", provider: "test", model: "test" } }, createdAt: project.createdAt, updatedAt: project.updatedAt });
+    expect(store.saveProjectCheckpoint).toHaveBeenCalledWith(expect.objectContaining({ projectId: project.id, agentRunId: "00000000-0000-4000-8000-000000000210", progress: 100, summary: "Delivered" }));
   });
 });

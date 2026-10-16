@@ -81,6 +81,9 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `POST /v1/projects/:id/resources` — link an owned conversation, run, memory, or workspace file.
 - `POST /v1/projects/:id/artifacts` — snapshot the current bytes of an owned file as the next immutable version.
 - `POST /v1/projects/:id/artifacts/:versionId/restore` — explicitly restore one owned version to its original path.
+- `POST /v1/projects/:id/goals` / `PATCH /v1/projects/:id/goals/:goalId` — create goals and transition their state.
+- `POST /v1/projects/:id/steps` / `PATCH /v1/projects/:id/steps/:stepId` — append ordered plan steps and update progress.
+- `POST /v1/projects/:id/checkpoints` — record a bounded manual progress checkpoint.
 
 An isolated background run uses `jobType: "agent.run"` and accepts an `input`
 with `objective`, optional bounded `context`, and `taskClass` (`fast`, `deep`,
@@ -196,6 +199,11 @@ downtime. Pausing or disabling a schedule never cancels an already queued run.
   path, and an atomically allocated per-path version. Existing versions are
   immutable. Restore is an explicit authenticated request and is audit logged
   without content.
+- Goals and plan steps use bounded state machines exposed by validated API
+  values. Plan positions are allocated under a PostgreSQL advisory lock.
+- A terminal autonomous run linked to a project is summarized into a checkpoint
+  automatically. A partial unique index on project + run makes worker retry and
+  recovery idempotent; waiting-approval runs are not recorded as completed work.
 
 ## Quotas and traces
 

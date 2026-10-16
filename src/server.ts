@@ -146,6 +146,7 @@ for (const recovered of await agentRuntime.recoverReady()) {
       messages: [],
       result: recovered.result.result,
     });
+    await projects.recordRunResult(recovered);
   }
 }
 const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
@@ -186,6 +187,7 @@ const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
       messages: run.conversationMessages,
       result: run.result.result,
     });
+    await projects.recordRunResult(run);
     if (run.delivery?.channel === "telegram" && telegram) {
       if (run.status === "waiting_approval" && run.pendingApprovalId) {
         await telegram.client.sendApproval(

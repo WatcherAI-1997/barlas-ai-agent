@@ -49,6 +49,10 @@ autonomy.
   advisory locking serializes version allocation and SHA-256 identifies exact
   content. Restore overwrites only the original owned workspace path after an
   explicit authenticated request.
+- Project execution adds goals, ordered plan steps, and progress checkpoints.
+  Worker completion writes an idempotent checkpoint for every linked project;
+  approval pauses are excluded and later terminal updates replace the same
+  run checkpoint rather than duplicating progress.
 - Media uploads are limited to 10 MB and verified from binary signatures before
   storage. Vision, scanned-PDF analysis, transcription, and speech generation
   use owned workspace paths and remain external approval-gated model calls;

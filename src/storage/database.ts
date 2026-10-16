@@ -36,7 +36,7 @@ import type {
   MemoryEntry,
 } from "./types.js";
 import type { AgentSchedule } from "../schedules/types.js";
-import type { ArtifactVersion, Project, ProjectResource, ProjectResourceType, ProjectStore } from "../projects/service.js";
+import type { ArtifactVersion, GoalStatus, PlanStepStatus, Project, ProjectCheckpoint, ProjectGoal, ProjectPlanStep, ProjectResource, ProjectResourceType, ProjectStore } from "../projects/service.js";
 
 export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore {
   private readonly pool: Pool;
@@ -140,6 +140,101 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     );
     const row = result.rows[0];
     return row ? { ...mapArtifact(row), content: row.content } : null;
+  }
+
+  async createProjectGoal(input: { projectId: string; userId: string; title: string; description: string; priority: number }): Promise<ProjectGoal | null> {
+    const result = await this.pool.query<ProjectGoalRow>(
+      `insert into project_goals (project_id, user_id, title, description, priority)
+       select id, user_id, $3, $4, $5 from projects where id = $1 and user_id = $2
+       returning id, project_id, title, description, status, priority, created_at, updated_at`,
+      [input.projectId, input.userId, input.title, input.description, input.priority],
+    );
+    return result.rows[0] ? mapProjectGoal(result.rows[0]) : null;
+  }
+
+  async updateProjectGoalStatus(input: { projectId: string; userId: string; id: string; status: GoalStatus }): Promise<ProjectGoal | null> {
+    const result = await this.pool.query<ProjectGoalRow>(
+      `update project_goals set status = $4, updated_at = now()
+       where project_id = $1 and user_id = $2 and id = $3
+       returning id, project_id, title, description, status, priority, created_at, updated_at`,
+      [input.projectId, input.userId, input.id, input.status],
+    );
+    return result.rows[0] ? mapProjectGoal(result.rows[0]) : null;
+  }
+
+  async listProjectGoals(userId: string, projectId: string): Promise<ProjectGoal[]> {
+    const result = await this.pool.query<ProjectGoalRow>(
+      `select id, project_id, title, description, status, priority, created_at, updated_at
+       from project_goals where user_id = $1 and project_id = $2 order by priority desc, created_at, id`, [userId, projectId],
+    );
+    return result.rows.map(mapProjectGoal);
+  }
+
+  async createProjectPlanStep(input: { projectId: string; userId: string; goalId?: string; title: string }): Promise<ProjectPlanStep | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`plan:${input.projectId}`]);
+      const result = await client.query<ProjectPlanStepRow>(
+        `insert into project_plan_steps (project_id, user_id, goal_id, title, position)
+         select project.id, project.user_id, $3, $4,
+           coalesce((select max(position) + 1 from project_plan_steps where project_id = project.id), 1)
+         from projects project where project.id = $1 and project.user_id = $2
+           and ($3::uuid is null or exists (select 1 from project_goals goal where goal.id = $3 and goal.project_id = project.id and goal.user_id = project.user_id))
+         returning id, project_id, goal_id, title, position, status, created_at, updated_at`,
+        [input.projectId, input.userId, input.goalId ?? null, input.title],
+      );
+      await client.query("commit");
+      return result.rows[0] ? mapProjectPlanStep(result.rows[0]) : null;
+    } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
+  }
+
+  async updateProjectPlanStepStatus(input: { projectId: string; userId: string; id: string; status: PlanStepStatus }): Promise<ProjectPlanStep | null> {
+    const result = await this.pool.query<ProjectPlanStepRow>(
+      `update project_plan_steps set status = $4, updated_at = now()
+       where project_id = $1 and user_id = $2 and id = $3
+       returning id, project_id, goal_id, title, position, status, created_at, updated_at`,
+      [input.projectId, input.userId, input.id, input.status],
+    );
+    return result.rows[0] ? mapProjectPlanStep(result.rows[0]) : null;
+  }
+
+  async listProjectPlanSteps(userId: string, projectId: string): Promise<ProjectPlanStep[]> {
+    const result = await this.pool.query<ProjectPlanStepRow>(
+      `select id, project_id, goal_id, title, position, status, created_at, updated_at
+       from project_plan_steps where user_id = $1 and project_id = $2 order by position, id`, [userId, projectId],
+    );
+    return result.rows.map(mapProjectPlanStep);
+  }
+
+  async saveProjectCheckpoint(input: { projectId: string; userId: string; goalId?: string; kind: "manual" | "agent_run"; title: string; summary: string; progress: number; agentRunId?: string }): Promise<ProjectCheckpoint | null> {
+    const result = await this.pool.query<ProjectCheckpointRow>(
+      `insert into project_checkpoints (project_id, user_id, goal_id, kind, title, summary, progress, agent_run_id)
+       select project.id, project.user_id, $3, $4, $5, $6, $7, $8
+       from projects project where project.id = $1 and project.user_id = $2
+         and ($3::uuid is null or exists (select 1 from project_goals goal where goal.id = $3 and goal.project_id = project.id and goal.user_id = project.user_id))
+       on conflict (project_id, agent_run_id) where agent_run_id is not null do update set
+         title = excluded.title, summary = excluded.summary, progress = excluded.progress, updated_at = now()
+       returning id, project_id, goal_id, kind, title, summary, progress, agent_run_id, created_at, updated_at`,
+      [input.projectId, input.userId, input.goalId ?? null, input.kind, input.title, input.summary, input.progress, input.agentRunId ?? null],
+    );
+    return result.rows[0] ? mapProjectCheckpoint(result.rows[0]) : null;
+  }
+
+  async listProjectCheckpoints(userId: string, projectId: string): Promise<ProjectCheckpoint[]> {
+    const result = await this.pool.query<ProjectCheckpointRow>(
+      `select id, project_id, goal_id, kind, title, summary, progress, agent_run_id, created_at, updated_at
+       from project_checkpoints where user_id = $1 and project_id = $2 order by created_at desc, id`, [userId, projectId],
+    );
+    return result.rows.map(mapProjectCheckpoint);
+  }
+
+  async projectIdsForResource(userId: string, type: ProjectResourceType, resourceId: string): Promise<string[]> {
+    const result = await this.pool.query<{ project_id: string }>(
+      `select project_id from project_resources where user_id = $1 and resource_type = $2 and resource_id = $3 order by project_id`,
+      [userId, type, resourceId],
+    );
+    return result.rows.map((row) => row.project_id);
   }
 
   async listSkillVersions(): Promise<StoredSkill[]> {
@@ -1843,6 +1938,9 @@ interface SkillEvaluationRow {
 interface ProjectRow { id: string; user_id: string; name: string; description: string; status: Project["status"]; created_at: Date; updated_at: Date }
 interface ProjectResourceRow { project_id: string; resource_type: ProjectResourceType; resource_id: string; label: string; created_at: Date }
 interface ArtifactRow { id: string; project_id: string; path: string; version: number; sha256: string; size_bytes: number; created_at: Date }
+interface ProjectGoalRow { id: string; project_id: string; title: string; description: string; status: GoalStatus; priority: number; created_at: Date; updated_at: Date }
+interface ProjectPlanStepRow { id: string; project_id: string; goal_id: string | null; title: string; position: number; status: PlanStepStatus; created_at: Date; updated_at: Date }
+interface ProjectCheckpointRow { id: string; project_id: string; goal_id: string | null; kind: ProjectCheckpoint["kind"]; title: string; summary: string; progress: number; agent_run_id: string | null; created_at: Date; updated_at: Date }
 
 function mapProject(row: ProjectRow): Project {
   return { id: row.id, userId: row.user_id, name: row.name, description: row.description, status: row.status, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
@@ -1854,6 +1952,18 @@ function mapProjectResource(row: ProjectResourceRow): ProjectResource {
 
 function mapArtifact(row: ArtifactRow): ArtifactVersion {
   return { id: row.id, projectId: row.project_id, path: row.path, version: row.version, sha256: row.sha256, bytes: row.size_bytes, createdAt: row.created_at.toISOString() };
+}
+
+function mapProjectGoal(row: ProjectGoalRow): ProjectGoal {
+  return { id: row.id, projectId: row.project_id, title: row.title, description: row.description, status: row.status, priority: row.priority, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
+}
+
+function mapProjectPlanStep(row: ProjectPlanStepRow): ProjectPlanStep {
+  return { id: row.id, projectId: row.project_id, ...(row.goal_id ? { goalId: row.goal_id } : {}), title: row.title, position: row.position, status: row.status, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
+}
+
+function mapProjectCheckpoint(row: ProjectCheckpointRow): ProjectCheckpoint {
+  return { id: row.id, projectId: row.project_id, ...(row.goal_id ? { goalId: row.goal_id } : {}), kind: row.kind, title: row.title, summary: row.summary, progress: row.progress, ...(row.agent_run_id ? { agentRunId: row.agent_run_id } : {}), createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
 }
 
 function mapSkill(row: SkillRow): StoredSkill {

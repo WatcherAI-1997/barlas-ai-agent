@@ -48,6 +48,7 @@ for (const legalFile of [
 for (const required of [
   "migrations/016_skills.sql",
   "migrations/018_projects.sql",
+  "migrations/019_project_execution.sql",
   "src/skills/manager.ts",
   "tests/skill-manager.test.ts",
 ]) {
@@ -58,6 +59,13 @@ const projectMigration = await readFile("migrations/018_projects.sql", "utf8");
 const database = await readFile("src/storage/database.ts", "utf8");
 for (const required of ["resourceBelongsToUser", "workspace.readBuffer", "writeUpload", 'createHash("sha256")']) {
   if (!projects.includes(required)) throw new Error(`Project isolation/version boundary is missing: ${required}`);
+}
+const projectExecutionMigration = await readFile("migrations/019_project_execution.sql", "utf8");
+for (const required of ["foreign key (project_id, user_id)", "project_checkpoints_run_idx", "where agent_run_id is not null", "unique (project_id, position)"]) {
+  if (!projectExecutionMigration.includes(required)) throw new Error(`Project execution boundary is missing: ${required}`);
+}
+for (const required of ["recordRunResult", 'run.status === "waiting_approval"', "projectIdsForResource"]) {
+  if (!projects.includes(required)) throw new Error(`Automatic checkpoint boundary is missing: ${required}`);
 }
 if (!database.includes("pg_advisory_xact_lock")) throw new Error("Project artifact version allocation is not serialized");
 for (const required of ["unique (project_id, path, version)", "foreign key (project_id, user_id)", "size_bytes integer"]) {

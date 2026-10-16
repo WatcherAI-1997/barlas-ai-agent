@@ -378,7 +378,7 @@ describe("Barlas AI Agent API", () => {
       cancel: vi.fn(async () => ({ ...record, status: "cancelled" as const })),
     };
     const projectId = "00000000-0000-4000-8000-000000000201";
-    const projects = { create: vi.fn(), list: vi.fn(), detail: vi.fn(), context: vi.fn(async () => "Active Barlas project: Launch."), attach: vi.fn(async () => ({ projectId, type: "agent_run" as const, id: record.id, label: "Run durably", createdAt: record.createdAt })), snapshot: vi.fn(), restore: vi.fn() };
+    const projects = { create: vi.fn(), list: vi.fn(), detail: vi.fn(), context: vi.fn(async () => "Active Barlas project: Launch."), attach: vi.fn(async () => ({ projectId, type: "agent_run" as const, id: record.id, label: "Run durably", createdAt: record.createdAt })), snapshot: vi.fn(), restore: vi.fn(), createGoal: vi.fn(), updateGoal: vi.fn(), createStep: vi.fn(), updateStep: vi.fn(), checkpoint: vi.fn(), recordRunResult: vi.fn() };
     const app = await buildApp({ apiToken, ...deps, agentRuntime, projects });
     const response = await app.inject({
       method: "POST",
@@ -676,12 +676,15 @@ describe("Barlas AI Agent API", () => {
   it("creates an owned project and returns its linked resources and artifact versions", async () => {
     const deps = dependencies();
     const project = { id: "00000000-0000-4000-8000-000000000201", userId: "user-1", name: "Launch", description: "Ship", status: "active" as const, createdAt: "2026-10-16T00:00:00.000Z", updatedAt: "2026-10-16T00:00:00.000Z" };
-    const projects = { create: vi.fn(async () => project), list: vi.fn(async () => [project]), detail: vi.fn(async () => ({ project, resources: [], artifacts: [] })), context: vi.fn(async () => "Active Barlas project: Launch."), attach: vi.fn(), snapshot: vi.fn(), restore: vi.fn() };
+    const goal = { id: "00000000-0000-4000-8000-000000000202", projectId: project.id, title: "Release", description: "Closed alpha", status: "planned" as const, priority: 5, createdAt: project.createdAt, updatedAt: project.updatedAt };
+    const projects = { create: vi.fn(async () => project), list: vi.fn(async () => [project]), detail: vi.fn(async () => ({ project, resources: [], artifacts: [], goals: [], steps: [], checkpoints: [] })), context: vi.fn(async () => "Active Barlas project: Launch."), attach: vi.fn(), snapshot: vi.fn(), restore: vi.fn(), createGoal: vi.fn(async () => goal), updateGoal: vi.fn(), createStep: vi.fn(), updateStep: vi.fn(), checkpoint: vi.fn(), recordRunResult: vi.fn() };
     const app = await buildApp({ apiToken, ...deps, projects }); const auth = { authorization: `Bearer ${apiToken}` };
     const created = await app.inject({ method: "POST", url: "/v1/projects", headers: auth, payload: { userId: "user-1", name: "Launch", description: "Ship" } });
     const detail = await app.inject({ method: "GET", url: `/v1/projects/${project.id}?userId=user-1`, headers: auth });
+    const createdGoal = await app.inject({ method: "POST", url: `/v1/projects/${project.id}/goals`, headers: auth, payload: { userId: "user-1", title: "Release", description: "Closed alpha", priority: 5 } });
     expect(created.statusCode).toBe(201); expect(created.json()).toEqual({ project });
-    expect(detail.json()).toEqual({ project, resources: [], artifacts: [] });
+    expect(detail.json()).toEqual({ project, resources: [], artifacts: [], goals: [], steps: [], checkpoints: [] });
+    expect(createdGoal.statusCode).toBe(201); expect(createdGoal.json()).toEqual({ goal });
     expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "project.created", resourceId: project.id }));
     await app.close();
   });

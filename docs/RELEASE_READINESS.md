@@ -3,11 +3,11 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 116 automated tests across 33 files pass.
+- 117 automated tests across 33 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
-- All eighteen SQL migrations apply twice to a clean PostgreSQL 17 database.
+- All nineteen SQL migrations apply twice to a clean PostgreSQL 17 database.
 - The production Docker image builds and runs read-only with dropped capabilities.
 - The pinned Playwright sidecar builds separately, runs read-only as an
   unprivileged user with all capabilities dropped, and completed a live public
@@ -23,6 +23,8 @@
 - Project tests verify cross-user denial, owned resource linking, immutable
   SHA-256 artifact snapshots, project-aware agent context/run linking, and
   explicit restoration of selected versions.
+- Project-execution tests cover owned goals, ordered plans, bounded manual
+  checkpoints, automatic terminal-run summaries, and retry-safe deduplication.
 - The live agent evaluation suite validates scenario definitions and scores
   persisted statuses, tools, content-safe events, output constraints, steps,
   tokens, and cost without model self-grading. Credentialed baseline results

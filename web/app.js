@@ -317,12 +317,47 @@ async function openProject(id) {
   state.projectId = id;
   const data = await api(`/v1/projects/${id}?userId=${encodeURIComponent(state.account.id)}`);
   $("#project-detail").classList.remove("hidden"); $("#project-title").textContent = data.project.name; $("#project-description-view").textContent = data.project.description;
+  const goalOptions = [new Option("Без цели", ""), ...data.goals.map((goal) => new Option(goal.title, goal.id))];
+  $("#project-step-goal").replaceChildren(...goalOptions.map((option) => option.cloneNode(true)));
+  $("#project-checkpoint-goal").replaceChildren(...goalOptions);
+  renderList("#project-goals", data.goals, (item) => projectStatusCard(item.title, `Приоритет ${item.priority}`, item.description, item.status, ["planned", "in_progress", "blocked", "completed"], (status) => updateProjectItem("goals", item.id, status)));
+  renderList("#project-steps", data.steps, (item) => projectStatusCard(`${item.position}. ${item.title}`, item.goalId ? "Связано с целью" : "Общий план", "", item.status, ["pending", "in_progress", "blocked", "completed", "skipped"], (status) => updateProjectItem("steps", item.id, status)));
+  renderList("#project-checkpoints", data.checkpoints, (item) => card(`${item.progress}% · ${item.title}`, `${item.kind} · ${new Date(item.createdAt).toLocaleString()}`, item.summary));
   renderList("#project-resources", data.resources, (item) => card(item.label || item.id, item.type, item.id));
   renderList("#project-artifacts", data.artifacts, (item) => {
     const node = card(`${item.path} · v${item.version}`, `${item.bytes} байт · ${new Date(item.createdAt).toLocaleString()}`, item.sha256);
     const button = document.createElement("button"); button.textContent = "Восстановить"; button.addEventListener("click", () => restoreArtifact(item.id).catch((error) => alert(error.message))); node.append(button); return node;
   });
 }
+
+function projectStatusCard(title, meta, body, status, statuses, update) {
+  const node = card(title, meta, body); const select = document.createElement("select");
+  select.replaceChildren(...statuses.map((value) => new Option(value, value, false, value === status)));
+  select.addEventListener("change", () => update(select.value).catch((error) => alert(error.message))); node.append(select); return node;
+}
+
+async function updateProjectItem(kind, id, status) {
+  await api(`/v1/projects/${state.projectId}/${kind}/${id}`, { method: "PATCH", body: JSON.stringify({ userId: state.account.id, status }) });
+  await openProject(state.projectId);
+}
+
+$("#project-goal-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); if (!state.projectId) return;
+  await api(`/v1/projects/${state.projectId}/goals`, { method: "POST", body: JSON.stringify({ userId: state.account.id, title: $("#project-goal-title").value.trim(), description: $("#project-goal-description").value.trim(), priority: Number($("#project-goal-priority").value) }) });
+  event.target.reset(); await openProject(state.projectId);
+});
+
+$("#project-step-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); if (!state.projectId) return;
+  await api(`/v1/projects/${state.projectId}/steps`, { method: "POST", body: JSON.stringify({ userId: state.account.id, title: $("#project-step-title").value.trim(), goalId: $("#project-step-goal").value || undefined }) });
+  event.target.reset(); await openProject(state.projectId);
+});
+
+$("#project-checkpoint-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); if (!state.projectId) return;
+  await api(`/v1/projects/${state.projectId}/checkpoints`, { method: "POST", body: JSON.stringify({ userId: state.account.id, title: $("#project-checkpoint-title").value.trim(), summary: $("#project-checkpoint-summary").value.trim(), progress: Number($("#project-checkpoint-progress").value), goalId: $("#project-checkpoint-goal").value || undefined }) });
+  event.target.reset(); await openProject(state.projectId);
+});
 
 $("#project-resource-form").addEventListener("submit", async (event) => {
   event.preventDefault(); if (!state.projectId) return;

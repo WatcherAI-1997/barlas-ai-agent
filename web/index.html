@@ -141,6 +141,27 @@
           <div id="projects" class="grid"></div>
           <div id="project-detail" class="hidden">
             <h2 id="project-title"></h2><p id="project-description-view" class="meta"></p>
+            <form id="project-goal-form" class="inline-form">
+              <input id="project-goal-title" maxlength="200" placeholder="Цель" required>
+              <input id="project-goal-description" maxlength="4000" placeholder="Описание">
+              <select id="project-goal-priority"><option value="5">Приоритет 5</option><option value="4">Приоритет 4</option><option value="3" selected>Приоритет 3</option><option value="2">Приоритет 2</option><option value="1">Приоритет 1</option></select>
+              <button type="submit">Добавить цель</button>
+            </form>
+            <form id="project-step-form" class="inline-form">
+              <input id="project-step-title" maxlength="300" placeholder="Шаг плана" required>
+              <select id="project-step-goal"><option value="">Без цели</option></select>
+              <button type="submit">Добавить шаг</button>
+            </form>
+            <form id="project-checkpoint-form" class="inline-form">
+              <input id="project-checkpoint-title" maxlength="200" placeholder="Контрольная точка" required>
+              <input id="project-checkpoint-summary" maxlength="10000" placeholder="Что достигнуто" required>
+              <input id="project-checkpoint-progress" type="number" min="0" max="100" value="50" required>
+              <select id="project-checkpoint-goal"><option value="">Без цели</option></select>
+              <button type="submit">Зафиксировать</button>
+            </form>
+            <h2>Цели</h2><div id="project-goals" class="grid"></div>
+            <h2>План</h2><div id="project-steps" class="grid"></div>
+            <h2>Контрольные точки</h2><div id="project-checkpoints" class="grid"></div>
             <form id="project-resource-form" class="inline-form">
               <select id="project-resource-type"><option value="conversation">Диалог</option><option value="agent_run">Запуск</option><option value="memory">Память</option><option value="file">Файл</option></select>
               <input id="project-resource-id" maxlength="1000" placeholder="UUID или путь файла" required>
