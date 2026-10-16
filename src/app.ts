@@ -1,6 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { basename } from "node:path";
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
 
 import sensible from "@fastify/sensible";
 import multipart from "@fastify/multipart";
@@ -21,6 +21,7 @@ import type { AgentLoop } from "./core/agent-loop.js";
 import type { TelegramLinkService } from "./auth/telegram-link.js";
 import { parseTelegramVoiceCommand } from "./channels/telegram.js";
 import { sendTelegramVoiceReply, telegramVoiceFallbackText } from "./channels/telegram-voice.js";
+import { extractWhatsAppMessages, verifyWhatsAppSignature } from "./channels/whatsapp.js";
 import type { GitHubConnector } from "./connectors/github.js";
 import type { GoogleConnector } from "./connectors/google.js";
 import { connectorProviders, type ConnectorService } from "./connectors/vault.js";
@@ -422,6 +423,11 @@ export interface AppDependencies {
     socketSecret: string;
     client: { sendMessage(channelId: string, text: string): Promise<void> };
   };
+  whatsapp?: {
+    appSecret: string;
+    verifyToken: string;
+    client: { sendMessage(recipientId: string, text: string): Promise<void> };
+  };
   logger?: boolean;
 }
 
@@ -467,10 +473,35 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   const memory = dependencies.memory ?? dependencies.database;
   const seenDiscordMessages = new Set<string>();
   const seenSlackMessages = new Set<string>();
+  const seenWhatsAppMessages = new Set<string>();
+  const rawWhatsAppBodies = new WeakMap<FastifyRequest, Buffer>();
   const maxWorkspaceFileBytes = dependencies.maxWorkspaceFileBytes ?? DEFAULT_MAX_WORKSPACE_FILE_BYTES;
   await app.register(sensible);
   await app.register(multipart, {
     limits: { fileSize: maxWorkspaceFileBytes + 1, files: 1, fields: 0, parts: 1 },
+  });
+  app.addHook("preParsing", (request, _reply, payload, done) => {
+    if (request.method !== "POST" || !request.url.startsWith("/channels/whatsapp/webhook")) {
+      done(null, payload);
+      return;
+    }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    const collector = new Transform({
+      transform(chunk: Buffer | string, _encoding, callback) {
+        const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        size += value.byteLength;
+        collector.receivedEncodedLength += value.byteLength;
+        if (size <= 2_000_000) chunks.push(value);
+        callback(null, chunk);
+      },
+      flush(callback) {
+        if (size <= 2_000_000) rawWhatsAppBodies.set(request, Buffer.concat(chunks));
+        callback();
+      },
+    }) as Transform & { receivedEncodedLength: number };
+    collector.receivedEncodedLength = 0;
+    done(null, payload.pipe(collector));
   });
   if (dependencies.webRoot) {
     await app.register(fastifyStatic, { root: dependencies.webRoot, prefix: "/ui/" });
@@ -2025,6 +2056,80 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         workerEnabled: dependencies.runtimeInfo?.workerEnabled ?? false,
         stats,
       }));
+  });
+
+  app.get("/channels/whatsapp/webhook", async (request, reply) => {
+    if (!dependencies.whatsapp) return reply.notFound();
+    const parsed = z.object({
+      "hub.mode": z.literal("subscribe"),
+      "hub.verify_token": z.string().min(1),
+      "hub.challenge": z.string().min(1).max(1_000),
+    }).passthrough().safeParse(request.query);
+    if (!parsed.success || !tokenMatches(dependencies.whatsapp.verifyToken, parsed.data["hub.verify_token"])) {
+      return reply.forbidden("Invalid WhatsApp verification token");
+    }
+    return reply.type("text/plain").send(parsed.data["hub.challenge"]);
+  });
+
+  app.post("/channels/whatsapp/webhook", async (request, reply) => {
+    if (!dependencies.whatsapp) return reply.notFound();
+    const suppliedSignature = request.headers["x-hub-signature-256"];
+    const rawBody = rawWhatsAppBodies.get(request);
+    if (typeof suppliedSignature !== "string" || !rawBody ||
+      !verifyWhatsAppSignature(dependencies.whatsapp.appSecret, rawBody, suppliedSignature)) {
+      return reply.unauthorized("Invalid WhatsApp webhook signature");
+    }
+    const messages = extractWhatsAppMessages(request.body);
+    if (messages.length === 0) return { ok: true, ignored: true };
+    if (!dependencies.agentRuntime) return reply.serviceUnavailable("Agent runtime is unavailable");
+    const accepted: string[] = [];
+    for (const message of messages.slice(0, 20)) {
+      if (seenWhatsAppMessages.has(message.id)) continue;
+      seenWhatsAppMessages.add(message.id);
+      if (seenWhatsAppMessages.size > 2_000) seenWhatsAppMessages.delete(seenWhatsAppMessages.values().next().value!);
+      const userId = `whatsapp:${message.from}`;
+      const decision = /^!(approve|reject)\s+([0-9a-f-]{36})$/iu.exec(message.text);
+      if (decision && dependencies.toolExecutor) {
+        try {
+          const outcome = await dependencies.toolExecutor.decide({
+            approvalId: decision[2]!, userId, approved: decision[1] === "approve",
+          });
+          const resumed = await dependencies.agentRuntime.resumeByApproval({
+            userId, approvalId: decision[2]!,
+            output: outcome.status === "completed" ? outcome.output : null,
+            rejected: outcome.status === "rejected",
+          });
+          await dependencies.whatsapp.client.sendMessage(message.from, resumed?.result?.text ?? "Решение принято.");
+          if (resumed) await dependencies.projects?.recordRunResult(resumed);
+        } catch (error) {
+          await dependencies.whatsapp.client.sendMessage(message.from, error instanceof Error ? error.message.slice(0, 500) : "Ошибка");
+        }
+        accepted.push(message.id);
+        continue;
+      }
+      const memories = await memory.recall(userId, message.text, 5);
+      const run = await dependencies.agentRuntime.enqueue({
+        userId,
+        conversationId: randomUUID(),
+        messages: [
+          ...(memories.length ? [{ role: "system" as const, content: ["Use these Barlas AI Agent user memories only when relevant:", ...memories.map((item) => `- [${item.category}] ${item.content}`)].join("\n") }] : []),
+          { role: "user" as const, content: message.text },
+        ],
+        conversationMessages: [{ role: "user", content: message.text }],
+        delivery: { channel: "whatsapp", recipientId: message.from },
+        taskClass: "fast",
+        maxSteps: 8,
+      });
+      accepted.push(message.id);
+      await dependencies.database.appendAudit({
+        userId,
+        eventType: "whatsapp.message.accepted",
+        resourceType: "agent_run",
+        resourceId: run.id,
+        details: { messageId: message.id },
+      });
+    }
+    return { ok: true, accepted };
   });
 
   app.post("/channels/slack/message", async (request, reply) => {

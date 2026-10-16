@@ -230,8 +230,17 @@ else
   else
     TELEGRAM_WEBHOOK_SECRET=""
   fi
+  prompt WHATSAPP_ACCESS_TOKEN "WhatsApp permanent access token; blank disables WhatsApp" "" true
+  if [[ -n "${WHATSAPP_ACCESS_TOKEN:-}" ]]; then
+    prompt WHATSAPP_PHONE_NUMBER_ID "WhatsApp phone number ID"
+    prompt WHATSAPP_VERIFY_TOKEN "WhatsApp webhook verify token" "" true
+    prompt WHATSAPP_APP_SECRET "WhatsApp app secret" "" true
+    prompt WHATSAPP_GRAPH_API_BASE_URL "WhatsApp Graph API version root" "https://graph.facebook.com/v23.0"
+  else
+    WHATSAPP_PHONE_NUMBER_ID=""; WHATSAPP_VERIFY_TOKEN=""; WHATSAPP_APP_SECRET=""; WHATSAPP_GRAPH_API_BASE_URL="https://graph.facebook.com/v23.0"
+  fi
 
-  for variable in BARLAS_DOMAIN BARLAS_HTTP_PORT BARLAS_HTTPS_PORT OWNER_EMAIL OWNER_DISPLAY_NAME OWNER_LANGUAGE MODEL_PROVIDER MODEL_BASE_URL MODEL_NAME DEEP_MODEL_NAME VISION_MODEL TRANSCRIPTION_MODEL SPEECH_MODEL EMBEDDING_MODEL MODEL_API_KEY MEDIA_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET; do
+  for variable in BARLAS_DOMAIN BARLAS_HTTP_PORT BARLAS_HTTPS_PORT OWNER_EMAIL OWNER_DISPLAY_NAME OWNER_LANGUAGE MODEL_PROVIDER MODEL_BASE_URL MODEL_NAME DEEP_MODEL_NAME VISION_MODEL TRANSCRIPTION_MODEL SPEECH_MODEL EMBEDDING_MODEL MODEL_API_KEY MEDIA_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET WHATSAPP_ACCESS_TOKEN WHATSAPP_PHONE_NUMBER_ID WHATSAPP_VERIFY_TOKEN WHATSAPP_APP_SECRET WHATSAPP_GRAPH_API_BASE_URL; do
     require_single_line "$variable"
   done
 
@@ -257,6 +266,11 @@ else
     ((BARLAS_HTTPS_PORT >= 1 && BARLAS_HTTPS_PORT <= 65535)) || fail "HTTPS port must be between 1 and 65535"
   fi
   [[ -z "${TELEGRAM_WEBHOOK_SECRET:-}" || ${#TELEGRAM_WEBHOOK_SECRET} -ge 32 ]] || fail "Telegram webhook secret must contain at least 32 characters"
+  if [[ -n "${WHATSAPP_ACCESS_TOKEN:-}" ]]; then
+    require_value WHATSAPP_PHONE_NUMBER_ID "WhatsApp phone number ID"
+    [[ ${#WHATSAPP_ACCESS_TOKEN} -ge 20 && ${#WHATSAPP_VERIFY_TOKEN} -ge 16 && ${#WHATSAPP_APP_SECRET} -ge 16 ]] || fail "WhatsApp credentials are invalid"
+    [[ "$WHATSAPP_GRAPH_API_BASE_URL" =~ ^https://[^[:space:]]+$ ]] || fail "WhatsApp Graph API URL must use HTTPS"
+  fi
 
   POSTGRES_PASSWORD="$(openssl rand -hex 32)"
   BARLAS_API_TOKEN="$(openssl rand -hex 32)"
@@ -300,6 +314,13 @@ else
     write_setting TELEGRAM_BOT_TOKEN "$TELEGRAM_BOT_TOKEN"
     write_setting TELEGRAM_WEBHOOK_SECRET "$TELEGRAM_WEBHOOK_SECRET"
     if [[ "$LOCAL_MODE" == true ]]; then write_setting TELEGRAM_POLLING_ENABLED "true"; else write_setting TELEGRAM_POLLING_ENABLED "false"; fi
+  fi
+  if [[ -n "${WHATSAPP_ACCESS_TOKEN:-}" ]]; then
+    write_setting WHATSAPP_ACCESS_TOKEN "$WHATSAPP_ACCESS_TOKEN"
+    write_setting WHATSAPP_PHONE_NUMBER_ID "$WHATSAPP_PHONE_NUMBER_ID"
+    write_setting WHATSAPP_VERIFY_TOKEN "$WHATSAPP_VERIFY_TOKEN"
+    write_setting WHATSAPP_APP_SECRET "$WHATSAPP_APP_SECRET"
+    write_setting WHATSAPP_GRAPH_API_BASE_URL "$WHATSAPP_GRAPH_API_BASE_URL"
   fi
   write_setting AGENT_RUN_WORKER_ENABLED "true"
   write_setting AGENT_RUN_WORKER_POLL_MS "1000"

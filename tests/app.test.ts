@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolve } from "node:path";
-import { generateKeyPairSync } from "node:crypto";
+import { createHmac, generateKeyPairSync } from "node:crypto";
 
 import { buildApp } from "../src/app.js";
 import type { ModelProvider } from "../src/core/models.js";
@@ -147,7 +147,7 @@ describe("Barlas AI Agent API", () => {
     const deps = dependencies();
     const extensionCatalog = createBuiltinExtensionCatalog({
       browser: false, github: false, google: false, mcp: false, sandbox: true,
-      telegram: true, discord: false, slack: false, privateModel: false, deviceNodes: true, modelProvider: "openai",
+      telegram: true, discord: false, slack: false, whatsapp: false, privateModel: false, deviceNodes: true, modelProvider: "openai",
     });
     const app = await buildApp({ apiToken, ...deps, extensionCatalog });
     const response = await app.inject({
@@ -158,6 +158,7 @@ describe("Barlas AI Agent API", () => {
       expect.objectContaining({ id: "channel.telegram", configured: true }),
       expect.objectContaining({ id: "channel.discord", configured: false }),
       expect.objectContaining({ id: "channel.slack", configured: false }),
+      expect.objectContaining({ id: "channel.whatsapp", configured: false }),
       expect.objectContaining({ id: "runtime.browser", configured: false }),
     ]));
     await app.close();
@@ -757,6 +758,65 @@ describe("Barlas AI Agent API", () => {
     }));
     expect(sendMessage).not.toHaveBeenCalled();
     expect(sendChatAction).toHaveBeenCalledWith(42, "typing");
+    await app.close();
+  });
+
+  it("verifies and queues signed WhatsApp Cloud API messages", async () => {
+    const deps = dependencies();
+    const enqueue = vi.fn(async (input) => ({
+      id: "00000000-0000-4000-8000-000000000020",
+      ...input,
+      status: "queued" as const,
+      scheduledFor: "2026-10-16T00:00:00.000Z",
+      attempts: 0,
+      maxAttempts: 3,
+      createdAt: "2026-10-16T00:00:00.000Z",
+      updatedAt: "2026-10-16T00:00:00.000Z",
+    }));
+    const agentRuntime = {
+      start: vi.fn(), enqueue, resume: vi.fn(), resumeByApproval: vi.fn(),
+      get: vi.fn(), list: vi.fn(), events: vi.fn(), cancel: vi.fn(),
+    };
+    const appSecret = "whatsapp-app-secret-value";
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [{ changes: [{ field: "messages", value: { messages: [{
+        id: "wamid.1", from: "15550001111", type: "text", text: { body: "Plan this" },
+      }] } }] }],
+    };
+    const raw = JSON.stringify(payload);
+    const signature = `sha256=${createHmac("sha256", appSecret).update(raw).digest("hex")}`;
+    const app = await buildApp({
+      apiToken, ...deps, agentRuntime,
+      whatsapp: { appSecret, verifyToken: "verify-token-value", client: { sendMessage: vi.fn() } },
+    });
+
+    const verification = await app.inject({
+      method: "GET",
+      url: "/channels/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=verify-token-value&hub.challenge=challenge-42",
+    });
+    expect(verification.statusCode).toBe(200);
+    expect(verification.body).toBe("challenge-42");
+
+    const accepted = await app.inject({
+      method: "POST", url: "/channels/whatsapp/webhook",
+      headers: { "content-type": "application/json", "x-hub-signature-256": signature },
+      payload: raw,
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toMatchObject({ ok: true, accepted: ["wamid.1"] });
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "whatsapp:15550001111",
+      delivery: { channel: "whatsapp", recipientId: "15550001111" },
+      conversationMessages: [{ role: "user", content: "Plan this" }],
+    }));
+
+    const rejected = await app.inject({
+      method: "POST", url: "/channels/whatsapp/webhook",
+      headers: { "content-type": "application/json", "x-hub-signature-256": "sha256=bad" },
+      payload: raw,
+    });
+    expect(rejected.statusCode).toBe(401);
     await app.close();
   });
 

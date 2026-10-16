@@ -5,6 +5,7 @@ import { TelegramClient } from "./channels/telegram.js";
 import { TelegramPollingWorker } from "./channels/telegram-polling.js";
 import { DiscordClient, DiscordGatewayWorker } from "./channels/discord.js";
 import { SlackClient, SlackSocketWorker } from "./channels/slack.js";
+import { WhatsAppClient } from "./channels/whatsapp.js";
 import { sendTelegramVoiceReply, telegramVoiceFallbackText } from "./channels/telegram-voice.js";
 import { GitHubConnector } from "./connectors/github.js";
 import { GoogleConnector } from "./connectors/google.js";
@@ -122,6 +123,7 @@ const extensionCatalog = createBuiltinExtensionCatalog({
   telegram: Boolean(config.TELEGRAM_BOT_TOKEN),
   discord: Boolean(config.DISCORD_BOT_TOKEN && config.DISCORD_GATEWAY_ENABLED),
   slack: Boolean(config.SLACK_BOT_TOKEN && config.SLACK_APP_TOKEN && config.SLACK_SOCKET_MODE_ENABLED),
+  whatsapp: Boolean(config.WHATSAPP_ACCESS_TOKEN && config.WHATSAPP_PHONE_NUMBER_ID && config.WHATSAPP_VERIFY_TOKEN && config.WHATSAPP_APP_SECRET),
   privateModel: Boolean(config.PRIVATE_MODEL_BASE_URL && config.PRIVATE_MODEL_NAME && config.PRIVATE_MODEL_API_KEY),
   deviceNodes: true,
   modelProvider: config.MODEL_PROVIDER,
@@ -197,6 +199,17 @@ const discord = config.DISCORD_BOT_TOKEN && config.DISCORD_GATEWAY_ENABLED
   : undefined;
 const slack = config.SLACK_BOT_TOKEN && config.SLACK_APP_TOKEN && config.SLACK_SOCKET_MODE_ENABLED
   ? { socketSecret: config.BARLAS_API_TOKEN, client: new SlackClient(config.SLACK_BOT_TOKEN, config.SLACK_APP_TOKEN) }
+  : undefined;
+const whatsapp = config.WHATSAPP_ACCESS_TOKEN && config.WHATSAPP_PHONE_NUMBER_ID && config.WHATSAPP_VERIFY_TOKEN && config.WHATSAPP_APP_SECRET
+  ? {
+      appSecret: config.WHATSAPP_APP_SECRET,
+      verifyToken: config.WHATSAPP_VERIFY_TOKEN,
+      client: new WhatsAppClient(
+        config.WHATSAPP_ACCESS_TOKEN,
+        config.WHATSAPP_PHONE_NUMBER_ID,
+        config.WHATSAPP_GRAPH_API_BASE_URL,
+      ),
+    }
   : undefined;
 const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
   isPaused: () => runtimeControl.isPaused(),
@@ -302,6 +315,13 @@ const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
         await slack.client.sendMessage(run.delivery.channelId, run.result.text);
       }
     }
+    if (run.delivery?.channel === "whatsapp" && whatsapp) {
+      if (run.status === "waiting_approval" && run.pendingApprovalId) {
+        await whatsapp.client.sendMessage(run.delivery.recipientId, `${run.result.text}\n\nДля решения: !approve ${run.pendingApprovalId} или !reject ${run.pendingApprovalId}`);
+      } else {
+        await whatsapp.client.sendMessage(run.delivery.recipientId, run.result.text);
+      }
+    }
   },
   onError: (error) => console.error("Barlas AI Agent autonomous run worker error", error),
 });
@@ -353,6 +373,7 @@ const app = await buildApp({
   ...(telegram ? { telegram } : {}),
   ...(discord ? { discord } : {}),
   ...(slack ? { slack } : {}),
+  ...(whatsapp ? { whatsapp } : {}),
   logger: true,
 });
 const telegramPolling = telegram && config.TELEGRAM_POLLING_ENABLED

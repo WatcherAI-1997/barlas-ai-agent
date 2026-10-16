@@ -39,6 +39,11 @@ const configSchema = z.object({
   SLACK_BOT_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(20).optional()),
   SLACK_APP_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(20).optional()),
   SLACK_SOCKET_MODE_ENABLED: z.stringbool().default(false),
+  WHATSAPP_ACCESS_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(20).optional()),
+  WHATSAPP_PHONE_NUMBER_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).max(64).optional()),
+  WHATSAPP_VERIFY_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(16).optional()),
+  WHATSAPP_APP_SECRET: z.preprocess((value) => value === "" ? undefined : value, z.string().min(16).optional()),
+  WHATSAPP_GRAPH_API_BASE_URL: z.string().url().default("https://graph.facebook.com/v23.0"),
   CONNECTOR_VAULT_KEY: z.string().optional(),
   CONNECTOR_VAULT_KEY_VERSION: z.coerce.number().int().min(1).max(1_000_000).default(1),
   JOB_WORKER_ENABLED: z.stringbool().default(true),
@@ -115,6 +120,15 @@ const configSchema = z.object({
   }
   if (config.SLACK_SOCKET_MODE_ENABLED && (!config.SLACK_BOT_TOKEN || !config.SLACK_APP_TOKEN)) {
     context.addIssue({ code: "custom", message: "SLACK_BOT_TOKEN and SLACK_APP_TOKEN are required when Slack Socket Mode is enabled" });
+  }
+  const whatsappFields = [
+    config.WHATSAPP_ACCESS_TOKEN,
+    config.WHATSAPP_PHONE_NUMBER_ID,
+    config.WHATSAPP_VERIFY_TOKEN,
+    config.WHATSAPP_APP_SECRET,
+  ];
+  if (whatsappFields.some(Boolean) && !whatsappFields.every(Boolean)) {
+    context.addIssue({ code: "custom", message: "All WhatsApp Cloud API settings must be configured together" });
   }
 
   const privateModelFields = [

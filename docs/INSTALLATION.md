@@ -184,7 +184,15 @@ to `owner@barlas.local`. Public mode additionally requires `BARLAS_DOMAIN` and
 `EMBEDDING_MODEL`, `OWNER_DISPLAY_NAME`, `OWNER_LANGUAGE`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
 `TELEGRAM_BOT_API_BASE_URL`, `TELEGRAM_MAX_UPLOAD_BYTES`,
+`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN`,
+`WHATSAPP_APP_SECRET`, `WHATSAPP_GRAPH_API_BASE_URL`,
 `MAX_WORKSPACE_FILE_BYTES`, `BARLAS_HTTP_PORT`, and `BARLAS_HTTPS_PORT`.
+
+WhatsApp uses the official Cloud API. Configure the provider callback to
+`https://YOUR_DOMAIN/channels/whatsapp/webhook`, subscribe to message events,
+and use the same `WHATSAPP_VERIFY_TOKEN` in both places. Every incoming POST is
+verified against `X-Hub-Signature-256` with `WHATSAPP_APP_SECRET`; unsigned or
+modified payloads are rejected before they reach the agent runtime.
 
 When `MODEL_PROVIDER=anthropic`, chat and agent tools use the Anthropic
 Messages API. Vision, PDF analysis, transcription, speech, and embeddings are

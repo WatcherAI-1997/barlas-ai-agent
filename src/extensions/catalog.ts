@@ -54,6 +54,7 @@ export interface BuiltinExtensionAvailability {
   telegram: boolean;
   discord: boolean;
   slack: boolean;
+  whatsapp: boolean;
   privateModel: boolean;
   deviceNodes: boolean;
   modelProvider: "codex_cli" | "openai" | "anthropic" | "ollama" | "openai_compatible";
@@ -68,6 +69,7 @@ export function createBuiltinExtensionCatalog(availability: BuiltinExtensionAvai
   add({ id: "channel.telegram", name: "Telegram", description: "Telegram messages, approvals, voice replies and domain-free long polling.", kind: "channel", capabilities: ["chat", "approvals", "voice", "polling", "webhook"], risks: ["external", "write"], configuration: ["TELEGRAM_BOT_TOKEN"] }, () => availability.telegram);
   add({ id: "channel.discord", name: "Discord", description: "Discord DMs and mention-gated guild chat through a domain-free Gateway connection.", kind: "channel", capabilities: ["chat", "direct-messages", "gateway", "mentions"], risks: ["external", "write"], configuration: ["DISCORD_BOT_TOKEN"] }, () => availability.discord);
   add({ id: "channel.slack", name: "Slack", description: "Slack DMs and app mentions through domain-free Socket Mode.", kind: "channel", capabilities: ["chat", "direct-messages", "mentions", "socket-mode"], risks: ["external", "write"], configuration: ["SLACK_APP_TOKEN", "SLACK_BOT_TOKEN"] }, () => availability.slack);
+  add({ id: "channel.whatsapp", name: "WhatsApp", description: "Two-way WhatsApp Cloud API messages with signed webhooks and durable agent runs.", kind: "channel", capabilities: ["approvals", "chat", "signed-webhook"], risks: ["external", "write"], configuration: ["WHATSAPP_ACCESS_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_VERIFY_TOKEN"] }, () => availability.whatsapp);
   add({ id: "connector.github", name: "GitHub", description: "Repository profile and repository access through an encrypted connector.", kind: "connector", capabilities: ["profile.read", "repositories.read"], risks: ["read", "external"], configuration: ["CONNECTOR_VAULT_KEY"] }, () => availability.github);
   add({ id: "connector.google", name: "Google", description: "Drive, Gmail and Calendar access through an encrypted connector.", kind: "connector", capabilities: ["calendar.read", "drive.read", "gmail.read"], risks: ["read", "external"], configuration: ["CONNECTOR_VAULT_KEY"] }, () => availability.google);
   add({ id: "connector.mcp", name: "Model Context Protocol", description: "Connect approved MCP servers and expose their tools to Barlas.", kind: "connector", capabilities: ["tools.discover", "tools.execute"], risks: ["external", "write"], configuration: ["CONNECTOR_VAULT_KEY"] }, () => availability.mcp);

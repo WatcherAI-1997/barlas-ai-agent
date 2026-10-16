@@ -10,7 +10,9 @@ export interface AgentRunRecord {
   status: AgentRunStatus;
   messages: AgentMessage[];
   conversationMessages: AgentMessage[];
-  delivery?: { channel: "telegram"; chatId: number; voice?: boolean } | { channel: "discord" | "slack"; channelId: string };
+  delivery?: { channel: "telegram"; chatId: number; voice?: boolean }
+    | { channel: "discord" | "slack"; channelId: string }
+    | { channel: "whatsapp"; recipientId: string };
   taskClass: "fast" | "deep" | "private";
   allowedTools?: string[];
   maxSteps: number;

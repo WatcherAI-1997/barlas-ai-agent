@@ -15,12 +15,14 @@ $AllowedKeys = @(
     "PORT", "BARLAS_HTTP_PORT", "OWNER_EMAIL", "OWNER_DISPLAY_NAME", "OWNER_LANGUAGE",
     "MODEL_PROVIDER", "MODEL_NAME", "MODEL_API_KEY", "MODEL_BASE_URL", "OLLAMA_BASE_URL", "DEEP_MODEL_NAME", "MEDIA_API_KEY", "VISION_MODEL",
     "TRANSCRIPTION_MODEL", "SPEECH_MODEL", "DEFAULT_SPEECH_VOICE", "EMBEDDING_MODEL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET",
-    "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED", "AGENT_MAX_STEPS", "AGENT_MAX_TOTAL_TOKENS", "AGENT_MAX_OUTPUT_TOKENS_PER_STEP",
+    "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED",
+    "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_GRAPH_API_BASE_URL",
+    "AGENT_MAX_STEPS", "AGENT_MAX_TOTAL_TOKENS", "AGENT_MAX_OUTPUT_TOKENS_PER_STEP",
     "DAILY_CHAT_QUOTA", "DAILY_TOOL_QUOTA", "DAILY_JOB_QUOTA", "AGENT_NAME", "AGENT_STYLE", "AGENT_INSTRUCTIONS",
     "JOB_WORKER_ENABLED", "AGENT_RUN_WORKER_ENABLED", "SESSION_TTL_HOURS", "MAX_WORKSPACE_FILE_BYTES",
     "BROWSER_WS_ENDPOINT", "SEARXNG_BASE_URL", "LOG_LEVEL", "TELEGRAM_BOT_API_BASE_URL", "TELEGRAM_MAX_UPLOAD_BYTES"
 )
-$SecretKeys = @("MODEL_API_KEY", "MEDIA_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "DISCORD_BOT_TOKEN", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "BARLAS_API_TOKEN", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY")
+$SecretKeys = @("MODEL_API_KEY", "MEDIA_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "DISCORD_BOT_TOKEN", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "BARLAS_API_TOKEN", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY")
 
 function Unquote-Value([string]$Raw) {
     if ($Raw.Length -ge 2 -and $Raw[0] -eq "'" -and $Raw[$Raw.Length - 1] -eq "'") { return $Raw.Substring(1, $Raw.Length - 2).Replace("\'", "'") }
@@ -315,6 +317,24 @@ function Configure-Channels {
     } elseif ($SlackChoice -eq "disable") {
         foreach ($Name in @("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED")) { $Settings.Remove($Name) }
     }
+    $WhatsAppConfigured = (Current "WHATSAPP_ACCESS_TOKEN") -and (Current "WHATSAPP_PHONE_NUMBER_ID") -and (Current "WHATSAPP_APP_SECRET")
+    Write-Host "WhatsApp: $(if ($WhatsAppConfigured) { 'configured (Cloud API)' } else { 'disabled' })"
+    $WhatsAppChoice = Read-MappedChoice "WhatsApp" @("keep", "configure", "disable") @("Keep current setting", "Connect or replace Cloud API", "Disable WhatsApp") "keep"
+    if ($WhatsAppChoice -eq "configure") {
+        $AccessToken = Read-Secret "WhatsApp permanent access token"
+        $PhoneNumberId = Read-ValidatedPlain "WhatsApp phone number ID" (Current "WHATSAPP_PHONE_NUMBER_ID") { param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and ([string]$Value).Length -le 64 } "Phone number ID is required."
+        $VerifyToken = Read-Secret "WhatsApp webhook verify token (same value used in the provider dashboard)"
+        $AppSecret = Read-Secret "WhatsApp app secret"
+        if ($AccessToken.Length -lt 20 -or $VerifyToken.Length -lt 16 -or $AppSecret.Length -lt 16) { throw "WhatsApp credentials are invalid" }
+        Set-Value "WHATSAPP_ACCESS_TOKEN" $AccessToken
+        Set-Value "WHATSAPP_PHONE_NUMBER_ID" $PhoneNumberId
+        Set-Value "WHATSAPP_VERIFY_TOKEN" $VerifyToken
+        Set-Value "WHATSAPP_APP_SECRET" $AppSecret
+        Set-Value "WHATSAPP_GRAPH_API_BASE_URL" (Read-ValidatedPlain "WhatsApp Graph API version root" (Current "WHATSAPP_GRAPH_API_BASE_URL" "https://graph.facebook.com/v23.0") { param($Value) [Uri]::IsWellFormedUriString([string]$Value, [UriKind]::Absolute) -and ([Uri]$Value).Scheme -eq "https" } "Enter a valid HTTPS URL.")
+        Write-Host "Configure the public HTTPS callback as /channels/whatsapp/webhook." -ForegroundColor DarkGray
+    } elseif ($WhatsAppChoice -eq "disable") {
+        foreach ($Name in @("WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_GRAPH_API_BASE_URL")) { $Settings.Remove($Name) }
+    }
 }
 function Configure-Integrations {
     Write-Step 7 10 "Integrations and skills"
@@ -349,7 +369,7 @@ function Apply-Profile([string]$SelectedProfile) {
     } elseif ($SelectedProfile -eq "private") {
         Set-Value "MODEL_PROVIDER" "ollama"; Set-Value "MODEL_API_KEY" ""; Set-Value "MEDIA_API_KEY" ""
         Set-Value "OLLAMA_BASE_URL" (Current "OLLAMA_BASE_URL" "http://127.0.0.1:11434")
-        foreach ($Name in @("TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED")) { $Settings.Remove($Name) }
+        foreach ($Name in @("TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_GRAPH_API_BASE_URL")) { $Settings.Remove($Name) }
     } elseif ($SelectedProfile -eq "developer") {
         Set-Value "AGENT_MAX_STEPS" "12"; Set-Value "AGENT_MAX_TOTAL_TOKENS" "100000"
         Set-Value "JOB_WORKER_ENABLED" "true"; Set-Value "AGENT_RUN_WORKER_ENABLED" "true"
@@ -397,6 +417,9 @@ if ($Action -eq "validate") {
     }
     if ((Current "MODEL_PROVIDER") -notin @("ollama", "codex_cli") -and [string]::IsNullOrWhiteSpace((Current "MODEL_API_KEY"))) { $Problems += "MODEL_API_KEY is missing" }
     if ((Current "MODEL_PROVIDER") -eq "openai_compatible" -and [string]::IsNullOrWhiteSpace((Current "MODEL_BASE_URL"))) { $Problems += "MODEL_BASE_URL is missing" }
+    $WhatsAppFields = @((Current "WHATSAPP_ACCESS_TOKEN"), (Current "WHATSAPP_PHONE_NUMBER_ID"), (Current "WHATSAPP_VERIFY_TOKEN"), (Current "WHATSAPP_APP_SECRET"))
+    $WhatsAppConfigured = @($WhatsAppFields | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+    if ($WhatsAppConfigured -ne 0 -and $WhatsAppConfigured -ne 4) { $Problems += "All WhatsApp settings must be configured together" }
     if ((Current "BARLAS_GATEWAY_TOKEN").Length -lt 32) { $Problems += "BARLAS_GATEWAY_TOKEN is too short" }
     if ((Current "AGENT_NAME" "Barlas").Length -gt 80) { $Problems += "AGENT_NAME is too long" }
     if ((Current "AGENT_STYLE" "balanced") -notin @("balanced", "concise", "warm", "analytical", "creative")) { $Problems += "AGENT_STYLE is invalid" }
@@ -450,6 +473,7 @@ if ($Action -eq "channels-status") {
     Write-Output "Telegram: $(if (Current 'TELEGRAM_BOT_TOKEN') { 'configured (long polling)' } else { 'disabled' })"
     Write-Output "Discord: $(if (Current 'DISCORD_BOT_TOKEN') { 'configured (Gateway)' } else { 'disabled' })"
     Write-Output "Slack: $(if ((Current 'SLACK_BOT_TOKEN') -and (Current 'SLACK_APP_TOKEN')) { 'configured (Socket Mode)' } else { 'disabled' })"
+    Write-Output "WhatsApp: $(if ((Current 'WHATSAPP_ACCESS_TOKEN') -and (Current 'WHATSAPP_PHONE_NUMBER_ID')) { 'configured (signed webhook)' } else { 'disabled' })"
     return
 }
 if ($Action -eq "security-audit") {
@@ -506,5 +530,6 @@ Write-Host "  Memory:        $(if (Current 'EMBEDDING_MODEL') { 'semantic' } els
 Write-Host "  Telegram:      $(if (Current 'TELEGRAM_BOT_TOKEN') { 'configured' } else { 'disabled' })"
 Write-Host "  Discord:       $(if (Current 'DISCORD_BOT_TOKEN') { 'configured' } else { 'disabled' })"
 Write-Host "  Slack:         $(if ((Current 'SLACK_BOT_TOKEN') -and (Current 'SLACK_APP_TOKEN')) { 'configured' } else { 'disabled' })"
+Write-Host "  WhatsApp:      $(if ((Current 'WHATSAPP_ACCESS_TOKEN') -and (Current 'WHATSAPP_PHONE_NUMBER_ID')) { 'configured' } else { 'disabled' })"
 Write-Host "`n[OK] Configuration saved securely" -ForegroundColor Green
 Write-Host "The gateway will restart and run final diagnostics." -ForegroundColor DarkGray

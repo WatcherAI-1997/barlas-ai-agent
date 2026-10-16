@@ -270,6 +270,7 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     $AgentName = "Barlas"; $AgentStyle = "balanced"; $AgentInstructions = ""
     $EmbeddingModel = ""; $DefaultVoice = "alloy"; $BrowserEndpoint = "local://chromium"
     $DiscordBotToken = ""; $SlackBotToken = ""; $SlackAppToken = ""
+    $WhatsAppAccessToken = ""; $WhatsAppPhoneNumberId = ""; $WhatsAppVerifyToken = ""; $WhatsAppAppSecret = ""
     $AgentMaxSteps = "8"; $AgentMaxTokens = "50000"; $DailyChatQuota = "500"; $DailyToolQuota = "1000"; $DailyJobQuota = "100"
     $MaxWorkspaceFileBytes = "2000000000"; $SessionTtlHours = "168"; $LogLevel = "info"
     if ($SetupMode -eq "complete") {
@@ -297,6 +298,14 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
         if ($SlackChoice -eq "configure") {
             $SlackBotToken = Read-Value "SLACK_BOT_TOKEN" "Slack bot token (xoxb-...)" "" -Secret
             $SlackAppToken = Read-Value "SLACK_APP_TOKEN" "Slack app token (xapp-...)" "" -Secret
+        }
+        $WhatsAppChoice = Read-MenuChoice "BARLAS_WHATSAPP_SETUP" "WhatsApp" @("skip", "configure") @("Skip for now", "Connect through Cloud API signed webhooks") "skip"
+        if ($WhatsAppChoice -eq "configure") {
+            $WhatsAppAccessToken = Read-Value "WHATSAPP_ACCESS_TOKEN" "WhatsApp permanent access token" "" -Secret
+            $WhatsAppPhoneNumberId = Read-Value "WHATSAPP_PHONE_NUMBER_ID" "WhatsApp phone number ID" ""
+            $WhatsAppVerifyToken = Read-Value "WHATSAPP_VERIFY_TOKEN" "Webhook verify token (same value used in the provider dashboard)" "" -Secret
+            $WhatsAppAppSecret = Read-Value "WHATSAPP_APP_SECRET" "WhatsApp app secret" "" -Secret
+            if ($WhatsAppAccessToken.Length -lt 20 -or [string]::IsNullOrWhiteSpace($WhatsAppPhoneNumberId) -or $WhatsAppVerifyToken.Length -lt 16 -or $WhatsAppAppSecret.Length -lt 16) { throw "WhatsApp credentials are invalid" }
         }
 
         Write-Host "`nAUTOMATION AND SAFETY" -ForegroundColor White
@@ -337,6 +346,13 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     if ($DiscordBotToken) { $Settings["DISCORD_BOT_TOKEN"] = $DiscordBotToken; $Settings["DISCORD_GATEWAY_ENABLED"] = "true" }
     if ($SlackBotToken -and $SlackAppToken) {
         $Settings["SLACK_BOT_TOKEN"] = $SlackBotToken; $Settings["SLACK_APP_TOKEN"] = $SlackAppToken; $Settings["SLACK_SOCKET_MODE_ENABLED"] = "true"
+    }
+    if ($WhatsAppAccessToken -and $WhatsAppPhoneNumberId -and $WhatsAppVerifyToken -and $WhatsAppAppSecret) {
+        $Settings["WHATSAPP_ACCESS_TOKEN"] = $WhatsAppAccessToken
+        $Settings["WHATSAPP_PHONE_NUMBER_ID"] = $WhatsAppPhoneNumberId
+        $Settings["WHATSAPP_VERIFY_TOKEN"] = $WhatsAppVerifyToken
+        $Settings["WHATSAPP_APP_SECRET"] = $WhatsAppAppSecret
+        $Settings["WHATSAPP_GRAPH_API_BASE_URL"] = "https://graph.facebook.com/v23.0"
     }
     foreach ($Pair in $Settings.GetEnumerator()) {
         if (([string]$Pair.Value).Contains("`r") -or ([string]$Pair.Value).Contains("`n")) { throw "$($Pair.Key) must be a single line" }

@@ -63,4 +63,15 @@ describe("Barlas configuration", () => {
       SLACK_BOT_TOKEN: "xoxb-" + "b".repeat(24), SLACK_APP_TOKEN: "xapp-" + "a".repeat(24),
     })).toMatchObject({ SLACK_SOCKET_MODE_ENABLED: true });
   });
+
+  it("requires a complete WhatsApp Cloud API credential set", () => {
+    expect(() => loadConfig({ ...base, WHATSAPP_ACCESS_TOKEN: "w".repeat(24) })).toThrow(/All WhatsApp/u);
+    expect(loadConfig({
+      ...base,
+      WHATSAPP_ACCESS_TOKEN: "w".repeat(24),
+      WHATSAPP_PHONE_NUMBER_ID: "123456789",
+      WHATSAPP_VERIFY_TOKEN: "v".repeat(16),
+      WHATSAPP_APP_SECRET: "s".repeat(16),
+    })).toMatchObject({ WHATSAPP_PHONE_NUMBER_ID: "123456789" });
+  });
 });
