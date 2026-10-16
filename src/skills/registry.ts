@@ -63,7 +63,7 @@ export function createBuiltinSkillRegistry(): SkillRegistry {
     version: "1.0.0",
     description: "Extract verified findings, uncertainties, and sources from supplied context.",
     instructions: "Separate facts from assumptions. Preserve source references. State uncertainty explicitly.",
-    allowedTools: ["files.read", "files.list", "web.search"],
+    allowedTools: ["files.read", "files.list", "web.search", "agent.delegate"],
   });
   registry.register({
     id: "writing.brief",
@@ -77,7 +77,7 @@ export function createBuiltinSkillRegistry(): SkillRegistry {
     version: "1.0.0",
     description: "Produce an ordered implementation plan with checks and rollback points.",
     instructions: "Use bounded steps, identify dependencies and risks, and include objective verification criteria.",
-    allowedTools: ["files.read", "files.list"],
+    allowedTools: ["files.read", "files.list", "agent.delegate"],
   });
   return registry;
 }

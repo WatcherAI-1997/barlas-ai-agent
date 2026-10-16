@@ -21,7 +21,7 @@
 - Durable run checkpoints, approval continuation, recovery, cancellation, and step journal. *(implemented)*
 - Asynchronous leased agent-run queue, live progress polling, and Telegram result delivery. *(implemented)*
 - Durable long-running job storage and schedules. *(worker, leases, retries implemented)*
-- Isolated subagents and resumable workflows. *(bounded dependency workflows with up to three parallel subagents implemented)*
+- Isolated subagents and resumable workflows. *(bounded dependency workflows plus model-initiated delegation to up to three parallel, tool-free, non-recursive subagents implemented)*
 - Versioned skills with evaluation and rollback. *(persistent owner-installed candidates, bounded automated acceptance evaluation, activation gate, exact selection, tool-permission enforcement, and rollback implemented)*
 - Approval queue and audit trail. *(foundation implemented)*
 - Execution traces and per-user quotas. *(implemented foundation)*

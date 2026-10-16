@@ -8,6 +8,7 @@ import { ConnectorService, ConnectorVault } from "./connectors/vault.js";
 import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
 import { AgentLoop } from "./core/agent-loop.js";
+import { SubagentCoordinator } from "./core/subagents.js";
 import { PersistentAgentRuntime } from "./runs/runtime.js";
 import { AgentRunWorker } from "./runs/worker.js";
 import { RuntimeGovernance } from "./governance/runtime.js";
@@ -81,6 +82,7 @@ const memory = new SemanticMemory(
 );
 const organizations = new OrganizationService(database);
 const skillRegistry = createBuiltinSkillRegistry();
+const subagentCoordinator = new SubagentCoordinator(modelProvider);
 const governance = new RuntimeGovernance(database, {
   chat: config.DAILY_CHAT_QUOTA,
   tool: config.DAILY_TOOL_QUOTA,
@@ -90,6 +92,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   workspaceRoot: config.WORKSPACE_ROOT,
   ...(config.SEARXNG_BASE_URL ? { searxngBaseUrl: config.SEARXNG_BASE_URL } : {}),
   ...(config.BROWSER_WS_ENDPOINT ? { managedBrowser: new ManagedBrowser(config.BROWSER_WS_ENDPOINT) } : {}),
+  subagentCoordinator,
   ...(githubConnector ? { githubConnector } : {}),
   ...(googleConnector ? { googleConnector } : {}),
 }), database, governance);

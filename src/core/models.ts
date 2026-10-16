@@ -10,6 +10,7 @@ export interface GenerateRequest {
   userId: string;
   conversationId: string;
   taskClass?: "fast" | "deep" | "private";
+  maxOutputTokens?: number;
 }
 
 export interface GenerateResult {
@@ -38,7 +39,6 @@ export interface ModelToolOutput {
 
 export interface GenerateToolRequest extends GenerateRequest {
   tools: ModelTool[];
-  maxOutputTokens?: number;
   previousResponseId?: string;
   toolOutputs?: ModelToolOutput[];
 }

@@ -58,5 +58,14 @@ for (const required of ["latest evaluation", "validateTools", "1 to 5 cases", "w
     throw new Error(`Skill activation safety check is missing: ${required}`);
   }
 }
+const subagents = await readFile("src/core/subagents.ts", "utf8");
+for (const required of [
+  "MAX_SUBAGENTS = 3",
+  "maxOutputTokens: 2_048",
+  "You have no tools, cannot delegate",
+  "Promise.all",
+]) {
+  if (!subagents.includes(required)) throw new Error(`Subagent boundary is missing: ${required}`);
+}
 
 console.log(`Barlas AI Agent security baseline passed for ${textFiles.length} repository text files.`);

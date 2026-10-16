@@ -7,6 +7,7 @@ import { SearxngSearchClient } from "./web-search.js";
 import { SafeWebReader } from "./safe-web.js";
 import { DocumentReader, DocumentWriter } from "./documents.js";
 import type { ManagedBrowser } from "./managed-browser.js";
+import type { SubagentCoordinator } from "../core/subagents.js";
 import type { GitHubConnector } from "../connectors/github.js";
 import type { GoogleConnector } from "../connectors/google.js";
 
@@ -16,6 +17,7 @@ export function createBuiltinToolRegistry(options: {
   githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
   googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
   managedBrowser?: Pick<ManagedBrowser, "run">;
+  subagentCoordinator?: Pick<SubagentCoordinator, "delegate">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
@@ -141,6 +143,31 @@ export function createBuiltinToolRegistry(options: {
     inputSchema: z.object({ url: z.string().url().max(2_000) }).strict(),
     execute: async (input) => webReader.open((input as { url: string }).url),
   });
+
+  if (options.subagentCoordinator) {
+    registry.register({
+      name: "agent.delegate",
+      description: "Run up to three independent analytical subagents in parallel, without tools or recursive delegation, and return their bounded findings.",
+      risk: "read",
+      inputSchema: z.object({
+        objective: z.string().min(1).max(20_000),
+        taskClass: z.enum(["fast", "deep", "private"]).default("deep"),
+        tasks: z.array(z.object({
+          name: z.string().min(1).max(100),
+          instruction: z.string().min(1).max(10_000),
+          context: z.string().max(30_000).optional(),
+        }).strict()).min(1).max(3),
+      }).strict(),
+      execute: async (input, context) => options.subagentCoordinator!.delegate({
+        userId: context.userId,
+        ...(input as {
+          objective: string;
+          taskClass: "fast" | "deep" | "private";
+          tasks: Array<{ name: string; instruction: string; context?: string }>;
+        }),
+      }),
+    });
+  }
 
   if (options.managedBrowser) {
     const actionSchema = z.discriminatedUnion("type", [

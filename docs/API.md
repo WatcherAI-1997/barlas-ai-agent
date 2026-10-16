@@ -246,6 +246,13 @@ store assertion details rather than full model output, and are audited. Only
 one version per skill ID can be active; prior versions remain available for an
 evaluated rollback.
 
+The built-in `agent.delegate` tool lets the parent autonomous loop create one
+to three independent analytical subagents in parallel. Delegates receive an
+objective, one named assignment, and optional bounded context. They have no
+tools, cannot recursively delegate, cannot claim external actions, and each
+response is capped at 2,048 output tokens and 30,000 characters. Usage is
+aggregated and returned to the parent with the findings.
+
 Queued runs are leased with PostgreSQL `FOR UPDATE SKIP LOCKED`. A worker crash
 leaves a recoverable lease; after its timeout another worker may claim the run.
 Retries are bounded and use exponential delay. The original visible messages

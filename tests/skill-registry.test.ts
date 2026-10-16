@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { SkillRegistry } from "../src/skills/registry.js";
+import { createBuiltinToolRegistry } from "../src/tools/builtins.js";
 
 describe("versioned skill registry", () => {
   it("keeps multiple versions and can activate an earlier safe version", () => {
@@ -13,5 +14,15 @@ describe("versioned skill registry", () => {
     expect(registry.activate("writing.test", "1.0.0").version).toBe("1.0.0");
     expect(registry.get("writing.test").version).toBe("1.0.0");
     expect(registry.list()).toHaveLength(2);
+  });
+});
+
+describe("subagent tool registration", () => {
+  it("exposes bounded delegation only when a coordinator is configured", () => {
+    expect(createBuiltinToolRegistry().list().some((tool) => tool.name === "agent.delegate")).toBe(false);
+    const registry = createBuiltinToolRegistry({
+      subagentCoordinator: { delegate: async () => ({ objective: "x", results: [], usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 } }) },
+    });
+    expect(registry.list()).toContainEqual(expect.objectContaining({ name: "agent.delegate", risk: "read" }));
   });
 });

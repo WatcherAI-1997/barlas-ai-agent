@@ -39,6 +39,7 @@ export class OpenAIProvider implements ToolCapableModelProvider {
         user_id: request.userId,
         conversation_id: request.conversationId,
       },
+      ...(request.maxOutputTokens ? { max_output_tokens: request.maxOutputTokens } : {}),
     });
 
     const usage = this.mapUsage(response.usage);

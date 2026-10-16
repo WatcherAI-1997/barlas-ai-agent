@@ -31,6 +31,9 @@ autonomy.
 - Managed workflows contain at most six sequential subagent steps. A step can
   consume the previous result but cannot recursively create more subagents or
   claim that it performed external actions.
+- During an autonomous run the parent model may delegate up to three independent
+  analytical tasks in parallel. Delegates receive only supplied context, have
+  no tools or recursive delegation, use bounded output, and return usage totals.
 - Web search uses a separately configured open-source SearXNG endpoint. It is
   disabled by default and remains subject to the external-action approval gate.
 - Interactive JavaScript browsing runs in a separate Playwright container with
