@@ -149,6 +149,8 @@ try {
     Write-Host "              approve an action"
     Write-Host "  barlas help" -ForegroundColor Cyan -NoNewline
     Write-Host "                    all commands"
+    Write-Host "  barlas update" -ForegroundColor Cyan -NoNewline
+    Write-Host "                  update Barlas"
     Write-Host ""
     Write-Host "Start now: barlas" -ForegroundColor Green
     if (Test-Path -LiteralPath $PreviousDir) { Write-Host "Previous application source is preserved at: $PreviousDir" -ForegroundColor DarkGray }

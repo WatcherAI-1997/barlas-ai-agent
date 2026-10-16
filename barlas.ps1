@@ -21,6 +21,33 @@ function Read-Setting([string]$Path, [string]$Name) {
 if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
     $NodeExe = Join-Path $BarlasHome "runtime\node\node.exe"
     if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) { throw "Barlas native runtime is missing. Run the one-line installer again." }
+    $LocalCommand = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    if ($LocalCommand -in @("start", "stop", "restart")) {
+        if ($LocalCommand -in @("stop", "restart")) { & (Join-Path $RootDir "scripts\stop-native.ps1") }
+        if ($LocalCommand -in @("start", "restart")) { & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady }
+        exit 0
+    }
+    if ($LocalCommand -eq "dashboard") {
+        $DashboardUrl = & (Join-Path $RootDir "scripts\dashboard-url.ps1")
+        Start-Process ([string]$DashboardUrl).Trim()
+        Write-Host "Barlas dashboard opened."
+        exit 0
+    }
+    if ($LocalCommand -eq "logs") {
+        $LogFile = Join-Path $BarlasHome "logs\native.out.log"
+        if (-not (Test-Path -LiteralPath $LogFile -PathType Leaf)) { throw "Barlas log is not available yet." }
+        if ($Arguments -contains "--follow") { Get-Content -LiteralPath $LogFile -Tail 100 -Wait }
+        else { Get-Content -LiteralPath $LogFile -Tail 100 }
+        exit 0
+    }
+    if ($LocalCommand -eq "update") {
+        $UpdateScript = Join-Path ([IO.Path]::GetTempPath()) ("barlas-update-" + [Guid]::NewGuid().ToString("N") + ".ps1")
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-windows.ps1" -OutFile $UpdateScript
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $UpdateScript
+            exit $LASTEXITCODE
+        } finally { Remove-Item -LiteralPath $UpdateScript -Force -ErrorAction SilentlyContinue }
+    }
     $Port = Read-Setting $NativeEnvFile "PORT"
     $Token = Read-Setting $NativeEnvFile "BARLAS_GATEWAY_TOKEN"
     $env:BARLAS_URL = "http://127.0.0.1:$Port"

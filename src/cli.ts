@@ -54,6 +54,7 @@ export function renderRows(rows: JsonObject[], fields: string[]): string {
 interface CliContext {
   api: BarlasApiClient;
   userId: string;
+  baseUrl: string;
 }
 
 async function context(): Promise<CliContext> {
@@ -62,7 +63,7 @@ async function context(): Promise<CliContext> {
   if (!token) throw new Error("BARLAS_TOKEN or a protected Barlas service token is required");
   const api = new BarlasApiClient(url, token);
   const me = await api.request<{ principal: { id: string } }>("/v1/me");
-  return { api, userId: me.principal.id };
+  return { api, userId: me.principal.id, baseUrl: url };
 }
 
 async function status(ctx: CliContext): Promise<void> {
@@ -98,6 +99,60 @@ async function extensions(ctx: CliContext): Promise<void> {
 async function nodes(ctx: CliContext): Promise<void> {
   const result = await ctx.api.request<{ nodes: JsonObject[] }>(`/v1/nodes?userId=${encodeURIComponent(ctx.userId)}`);
   output.write(`${renderRows(result.nodes, ["id", "name", "platform", "capabilities", "lastSeenAt", "revokedAt"])}\n`);
+}
+
+async function catalog(ctx: CliContext, kind?: string): Promise<void> {
+  const result = await ctx.api.request<{ extensions: JsonObject[] }>("/v1/extensions");
+  const rows = kind ? result.extensions.filter((item) => value(item.kind) === kind) : result.extensions;
+  output.write(`${renderRows(rows, ["id", "kind", "configured", "capabilities"])}\n`);
+}
+
+async function skills(ctx: CliContext): Promise<void> {
+  const result = await ctx.api.request<{ skills: JsonObject[] }>("/v1/skills");
+  output.write(`${renderRows(result.skills, ["id", "version", "name", "active", "allowedTools"])}\n`);
+}
+
+async function tools(ctx: CliContext): Promise<void> {
+  const result = await ctx.api.request<{ tools: JsonObject[] }>("/v1/tools");
+  output.write(`${renderRows(result.tools, ["name", "risk", "description"])}\n`);
+}
+
+async function sessions(ctx: CliContext): Promise<void> {
+  const result = await ctx.api.request<{ conversations: JsonObject[] }>(
+    `/v1/conversations?userId=${encodeURIComponent(ctx.userId)}&limit=25`,
+  );
+  output.write(`${renderRows(result.conversations, ["id", "title", "updatedAt", "createdAt"])}\n`);
+}
+
+async function memorySearch(ctx: CliContext, query: string): Promise<void> {
+  if (!query) throw new Error("Укажите поисковый запрос");
+  const result = await ctx.api.request<{ memories: JsonObject[] }>(
+    `/v1/memory/search?userId=${encodeURIComponent(ctx.userId)}&query=${encodeURIComponent(query)}&limit=20`,
+  );
+  output.write(`${renderRows(result.memories, ["id", "kind", "content", "createdAt"])}\n`);
+}
+
+async function audit(ctx: CliContext): Promise<void> {
+  const result = await ctx.api.request<{ traces: JsonObject[] }>(
+    `/v1/traces?userId=${encodeURIComponent(ctx.userId)}&limit=25`,
+  );
+  output.write(`${renderRows(result.traces, ["traceId", "operation", "status", "createdAt"])}\n`);
+}
+
+async function doctor(ctx: CliContext): Promise<void> {
+  const [health, ready] = await Promise.all([
+    ctx.api.request<{ status: string }>("/health"),
+    ctx.api.request<{ status: string }>("/ready"),
+  ]);
+  output.write(`API: ${health.status}\nRuntime: ${ready.status}\nGateway: authenticated\nURL: ${ctx.baseUrl}\n`);
+}
+
+async function action(ctx: CliContext, resource: "agent-runs" | "jobs" | "schedules", id: string, verb: string): Promise<void> {
+  if (!id) throw new Error("Укажите ID");
+  const result = await ctx.api.request<JsonObject>(`/v1/${resource}/${encodeURIComponent(id)}/${verb}`, {
+    method: "POST", body: JSON.stringify({ userId: ctx.userId }),
+  });
+  output.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
 async function nodePairingCode(ctx: CliContext): Promise<void> {
@@ -150,7 +205,7 @@ async function ask(ctx: CliContext, prompt: string): Promise<void> {
 }
 
 function help(): void {
-  output.write(`Barlas CLI\n\nКоманды:\n  tui                     интерактивный терминал\n  ask <запрос>            автономная задача\n  status                  состояние и метрики\n  runs                    последние запуски\n  approvals               очередь подтверждений\n  approve <id>            разрешить действие\n  reject <id>             отклонить действие\n  jobs                    фоновые задачи\n  projects                проекты\n  schedules               расписания\n  extensions              каталог расширений\n  nodes                   подключённые устройства\n  node-pair               одноразовый код подключения\n  help                    эта справка\n`);
+  output.write(`Barlas CLI — команды в стиле OpenClaw\n\nАгент:\n  chat | tui | terminal             интерактивный чат\n  agent <запрос> | ask <запрос>     автономная задача\n  status | health | doctor          состояние и диагностика\n  dashboard                         открыть кабинет (Windows)\n\nРабота:\n  runs                              последние запуски\n  runs cancel <id>                  отменить запуск\n  jobs                              фоновые задачи\n  jobs cancel|retry <id>            управление задачей\n  tasks                             запуски и фоновые задачи\n  cron | schedules                  расписания\n  cron pause|resume|disable <id>    управление расписанием\n  approvals                         подтверждения\n  approve|reject <id>               принять или отклонить\n  projects                          проекты\n\nЗнания и расширения:\n  memory search <запрос>            поиск памяти\n  sessions | transcripts            диалоги\n  skills                            установленные навыки\n  plugins | extensions              расширения\n  models                            провайдеры моделей\n  channels                          каналы связи\n  tools                             доступные инструменты\n  nodes | devices                   подключённые устройства\n  node-pair                         код подключения\n  audit                             журнал действий\n\nСистема Windows:\n  start | stop | restart            управление Barlas\n  logs                              последние логи\n  update                            обновление\n  help                              эта справка\n`);
 }
 
 async function tui(ctx: CliContext): Promise<void> {
@@ -180,13 +235,29 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   const command = args[0] ?? (process.stdin.isTTY ? "tui" : "help");
   if (["help", "--help", "-h"].includes(command)) { help(); return; }
   const ctx = await context();
-  if (command === "tui") return tui(ctx);
-  if (command === "ask") return ask(ctx, args.slice(1).join(" ").trim() || (() => { throw new Error("Укажите запрос"); })());
+  if (["tui", "chat", "terminal"].includes(command)) return tui(ctx);
+  if (["ask", "agent"].includes(command)) return ask(ctx, args.slice(1).join(" ").trim() || (() => { throw new Error("Укажите запрос"); })());
   if (command === "status") return status(ctx);
+  if (["health", "doctor"].includes(command)) return doctor(ctx);
   if (command === "extensions") return extensions(ctx);
-  if (command === "nodes") return nodes(ctx);
+  if (["plugins"].includes(command)) return catalog(ctx);
+  if (command === "models") return catalog(ctx, "provider");
+  if (command === "channels") return catalog(ctx, "channel");
+  if (command === "skills") return skills(ctx);
+  if (command === "tools") return tools(ctx);
+  if (["sessions", "transcripts"].includes(command)) return sessions(ctx);
+  if (command === "memory" && args[1] === "search") return memorySearch(ctx, args.slice(2).join(" ").trim());
+  if (command === "audit") return audit(ctx);
+  if (["nodes", "devices"].includes(command)) return nodes(ctx);
   if (command === "node-pair") return nodePairingCode(ctx);
+  if (command === "runs" && args[1] === "cancel") return action(ctx, "agent-runs", args[2] ?? "", "cancel");
   if (command === "runs") return list(ctx, "agent-runs");
+  if (command === "jobs" && ["cancel", "retry"].includes(args[1] ?? "")) return action(ctx, "jobs", args[2] ?? "", args[1]!);
+  if (["cron", "schedules"].includes(command) && ["pause", "resume", "disable"].includes(args[1] ?? "")) {
+    return action(ctx, "schedules", args[2] ?? "", args[1]!);
+  }
+  if (["cron", "schedules"].includes(command)) return list(ctx, "schedules");
+  if (command === "tasks") { await list(ctx, "agent-runs"); return list(ctx, "jobs"); }
   if (["approvals", "jobs", "projects", "schedules"].includes(command)) return list(ctx, command as "approvals" | "jobs" | "projects" | "schedules");
   if (command === "approve" || command === "reject") {
     if (!args[1]) throw new Error("Укажите ID подтверждения");
