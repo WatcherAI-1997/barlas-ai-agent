@@ -232,6 +232,53 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("continues a saved conversation without duplicating client-supplied history", async () => {
+    const deps = dependencies();
+    const conversationId = "00000000-0000-4000-8000-000000000099";
+    deps.database.getConversation.mockResolvedValue({
+      id: conversationId,
+      title: "Remember the name",
+      messageCount: 2,
+      lastMessage: "Your name is Arman",
+      createdAt: "2026-10-16T00:00:00.000Z",
+      updatedAt: "2026-10-16T00:00:01.000Z",
+      messages: [
+        { id: "1", role: "user", content: "My name is Arman", createdAt: "2026-10-16T00:00:00.000Z" },
+        { id: "2", role: "assistant", content: "Your name is Arman", createdAt: "2026-10-16T00:00:01.000Z" },
+      ],
+    } as never);
+    const app = await buildApp({ apiToken, ...deps });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/chat",
+      headers: { authorization: `Bearer ${apiToken}` },
+      payload: {
+        userId: "user-1",
+        conversationId,
+        messages: [
+          { role: "user", content: "My name is Arman" },
+          { role: "assistant", content: "Your name is Arman" },
+          { role: "user", content: "What is my name?" },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(deps.modelProvider.generate).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId,
+      messages: [
+        { role: "user", content: "My name is Arman" },
+        { role: "assistant", content: "Your name is Arman" },
+        { role: "user", content: "What is my name?" },
+      ],
+    }));
+    expect(deps.database.saveTurn).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId,
+      messages: [{ role: "user", content: "What is my name?" }],
+    }));
+    await app.close();
+  });
+
   it("runs the bounded autonomous agent loop", async () => {
     const deps = dependencies();
     const agentLoop = {
@@ -267,6 +314,58 @@ describe("Barlas AI Agent API", () => {
     });
     expect(agentLoop.run).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-1", maxSteps: 4 }));
     expect(deps.database.saveTurn).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("gives an autonomous follow-up the saved conversation context", async () => {
+    const deps = dependencies();
+    const conversationId = "00000000-0000-4000-8000-000000000098";
+    deps.database.getConversation.mockResolvedValue({
+      id: conversationId,
+      title: "Plan",
+      messageCount: 2,
+      lastMessage: "I will prepare it",
+      createdAt: "2026-10-16T00:00:00.000Z",
+      updatedAt: "2026-10-16T00:00:01.000Z",
+      messages: [
+        { id: "1", role: "user", content: "Prepare a plan", createdAt: "2026-10-16T00:00:00.000Z" },
+        { id: "2", role: "assistant", content: "I will prepare it", createdAt: "2026-10-16T00:00:01.000Z" },
+      ],
+    } as never);
+    const agentLoop = {
+      run: vi.fn(async () => ({
+        status: "completed" as const,
+        text: "Updated",
+        steps: 1,
+        toolExecutions: 0,
+        approvalIds: [],
+        result: { text: "Updated", provider: "test", model: "test-model" },
+      })),
+    };
+    const app = await buildApp({ apiToken, ...deps, agentLoop });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/agent/run",
+      headers: { authorization: `Bearer ${apiToken}` },
+      payload: {
+        userId: "user-1",
+        conversationId,
+        messages: [{ role: "user", content: "Now make it shorter" }],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(agentLoop.run).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId,
+      messages: expect.arrayContaining([
+        { role: "user", content: "Prepare a plan" },
+        { role: "assistant", content: "I will prepare it" },
+        { role: "user", content: "Now make it shorter" },
+      ]),
+    }));
+    expect(deps.database.saveTurn).toHaveBeenCalledWith(expect.objectContaining({
+      messages: [{ role: "user", content: "Now make it shorter" }],
+    }));
     await app.close();
   });
 

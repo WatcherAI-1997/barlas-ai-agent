@@ -78,6 +78,36 @@ const agentRunBodySchema = chatBodySchema.extend({
   path: ["skillVersion"],
 });
 
+type ChatMessage = z.infer<typeof chatBodySchema>["messages"][number];
+
+function sameMessage(left: ChatMessage, right: ChatMessage): boolean {
+  return left.role === right.role && left.content === right.content;
+}
+
+function mergeConversationMessages(history: ChatMessage[], incoming: ChatMessage[]): {
+  modelMessages: ChatMessage[];
+  newMessages: ChatMessage[];
+} {
+  const boundedHistory: ChatMessage[] = [];
+  let characters = 0;
+  for (const message of [...history].reverse()) {
+    if (boundedHistory.length >= 80 || characters + message.content.length > 80_000) break;
+    boundedHistory.unshift(message);
+    characters += message.content.length;
+  }
+
+  let overlap = Math.min(boundedHistory.length, incoming.length);
+  while (overlap > 0) {
+    const historyStart = boundedHistory.length - overlap;
+    if (incoming.slice(0, overlap).every((message, index) => (
+      sameMessage(message, boundedHistory[historyStart + index]!)
+    ))) break;
+    overlap -= 1;
+  }
+  const newMessages = incoming.slice(overlap);
+  return { modelMessages: [...boundedHistory, ...newMessages], newMessages };
+}
+
 const rememberBodySchema = z.object({
   userId: z.string().min(1).max(128),
   content: z.string().min(1).max(20_000),
@@ -1037,6 +1067,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       });
     }
     const conversationId = input.conversationId ?? randomUUID();
+    const existingConversation = input.conversationId
+      ? await dependencies.database.getConversation(input.userId, input.conversationId)
+      : null;
+    const conversation = mergeConversationMessages(
+      existingConversation?.messages.map(({ role, content }) => ({ role, content })) ?? [],
+      input.messages,
+    );
     const latestUserMessage = [...input.messages].reverse().find((message) => message.role === "user");
     const memories = latestUserMessage
       ? await memory.recall(input.userId, latestUserMessage.content, 5)
@@ -1055,14 +1092,14 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const result = await dependencies.modelProvider.generate({
         userId: input.userId,
         conversationId,
-        messages: [...languageContext, ...memoryContext, ...input.messages],
+        messages: [...languageContext, ...memoryContext, ...conversation.modelMessages],
         taskClass: input.taskClass,
       });
 
       await dependencies.database.saveTurn({
         userId: input.userId,
         conversationId,
-        messages: input.messages,
+        messages: conversation.newMessages,
         result,
       });
       if (traceId) {
@@ -1120,6 +1157,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const userId = authorizeUser(request, parsed.data.userId);
     await dependencies.governance?.consume(userId, "chat");
     const conversationId = parsed.data.conversationId ?? randomUUID();
+    const existingConversation = parsed.data.conversationId
+      ? await dependencies.database.getConversation(userId, parsed.data.conversationId)
+      : null;
+    const conversation = mergeConversationMessages(
+      existingConversation?.messages.map(({ role, content }) => ({ role, content })) ?? [],
+      parsed.data.messages,
+    );
     const latestUserMessage = [...parsed.data.messages].reverse().find((message) => message.role === "user");
     const memories = latestUserMessage
       ? await memory.recall(userId, latestUserMessage.content, 5)
@@ -1184,7 +1228,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const loopInput = {
         userId,
         conversationId,
-        messages: [...languageContext, ...projectContext, ...skillContext, ...memoryContext, ...parsed.data.messages],
+        messages: [...languageContext, ...projectContext, ...skillContext, ...memoryContext, ...conversation.modelMessages],
         taskClass: parsed.data.taskClass,
         maxSteps: parsed.data.maxSteps,
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
@@ -1193,7 +1237,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       if (dependencies.agentRuntime) {
         const run = await dependencies.agentRuntime.enqueue({
           ...loopInput,
-          conversationMessages: parsed.data.messages,
+          conversationMessages: conversation.newMessages,
         });
         if (parsed.data.projectId && dependencies.projects) {
           await dependencies.projects.attach(userId, parsed.data.projectId, "agent_run", run.id, latestUserMessage?.content.slice(0, 200) ?? "Agent run");
@@ -1220,7 +1264,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       await dependencies.database.saveTurn({
         userId,
         conversationId,
-        messages: parsed.data.messages,
+        messages: conversation.newMessages,
         result: result.result,
       });
       if (parsed.data.projectId && dependencies.projects) {

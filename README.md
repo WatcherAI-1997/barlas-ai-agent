@@ -112,6 +112,13 @@ Run `barlas onboard` for the full setup wizard, `barlas configure models` or
 to manage the local service. `barlas help` lists the complete OpenClaw-style
 command surface.
 
+`barlas` opens a continuous terminal conversation: replies share one stored
+context until `/new` is used. `/sessions` lists earlier conversations and
+`/use ID` resumes one. The same prompt accepts `/runs`, `/jobs`, `/cron`,
+`/memory QUERY`, `/skills`, `/plugins`, `/models`, `/channels`, `/tools`,
+`/nodes`, `/approvals`, `/approve ID`, `/reject ID`, and `/cancel RUN_ID`, so
+routine operation does not require leaving the chat.
+
 ### Linux
 
 For a local installation without a domain, DNS, Caddy, or public web exposure,

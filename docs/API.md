@@ -317,6 +317,14 @@ mutations remain disabled.
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.
 
+When `/v1/chat` or `/v1/agent/run` receives an existing owned
+`conversationId`, Barlas loads a bounded tail of that conversation and supplies
+it to the model before the new messages. Clients may send only the new turn or
+repeat a trailing portion of history; exact overlap is removed before model
+execution and persistence. At most 80 stored messages and 80,000 characters
+are restored, which keeps long-running terminal and web conversations useful
+without allowing unbounded context growth.
+
 When `EMBEDDING_MODEL` is configured, new memories also receive a bounded
 embedding and recall merges PostgreSQL full-text matches with cosine-ranked
 semantic candidates from the same user only. Embeddings are stored as native

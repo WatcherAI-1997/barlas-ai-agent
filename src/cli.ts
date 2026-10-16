@@ -170,11 +170,17 @@ async function decide(ctx: CliContext, id: string, approved: boolean): Promise<v
   output.write(`${approved ? "Разрешено" : "Отклонено"}: ${id}\n${JSON.stringify(result, null, 2)}\n`);
 }
 
-async function ask(ctx: CliContext, prompt: string): Promise<void> {
-  const accepted = await ctx.api.request<{ runId?: string; message?: { content?: string }; status?: string }>("/v1/agent/run", {
+async function ask(ctx: CliContext, prompt: string, conversationId?: string): Promise<string | undefined> {
+  const accepted = await ctx.api.request<{
+    runId?: string;
+    conversationId?: string;
+    message?: { content?: string };
+    status?: string;
+  }>("/v1/agent/run", {
     method: "POST",
     body: JSON.stringify({
       userId: ctx.userId,
+      ...(conversationId ? { conversationId } : {}),
       messages: [{ role: "user", content: prompt }],
       taskClass: "fast",
       maxSteps: 8,
@@ -182,7 +188,7 @@ async function ask(ctx: CliContext, prompt: string): Promise<void> {
   });
   if (!accepted.runId) {
     output.write(`${accepted.message?.content ?? JSON.stringify(accepted)}\n`);
-    return;
+    return accepted.conversationId ?? conversationId;
   }
   output.write(`Запуск ${accepted.runId.slice(0, 8)}…\n`);
   while (true) {
@@ -194,14 +200,47 @@ async function ask(ctx: CliContext, prompt: string): Promise<void> {
     if (["queued", "running"].includes(runStatus)) continue;
     if (runStatus === "waiting_approval") {
       output.write(`Ожидается подтверждение: ${value(response.run.pendingApprovalId)}\n`);
-      return;
+      return accepted.conversationId ?? conversationId;
     }
     const result = response.run.result as { text?: string } | undefined;
     if (result?.text) output.write(`${result.text}\n`);
     else if (response.run.error) output.write(`Ошибка: ${value(response.run.error)}\n`);
     else output.write(`${JSON.stringify(response.run, null, 2)}\n`);
-    return;
+    return value(response.run.conversationId) !== "-"
+      ? value(response.run.conversationId)
+      : accepted.conversationId ?? conversationId;
   }
+}
+
+async function conversation(ctx: CliContext, id: string): Promise<JsonObject> {
+  if (!id) throw new Error("Укажите ID диалога");
+  const result = await ctx.api.request<{ conversation: JsonObject }>(
+    `/v1/conversations/${encodeURIComponent(id)}?userId=${encodeURIComponent(ctx.userId)}`,
+  );
+  return result.conversation;
+}
+
+function tuiHelp(): void {
+  output.write(`Команды чата:
+  /new                         новый диалог
+  /session                     текущий диалог
+  /use <id>                    продолжить сохранённый диалог
+  /sessions                    список диалогов
+  /status                      состояние Barlas
+  /runs | /jobs | /tasks       выполняемая работа
+  /cron | /projects            расписания и проекты
+  /memory <запрос>             поиск памяти
+  /skills | /plugins           навыки и расширения
+  /models | /channels          модели и каналы
+  /tools | /nodes              инструменты и устройства
+  /approvals                   ожидающие подтверждения
+  /approve <id> | /reject <id> решение по действию
+  /cancel <run-id>             отменить запуск
+  /audit                       журнал действий
+  /help                        эта справка
+  /quit                        выход
+Обычный текст продолжает текущий диалог.
+`);
 }
 
 function help(): void {
@@ -262,21 +301,60 @@ function help(): void {
 
 async function tui(ctx: CliContext): Promise<void> {
   const readline = createInterface({ input, output, terminal: true });
-  output.write("\n⬤  ⬤  Barlas CLI\n  ⬤   /help · /quit\n\n");
+  let conversationId: string | undefined;
+  output.write("\n⬤  ⬤  Barlas\n  ⬤   живой диалог · /help · /quit\n\n");
   try {
     while (true) {
       const line = (await readline.question("barlas> ")).trim();
       if (!line) continue;
       if (["/quit", "/exit"].includes(line)) break;
-      if (line === "/help") { help(); continue; }
-      if (line === "/status") { await status(ctx); continue; }
-      if (line === "/approvals") { await list(ctx, "approvals"); continue; }
-      if (line === "/extensions") { await extensions(ctx); continue; }
-      if (line === "/nodes") { await nodes(ctx); continue; }
-      if (line === "/node-pair") { await nodePairingCode(ctx); continue; }
-      if (line.startsWith("/approve ")) { await decide(ctx, line.slice(9).trim(), true); continue; }
-      if (line.startsWith("/reject ")) { await decide(ctx, line.slice(8).trim(), false); continue; }
-      await ask(ctx, line);
+      try {
+        if (line === "/help") { tuiHelp(); continue; }
+        if (line === "/new") {
+          conversationId = undefined;
+          output.write("Новый диалог начнётся со следующего сообщения.\n");
+          continue;
+        }
+        if (line === "/session") {
+          if (!conversationId) output.write("Диалог ещё не начат.\n");
+          else output.write(`Текущий диалог: ${conversationId}\n`);
+          continue;
+        }
+        if (line.startsWith("/use ")) {
+          const id = line.slice(5).trim();
+          const selected = await conversation(ctx, id);
+          conversationId = id;
+          output.write(`Продолжаем: ${value(selected.title)} (${value(selected.messageCount)} сообщений)\n`);
+          continue;
+        }
+        if (line === "/sessions") { await sessions(ctx); continue; }
+        if (line === "/status") { await status(ctx); continue; }
+        if (line === "/runs") { await list(ctx, "agent-runs"); continue; }
+        if (line === "/jobs") { await list(ctx, "jobs"); continue; }
+        if (line === "/tasks") { await list(ctx, "agent-runs"); await list(ctx, "jobs"); continue; }
+        if (line === "/cron") { await list(ctx, "schedules"); continue; }
+        if (line === "/projects") { await list(ctx, "projects"); continue; }
+        if (line.startsWith("/memory ")) { await memorySearch(ctx, line.slice(8).trim()); continue; }
+        if (line === "/skills") { await skills(ctx); continue; }
+        if (["/plugins", "/extensions"].includes(line)) { await catalog(ctx); continue; }
+        if (line === "/models") { await catalog(ctx, "provider"); continue; }
+        if (line === "/channels") { await catalog(ctx, "channel"); continue; }
+        if (line === "/tools") { await tools(ctx); continue; }
+        if (line === "/approvals") { await list(ctx, "approvals"); continue; }
+        if (line === "/audit") { await audit(ctx); continue; }
+        if (line === "/nodes") { await nodes(ctx); continue; }
+        if (line === "/node-pair") { await nodePairingCode(ctx); continue; }
+        if (line.startsWith("/cancel ")) { await action(ctx, "agent-runs", line.slice(8).trim(), "cancel"); continue; }
+        if (line.startsWith("/approve ")) { await decide(ctx, line.slice(9).trim(), true); continue; }
+        if (line.startsWith("/reject ")) { await decide(ctx, line.slice(8).trim(), false); continue; }
+        if (line.startsWith("/")) {
+          output.write("Неизвестная команда. Введите /help.\n");
+          continue;
+        }
+        conversationId = await ask(ctx, line, conversationId);
+      } catch (error) {
+        output.write(`Ошибка: ${error instanceof Error ? error.message : String(error)}\n`);
+      }
     }
   } finally {
     readline.close();
@@ -288,7 +366,10 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (["help", "--help", "-h"].includes(command)) { help(); return; }
   const ctx = await context();
   if (["tui", "chat", "terminal"].includes(command)) return tui(ctx);
-  if (["ask", "agent"].includes(command)) return ask(ctx, args.slice(1).join(" ").trim() || (() => { throw new Error("Укажите запрос"); })());
+  if (["ask", "agent"].includes(command)) {
+    await ask(ctx, args.slice(1).join(" ").trim() || (() => { throw new Error("Укажите запрос"); })());
+    return;
+  }
   if (command === "status") return status(ctx);
   if (["health", "doctor"].includes(command)) return doctor(ctx);
   if (command === "extensions") return extensions(ctx);
