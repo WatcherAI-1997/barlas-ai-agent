@@ -16,6 +16,28 @@ describe("production installer", () => {
     expect(spawnSync("bash", ["scripts/update.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--rollback");
   });
 
+  it("ships a native Windows local installer and companion commands", async () => {
+    const installer = await readFile(join(root, "install.ps1"), "utf8");
+    const doctor = await readFile(join(root, "scripts", "doctor.ps1"), "utf8");
+    const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
+    const cli = await readFile(join(root, "barlas.ps1"), "utf8");
+
+    for (const required of [
+      'if ($env:OS -ne "Windows_NT")',
+      'BARLAS_INSTALL_MODE = "local"',
+      'http://127.0.0.1:$Port',
+      "Protect-SecretFile",
+      "RandomNumberGenerator",
+      '"--profile", "backup", "up", "-d", "--build"',
+      "scripts\\doctor.ps1",
+    ]) expect(installer).toContain(required);
+    expect(installer).not.toContain("BARLAS_DOMAIN = Read-Value");
+    expect(doctor).toContain("$RequireRunning");
+    expect(doctor).toContain("Docker Desktop engine is unavailable");
+    expect(dashboard).toContain("#token=$Token");
+    expect(cli).toContain("dist/src/cli.js");
+  });
+
   it("prepares a protected config without printing supplied secrets", async () => {
     const temporary = await mkdtemp(join(tmpdir(), "barlas-installer-"));
     const fakeBin = join(temporary, "bin");

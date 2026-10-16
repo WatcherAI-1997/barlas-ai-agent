@@ -1,11 +1,48 @@
 # Installation
 
-Barlas AI Agent is installed as an isolated Docker Compose stack on a Linux
-server. The installer does not reuse, migrate, stop, or reconfigure any existing
+Barlas AI Agent is installed as an isolated Docker Compose stack on Windows
+10/11 with Docker Desktop or on a Linux server. The installer does not reuse,
+migrate, stop, or reconfigure any existing
 agent. It creates Barlas-specific containers, networks, volumes, ports, database,
 workspace, backup storage, encryption keys, and owner account.
 
-## Quick install from the private repository
+## Windows laptop
+
+Install Docker Desktop with the WSL 2 engine and Linux containers. Install
+GitHub CLI if it is not already available, then open PowerShell:
+
+```powershell
+gh auth login
+gh repo clone WatcherAI-1997/barlas-ai-agent
+Set-Location barlas-ai-agent
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+No domain, DNS, Caddy, Bash shell, or public port is required. The Windows
+installer stores configuration in `deploy\local.env`, restricts its ACL to the
+current Windows account and `SYSTEM`, and exposes the cabinet only on loopback.
+Docker Desktop must be running and configured for Linux containers.
+
+Useful commands after installation:
+
+```powershell
+.\barlas.ps1
+.\barlas.ps1 status
+.\scripts\dashboard-url.ps1
+.\scripts\doctor.ps1 -RequireRunning
+```
+
+To prepare and validate configuration without starting containers:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -PrepareOnly
+```
+
+An existing `deploy\local.env` is reused and never silently overwritten.
+Windows installation is local-only; public HTTPS deployment remains the Linux
+server path.
+
+## Linux quick install from the private repository
 
 Authenticate GitHub CLI with an account that can read the repository:
 
@@ -109,9 +146,11 @@ link private; anyone holding it has owner access.
 
 ## Prerequisites and layout
 
-The supported production path requires Linux, Git, curl, OpenSSL, Docker Engine,
-and Docker Compose v2. The current installer intentionally does not install or
-upgrade system packages and does not require Node.js on the host.
+The supported public production path requires Linux, Git, curl, OpenSSL, Docker
+Engine, and Docker Compose v2. The Windows local path requires Windows 10/11,
+PowerShell 5.1 or newer, Git, Docker Desktop with the WSL 2 engine, and Docker
+Compose v2. Neither installer requires Node.js on the host or silently installs
+or upgrades system packages.
 
 On Kitty, iTerm2, and WezTerm, the installer renders a tightly cropped installer
 variant containing only the original Barlas mark and wordmark. The canonical

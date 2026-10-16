@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 
 const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { encoding: "utf8" })
   .trim().split("\n").filter(Boolean);
-const textFiles = files.filter((file) => /\.(?:ts|js|mjs|json|md|ya?ml|sql|sh|example)$/u.test(file));
+const textFiles = files.filter((file) => /\.(?:ts|js|mjs|json|md|ya?ml|sql|sh|ps1|example)$/u.test(file));
 const secretPatterns = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u,
   /\bsk-[A-Za-z0-9_-]{20,}\b/u,
@@ -52,8 +52,12 @@ for (const required of [
   "migrations/020_gateway_tokens.sql",
   "migrations/021_device_nodes.sql",
   "install.sh",
+  "install.ps1",
+  "barlas.ps1",
   "scripts/doctor.sh",
+  "scripts/doctor.ps1",
   "scripts/dashboard-url.sh",
+  "scripts/dashboard-url.ps1",
   "docs/INSTALLATION.md",
   "assets/brand/barlas-ai-agent-logo-original.png",
   "assets/brand/barlas-ai-agent-installer.png",
@@ -64,6 +68,7 @@ for (const required of [
   if (!files.includes(required)) throw new Error(`Skill lifecycle component is missing: ${required}`);
 }
 const installer = await readFile("install.sh", "utf8");
+const windowsInstaller = await readFile("install.ps1", "utf8");
 const doctor = await readFile("scripts/doctor.sh", "utf8");
 const updater = await readFile("scripts/update.sh", "utf8");
 const readme = await readFile("README.md", "utf8");
@@ -72,6 +77,9 @@ for (const required of ["barlas-ai-agent-github-hero.png", "Quick install", "Sec
 }
 for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "BARLAS_GATEWAY_TOKEN", "openssl rand -hex 32", "--prepare-only", "scripts/doctor.sh", "scripts/dashboard-url.sh", "barlas-ai-agent-installer.png", "TERM_PROGRAM", "⬤  ⬤", "Barlas", "AI AGENT", "never prints them"]) {
   if (!installer.includes(required)) throw new Error(`Installer safety/usability boundary is missing: ${required}`);
+}
+for (const required of ["Windows_NT", "Docker Desktop", "BARLAS_INSTALL_MODE = \"local\"", "RandomNumberGenerator", "Protect-SecretFile", "compose.local.yml", "doctor.ps1", "never prints them"]) {
+  if (!windowsInstaller.includes(required)) throw new Error(`Windows installer safety/usability boundary is missing: ${required}`);
 }
 for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {
   if (!doctor.includes(required)) throw new Error(`Doctor safety/usability boundary is missing: ${required}`);

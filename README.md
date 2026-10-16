@@ -10,7 +10,7 @@
 
 <p align="center">
   <img alt="Status: Private Alpha" src="https://img.shields.io/badge/STATUS-PRIVATE_ALPHA-E10600?style=for-the-badge&labelColor=090909">
-  <img alt="Tests: 125 passing" src="https://img.shields.io/badge/TESTS-125_PASSING-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
+  <img alt="Tests: 155 passing" src="https://img.shields.io/badge/TESTS-155_PASSING-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
   <img alt="Languages: 38" src="https://img.shields.io/badge/LANGUAGES-38-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
   <img alt="Runtime: Docker" src="https://img.shields.io/badge/RUNTIME-DOCKER-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
 </p>
@@ -80,6 +80,33 @@ erase the task or silently convert an unfinished action into success.
 
 ## 🚀 Quick install
 
+### Windows 10/11
+
+Install and start Docker Desktop once, make sure it uses the WSL 2 engine and
+Linux containers, then run PowerShell:
+
+```powershell
+gh auth login
+gh repo clone WatcherAI-1997/barlas-ai-agent
+Set-Location barlas-ai-agent
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+This native Windows installer does not ask for a domain and does not require a
+Bash shell. It checks Docker Desktop and Compose, creates a local configuration
+protected by a Windows ACL, builds the containers, runs diagnostics, and binds
+the cabinet only to `http://127.0.0.1:17840`. Telegram uses long polling.
+
+After installation:
+
+```powershell
+.\barlas.ps1
+.\barlas.ps1 ask "Проверь проект и составь план"
+.\scripts\dashboard-url.ps1
+```
+
+### Linux
+
 For a private local installation without a domain, DNS, Caddy, or public web
 exposure, authenticate with GitHub and run:
 
@@ -90,7 +117,8 @@ cd barlas-ai-agent
 ./install.sh --local
 ```
 
-The cabinet opens only on `http://127.0.0.1:17840`. If a Telegram bot token is
+On either operating system, the cabinet opens only on
+`http://127.0.0.1:17840`. If a Telegram bot token is
 provided, local mode uses the official Bot API long polling, so Telegram also
 works without a webhook, domain, or HTTPS certificate.
 
@@ -181,7 +209,7 @@ See the [security policy](docs/SECURITY.md),
 
 ## Current state
 
-**Private alpha · 143 automated tests · 20 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
+**Private alpha · 155 automated tests · 21 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
 
 The functional agent core, web cabinet, Telegram channel, project system,
 recurring tasks, multimodal tools, sandbox, browser, MCP, encrypted connectors,
