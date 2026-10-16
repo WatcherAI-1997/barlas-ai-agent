@@ -35,6 +35,7 @@ import { ScheduleService } from "./schedules/service.js";
 import { ScheduleWorker } from "./schedules/worker.js";
 import { languageInstruction } from "./i18n/languages.js";
 import { createBuiltinExtensionCatalog } from "./extensions/catalog.js";
+import { DeviceNodeService } from "./nodes/service.js";
 
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
@@ -92,6 +93,7 @@ const memory = new SemanticMemory(
     : undefined,
 );
 const organizations = new OrganizationService(database);
+const deviceNodes = new DeviceNodeService(database);
 const skillRegistry = createBuiltinSkillRegistry();
 const subagentCoordinator = new SubagentCoordinator(modelProvider);
 const codeSandbox = config.SANDBOX_SOCKET_PATH && config.SANDBOX_SHARED_TOKEN
@@ -105,6 +107,7 @@ const extensionCatalog = createBuiltinExtensionCatalog({
   sandbox: Boolean(codeSandbox),
   telegram: Boolean(config.TELEGRAM_BOT_TOKEN),
   privateModel: Boolean(config.PRIVATE_MODEL_BASE_URL && config.PRIVATE_MODEL_NAME && config.PRIVATE_MODEL_API_KEY),
+  deviceNodes: true,
 });
 const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
 const projects = new ProjectService(database, workspace);
@@ -133,6 +136,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   ...(mcpConnector ? { mcpConnector } : {}),
   mediaService,
   projectService: projects,
+  deviceNodes,
 }), database, governance);
 const skillManager = new SkillManager(
   database,
@@ -269,6 +273,7 @@ const app = await buildApp({
   skillRegistry,
   skillManager,
   extensionCatalog,
+  deviceNodes,
   governance,
   authService,
   telegramLinks,

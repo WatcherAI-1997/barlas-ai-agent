@@ -44,6 +44,13 @@ server-side; each plaintext token is shown only once.
 - `GET /v1/memory/search` — retrieve relevant memories for one user.
 - `GET /v1/tools` — list registered tools and their risk levels.
 - `GET /v1/extensions` — list built-in extension manifests, capabilities, risk classes, required setting names, and current configuration state without secret values.
+- `POST /v1/nodes/pairing-code` — create a short-lived, one-time code for the authenticated account.
+- `GET /v1/nodes` — list the account's paired device nodes and last heartbeat.
+- `DELETE /v1/nodes/:id` — revoke a node and its bearer token.
+- `POST /nodes/pair` — exchange a one-time code for a device token; the plaintext token is returned once.
+- `POST /nodes/heartbeat` — update node presence and advertised capabilities with the node token.
+- `GET /nodes/commands` — atomically claim a bounded batch of queued commands with the node token.
+- `POST /nodes/commands/:id/result` — acknowledge success or failure. The initial protocol only accepts `notify` commands.
 - `GET /v1/skills` — list installed skill IDs, versions, descriptions, activation state, and tool permissions.
 - `POST /v1/skills` — owner-only installation of an inactive candidate skill version.
 - `POST /v1/skills/:id/:version/evaluate` — run 1–5 bounded, tool-free acceptance cases.

@@ -37,8 +37,9 @@ import type {
 } from "./types.js";
 import type { AgentSchedule } from "../schedules/types.js";
 import type { ArtifactVersion, GoalStatus, PlanStepStatus, Project, ProjectCheckpoint, ProjectGoal, ProjectPlanStep, ProjectResource, ProjectResourceType, ProjectStore } from "../projects/service.js";
+import type { DeviceCommand, DeviceNode, DeviceNodeStore, NodePlatform } from "../nodes/service.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore, DeviceNodeStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -1571,6 +1572,104 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     return result.rowCount === 1;
   }
 
+  async createNodePairingCode(input: { accountId: string; codeHash: string; expiresAt: Date }): Promise<void> {
+    await this.pool.query(
+      `with invalidated as (
+         update device_node_pairing_codes set used_at = now()
+         where account_id = $1 and used_at is null
+       )
+       insert into device_node_pairing_codes (account_id, code_hash, expires_at) values ($1, $2, $3)`,
+      [input.accountId, input.codeHash, input.expiresAt],
+    );
+  }
+
+  async claimNodePairingCode(input: { codeHash: string; tokenHash: string; name: string; platform: NodePlatform; capabilities: string[] }): Promise<DeviceNode | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const code = await client.query<{ account_id: string }>(
+        `update device_node_pairing_codes set used_at = now()
+         where code_hash = $1 and used_at is null and expires_at > now()
+         returning account_id`, [input.codeHash],
+      );
+      const accountId = code.rows[0]?.account_id;
+      if (!accountId) { await client.query("rollback"); return null; }
+      const result = await client.query<DeviceNodeRow>(
+        `insert into device_nodes (account_id, name, platform, token_hash, capabilities)
+         values ($1, $2, $3, $4, $5)
+         returning id, account_id, name, platform, capabilities, last_seen_at, created_at, revoked_at`,
+        [accountId, input.name, input.platform, input.tokenHash, input.capabilities],
+      );
+      await client.query("commit");
+      return mapDeviceNode(result.rows[0]!);
+    } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
+  }
+
+  async authenticateNode(tokenHash: string, capabilities?: string[]): Promise<DeviceNode | null> {
+    const result = await this.pool.query<DeviceNodeRow>(
+      `update device_nodes set last_seen_at = now(), capabilities = coalesce($2, capabilities)
+       where token_hash = $1 and revoked_at is null
+       returning id, account_id, name, platform, capabilities, last_seen_at, created_at, revoked_at`,
+      [tokenHash, capabilities ?? null],
+    );
+    return result.rows[0] ? mapDeviceNode(result.rows[0]) : null;
+  }
+
+  async listDeviceNodes(accountId: string): Promise<DeviceNode[]> {
+    const result = await this.pool.query<DeviceNodeRow>(
+      `select id, account_id, name, platform, capabilities, last_seen_at, created_at, revoked_at
+       from device_nodes where account_id = $1 order by created_at desc`, [accountId],
+    );
+    return result.rows.map(mapDeviceNode);
+  }
+
+  async revokeDeviceNode(accountId: string, nodeId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `update device_nodes set revoked_at = coalesce(revoked_at, now())
+       where id = $1 and account_id = $2 and revoked_at is null`, [nodeId, accountId],
+    );
+    return result.rowCount === 1;
+  }
+
+  async enqueueDeviceCommand(input: { accountId: string; nodeId: string; kind: "notify"; payload: { title: string; body: string } }): Promise<DeviceCommand | null> {
+    const result = await this.pool.query<DeviceCommandRow>(
+      `insert into device_node_commands (node_id, account_id, kind, payload)
+       select id, account_id, $3, $4 from device_nodes
+       where id = $2 and account_id = $1 and revoked_at is null and capabilities @> array['notifications']::text[]
+       returning id, node_id, kind, payload, status, created_at`,
+      [input.accountId, input.nodeId, input.kind, input.payload],
+    );
+    return result.rows[0] ? mapDeviceCommand(result.rows[0]) : null;
+  }
+
+  async claimDeviceCommands(tokenHash: string, limit: number): Promise<DeviceCommand[]> {
+    const result = await this.pool.query<DeviceCommandRow>(
+      `with selected as (
+         select command.id from device_node_commands command
+         join device_nodes node on node.id = command.node_id
+         where node.token_hash = $1 and node.revoked_at is null and command.status = 'queued'
+         order by command.created_at for update skip locked limit $2
+       )
+       update device_node_commands command set status = 'delivered', delivered_at = now()
+       from selected where command.id = selected.id
+       returning command.id, command.node_id, command.kind, command.payload, command.status, command.created_at`,
+      [tokenHash, limit],
+    );
+    return result.rows.map(mapDeviceCommand);
+  }
+
+  async completeDeviceCommand(input: { tokenHash: string; commandId: string; succeeded: boolean; error?: string }): Promise<boolean> {
+    const result = await this.pool.query(
+      `update device_node_commands command
+       set status = $3, completed_at = now(), error = $4
+       from device_nodes node
+       where command.id = $2 and command.node_id = node.id and node.token_hash = $1
+         and node.revoked_at is null and command.status = 'delivered'`,
+      [input.tokenHash, input.commandId, input.succeeded ? "completed" : "failed", input.error ?? null],
+    );
+    return result.rowCount === 1;
+  }
+
   private mapApproval(row: {
     id: string;
     user_id: string;
@@ -1884,6 +1983,8 @@ interface ArtifactRow { id: string; project_id: string; path: string; version: n
 interface ProjectGoalRow { id: string; project_id: string; title: string; description: string; status: GoalStatus; priority: number; created_at: Date; updated_at: Date }
 interface ProjectPlanStepRow { id: string; project_id: string; goal_id: string | null; title: string; position: number; status: PlanStepStatus; created_at: Date; updated_at: Date }
 interface ProjectCheckpointRow { id: string; project_id: string; goal_id: string | null; kind: ProjectCheckpoint["kind"]; title: string; summary: string; progress: number; agent_run_id: string | null; created_at: Date; updated_at: Date }
+interface DeviceNodeRow { id: string; account_id: string; name: string; platform: NodePlatform; capabilities: string[]; last_seen_at: Date | null; created_at: Date; revoked_at: Date | null }
+interface DeviceCommandRow { id: string; node_id: string; kind: "notify"; payload: { title: string; body: string }; status: DeviceCommand["status"]; created_at: Date }
 
 function mapProject(row: ProjectRow): Project {
   return { id: row.id, userId: row.user_id, name: row.name, description: row.description, status: row.status, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
@@ -1907,6 +2008,18 @@ function mapProjectPlanStep(row: ProjectPlanStepRow): ProjectPlanStep {
 
 function mapProjectCheckpoint(row: ProjectCheckpointRow): ProjectCheckpoint {
   return { id: row.id, projectId: row.project_id, ...(row.goal_id ? { goalId: row.goal_id } : {}), kind: row.kind, title: row.title, summary: row.summary, progress: row.progress, ...(row.agent_run_id ? { agentRunId: row.agent_run_id } : {}), createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
+}
+
+function mapDeviceNode(row: DeviceNodeRow): DeviceNode {
+  return {
+    id: row.id, accountId: row.account_id, name: row.name, platform: row.platform,
+    capabilities: row.capabilities, lastSeenAt: row.last_seen_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString(), revokedAt: row.revoked_at?.toISOString() ?? null,
+  };
+}
+
+function mapDeviceCommand(row: DeviceCommandRow): DeviceCommand {
+  return { id: row.id, nodeId: row.node_id, kind: row.kind, payload: row.payload, status: row.status, createdAt: row.created_at.toISOString() };
 }
 
 function mapSkill(row: SkillRow): StoredSkill {

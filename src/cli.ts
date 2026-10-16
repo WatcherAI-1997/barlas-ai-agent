@@ -95,6 +95,18 @@ async function extensions(ctx: CliContext): Promise<void> {
   output.write(`${renderRows(result.extensions, ["id", "kind", "configured", "capabilities"])}\n`);
 }
 
+async function nodes(ctx: CliContext): Promise<void> {
+  const result = await ctx.api.request<{ nodes: JsonObject[] }>(`/v1/nodes?userId=${encodeURIComponent(ctx.userId)}`);
+  output.write(`${renderRows(result.nodes, ["id", "name", "platform", "capabilities", "lastSeenAt", "revokedAt"])}\n`);
+}
+
+async function nodePairingCode(ctx: CliContext): Promise<void> {
+  const result = await ctx.api.request<{ code: string; expiresAt: string }>("/v1/nodes/pairing-code", {
+    method: "POST", body: JSON.stringify({ userId: ctx.userId }),
+  });
+  output.write(`Одноразовый код: ${result.code}\nДействует до: ${result.expiresAt}\n`);
+}
+
 async function decide(ctx: CliContext, id: string, approved: boolean): Promise<void> {
   const result = await ctx.api.request<JsonObject>(`/v1/approvals/${encodeURIComponent(id)}/decision`, {
     method: "POST",
@@ -138,7 +150,7 @@ async function ask(ctx: CliContext, prompt: string): Promise<void> {
 }
 
 function help(): void {
-  output.write(`Barlas CLI\n\nКоманды:\n  tui                     интерактивный терминал\n  ask <запрос>            автономная задача\n  status                  состояние и метрики\n  runs                    последние запуски\n  approvals               очередь подтверждений\n  approve <id>            разрешить действие\n  reject <id>             отклонить действие\n  jobs                    фоновые задачи\n  projects                проекты\n  schedules               расписания\n  extensions              каталог расширений\n  help                    эта справка\n`);
+  output.write(`Barlas CLI\n\nКоманды:\n  tui                     интерактивный терминал\n  ask <запрос>            автономная задача\n  status                  состояние и метрики\n  runs                    последние запуски\n  approvals               очередь подтверждений\n  approve <id>            разрешить действие\n  reject <id>             отклонить действие\n  jobs                    фоновые задачи\n  projects                проекты\n  schedules               расписания\n  extensions              каталог расширений\n  nodes                   подключённые устройства\n  node-pair               одноразовый код подключения\n  help                    эта справка\n`);
 }
 
 async function tui(ctx: CliContext): Promise<void> {
@@ -153,6 +165,8 @@ async function tui(ctx: CliContext): Promise<void> {
       if (line === "/status") { await status(ctx); continue; }
       if (line === "/approvals") { await list(ctx, "approvals"); continue; }
       if (line === "/extensions") { await extensions(ctx); continue; }
+      if (line === "/nodes") { await nodes(ctx); continue; }
+      if (line === "/node-pair") { await nodePairingCode(ctx); continue; }
       if (line.startsWith("/approve ")) { await decide(ctx, line.slice(9).trim(), true); continue; }
       if (line.startsWith("/reject ")) { await decide(ctx, line.slice(8).trim(), false); continue; }
       await ask(ctx, line);
@@ -170,6 +184,8 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (command === "ask") return ask(ctx, args.slice(1).join(" ").trim() || (() => { throw new Error("Укажите запрос"); })());
   if (command === "status") return status(ctx);
   if (command === "extensions") return extensions(ctx);
+  if (command === "nodes") return nodes(ctx);
+  if (command === "node-pair") return nodePairingCode(ctx);
   if (command === "runs") return list(ctx, "agent-runs");
   if (["approvals", "jobs", "projects", "schedules"].includes(command)) return list(ctx, command as "approvals" | "jobs" | "projects" | "schedules");
   if (command === "approve" || command === "reject") {

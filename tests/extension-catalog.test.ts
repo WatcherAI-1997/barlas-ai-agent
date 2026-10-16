@@ -6,7 +6,7 @@ describe("Barlas extension catalog", () => {
   it("reports built-in capability availability without exposing secrets", () => {
     const catalog = createBuiltinExtensionCatalog({
       browser: true, github: false, google: false, mcp: true, sandbox: true,
-      telegram: true, privateModel: false,
+      telegram: true, privateModel: false, deviceNodes: true,
     });
     expect(catalog.get("channel.telegram")).toMatchObject({ configured: true, kind: "channel" });
     expect(catalog.get("connector.github")).toMatchObject({ configured: false });

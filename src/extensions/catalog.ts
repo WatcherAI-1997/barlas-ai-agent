@@ -53,6 +53,7 @@ export interface BuiltinExtensionAvailability {
   sandbox: boolean;
   telegram: boolean;
   privateModel: boolean;
+  deviceNodes: boolean;
 }
 
 export function createBuiltinExtensionCatalog(availability: BuiltinExtensionAvailability): ExtensionCatalog {
@@ -70,6 +71,6 @@ export function createBuiltinExtensionCatalog(availability: BuiltinExtensionAvai
   add({ id: "runtime.browser", name: "Managed browser", description: "Isolated Playwright browser navigation and extraction.", kind: "runtime", capabilities: ["browser.navigate", "browser.read"], risks: ["external", "read"], configuration: ["BROWSER_WS_ENDPOINT"] }, () => availability.browser);
   add({ id: "runtime.code-sandbox", name: "Code sandbox", description: "Isolated Python, Node.js, Git and npm execution.", kind: "runtime", capabilities: ["code.execute", "git", "npm", "python"], risks: ["write"], configuration: ["SANDBOX_SHARED_TOKEN", "SANDBOX_SOCKET_PATH"] }, () => availability.sandbox);
   add({ id: "skills.builtin", name: "Versioned skills", description: "Versioned skill installation, evaluation, activation and rollback.", kind: "skill-source", capabilities: ["skills.activate", "skills.evaluate", "skills.install", "skills.rollback"], risks: ["write"], configuration: [] }, () => true);
-  add({ id: "device.nodes", name: "Device nodes", description: "Reserved protocol boundary for paired desktop and mobile device nodes.", kind: "device", capabilities: ["nodes.pair", "nodes.status"], risks: ["device", "external"], configuration: ["NODE_PAIRING_SECRET"] }, () => false);
+  add({ id: "device.nodes", name: "Device nodes", description: "Token-paired desktop and mobile nodes with heartbeat, revocation and approval-gated notification delivery.", kind: "device", capabilities: ["nodes.notify", "nodes.pair", "nodes.revoke", "nodes.status"], risks: ["device", "external"], configuration: [] }, () => availability.deviceNodes);
   return catalog;
 }

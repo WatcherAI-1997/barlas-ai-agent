@@ -14,6 +14,7 @@ import type { GoogleConnector } from "../connectors/google.js";
 import type { McpConnector } from "../connectors/mcp.js";
 import { speechVoices, type MediaService } from "./media.js";
 import type { ProjectService } from "../projects/service.js";
+import type { DeviceNodeService } from "../nodes/service.js";
 
 export function createBuiltinToolRegistry(options: {
   workspaceRoot?: string;
@@ -26,6 +27,7 @@ export function createBuiltinToolRegistry(options: {
   codeSandbox?: Pick<CodeSandboxClient, "run">;
   mediaService?: Pick<MediaService, "analyzeImage" | "analyzePdf" | "transcribeAudio" | "createSpeech">;
   projectService?: Pick<ProjectService, "detail" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "snapshot" | "restore">;
+  deviceNodes?: Pick<DeviceNodeService, "notify">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
@@ -253,6 +255,23 @@ export function createBuiltinToolRegistry(options: {
       execute: async (input, context) => {
         const value = input as { path: string; text: string; voice: typeof speechVoices[number] };
         return options.mediaService!.createSpeech(context.userId, value.path, value.text, value.voice);
+      },
+    });
+  }
+
+  if (options.deviceNodes) {
+    registry.register({
+      name: "nodes.notify",
+      description: "Queue a notification on one paired device node. The node must advertise the notifications capability.",
+      risk: "external",
+      inputSchema: z.object({
+        nodeId: z.string().uuid(), title: z.string().min(1).max(120), body: z.string().min(1).max(2_000),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { nodeId: string; title: string; body: string };
+        const command = await options.deviceNodes!.notify(context.userId, value.nodeId, value.title, value.body);
+        if (!command) throw new Error("Paired node not found or notifications capability is unavailable");
+        return command;
       },
     });
   }

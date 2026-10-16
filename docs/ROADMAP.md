@@ -48,6 +48,10 @@
 - Typed extension catalog with stable manifests, capability/risk metadata,
   configuration-state API, and CLI discovery. *(built-in catalog implemented;
   signed third-party package lifecycle pending)*
+- Desktop/mobile node protocol foundation with one-time pairing, hashed and
+  independently revocable device tokens, heartbeat/capability discovery, and
+  approval-gated notification delivery. *(implemented; signed native clients,
+  camera/screen capture, and OS automation remain pending)*
 
 - Branded web application. *(responsive authenticated cabinet, mobile
   navigation, accessible feedback/dialogs, and isolated file manager implemented)*

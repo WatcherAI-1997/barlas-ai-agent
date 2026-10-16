@@ -49,6 +49,7 @@ import type { ScheduleService } from "./schedules/service.js";
 import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } from "./projects/service.js";
 import { renderPrometheusMetrics } from "./operations/metrics.js";
 import type { ExtensionCatalog } from "./extensions/catalog.js";
+import type { DeviceNodeService } from "./nodes/service.js";
 
 const chatBodySchema = z.object({
   userId: z.string().min(1).max(128),
@@ -274,6 +275,18 @@ const languagePreferenceSchema = z.object({
     .refine(isSupportedLanguage, "Unsupported language")
     .transform((value) => value as SupportedLanguageCode),
 }).strict();
+const nodeUserSchema = z.object({ userId: z.string().uuid() }).strict();
+const nodeParamsSchema = z.object({ id: z.string().uuid() }).strict();
+const nodePairSchema = z.object({
+  code: z.string().min(16).max(128), name: z.string().min(1).max(120),
+  platform: z.enum(["linux", "macos", "windows", "android", "ios"]),
+  capabilities: z.array(z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/u)).max(32).default([]),
+}).strict();
+const nodeHeartbeatSchema = z.object({
+  capabilities: z.array(z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/u)).max(32).optional(),
+}).strict();
+const nodeResultSchema = z.object({ succeeded: z.boolean(), error: z.string().max(1_000).optional() }).strict();
+const nodeCommandParamsSchema = z.object({ id: z.string().uuid() }).strict();
 
 interface Principal {
   userId: string;
@@ -295,6 +308,7 @@ export interface AppDependencies {
   skillRegistry?: Pick<SkillRegistry, "list" | "get" | "isActive">;
   skillManager?: Pick<SkillManager, "install" | "evaluate" | "activate">;
   extensionCatalog?: Pick<ExtensionCatalog, "list" | "get">;
+  deviceNodes?: Pick<DeviceNodeService, "createPairingCode" | "pair" | "authenticate" | "list" | "revoke" | "poll" | "complete">;
   governance?: RuntimeGovernance;
   authService?: Pick<AuthService,
     "authenticate" | "logout" | "listAccounts" | "createAccount" | "getAccount" | "setLanguage"
@@ -409,6 +423,46 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   app.get("/languages", async () => ({ languages: supportedLanguages }));
+
+  app.post("/nodes/pair", async (request, reply) => {
+    if (!dependencies.deviceNodes) return reply.notFound();
+    const parsed = nodePairSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid node pairing request");
+    const paired = await dependencies.deviceNodes.pair(parsed.data);
+    if (!paired) return reply.unauthorized("Pairing code is invalid or expired");
+    return reply.code(201).send({ node: paired.node, token: paired.token });
+  });
+
+  const nodeToken = (request: FastifyRequest): string => {
+    const authorization = request.headers.authorization;
+    return authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+  };
+
+  app.post("/nodes/heartbeat", async (request, reply) => {
+    if (!dependencies.deviceNodes) return reply.notFound();
+    const parsed = nodeHeartbeatSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.badRequest("Invalid node heartbeat");
+    const node = await dependencies.deviceNodes.authenticate(nodeToken(request), parsed.data.capabilities);
+    if (!node) return reply.unauthorized("Invalid or revoked node token");
+    return { node };
+  });
+
+  app.get("/nodes/commands", async (request, reply) => {
+    if (!dependencies.deviceNodes) return reply.notFound();
+    const token = nodeToken(request);
+    if (!await dependencies.deviceNodes.authenticate(token)) return reply.unauthorized("Invalid or revoked node token");
+    return { commands: await dependencies.deviceNodes.poll(token, 10) };
+  });
+
+  app.post("/nodes/commands/:id/result", async (request, reply) => {
+    if (!dependencies.deviceNodes) return reply.notFound();
+    const params = nodeCommandParamsSchema.safeParse(request.params);
+    const body = nodeResultSchema.safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid node command result");
+    const accepted = await dependencies.deviceNodes.complete(nodeToken(request), params.data.id, body.data.succeeded, body.data.error);
+    if (!accepted) return reply.notFound("Node command not found");
+    return { accepted: true };
+  });
 
   app.addHook("preHandler", async (request, reply) => {
     if (!request.url.startsWith("/v1/")) return;
@@ -1333,6 +1387,30 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   app.get("/v1/extensions", async (_request, reply) => {
     if (!dependencies.extensionCatalog) return reply.notFound();
     return { extensions: dependencies.extensionCatalog.list() };
+  });
+
+  app.post("/v1/nodes/pairing-code", async (request, reply) => {
+    if (!dependencies.deviceNodes) return reply.notFound();
+    const parsed = nodeUserSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid node pairing request");
+    return dependencies.deviceNodes.createPairingCode(authorizeUser(request, parsed.data.userId));
+  });
+
+  app.get("/v1/nodes", async (request, reply) => {
+    if (!dependencies.deviceNodes) return reply.notFound();
+    const parsed = nodeUserSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid node query");
+    return { nodes: await dependencies.deviceNodes.list(authorizeUser(request, parsed.data.userId)) };
+  });
+
+  app.delete("/v1/nodes/:id", async (request, reply) => {
+    if (!dependencies.deviceNodes) return reply.notFound();
+    const params = nodeParamsSchema.safeParse(request.params);
+    const parsed = nodeUserSchema.safeParse(request.query);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid node revoke request");
+    const revoked = await dependencies.deviceNodes.revoke(authorizeUser(request, parsed.data.userId), params.data.id);
+    if (!revoked) return reply.notFound("Node not found");
+    return { revoked: true };
   });
 
   app.get("/v1/skills", async (_request, reply) => {

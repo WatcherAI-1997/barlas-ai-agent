@@ -50,6 +50,7 @@ for (const required of [
   "migrations/018_projects.sql",
   "migrations/019_project_execution.sql",
   "migrations/020_gateway_tokens.sql",
+  "migrations/021_device_nodes.sql",
   "install.sh",
   "scripts/doctor.sh",
   "scripts/dashboard-url.sh",
@@ -101,6 +102,10 @@ for (const required of ["delete from user_sessions", "drop column password_hash"
   if (!gatewayTokenMigration.toLowerCase().includes(required)) throw new Error(`Gateway-token migration boundary is missing: ${required}`);
 }
 if (installer.includes("OWNER_PASSWORD")) throw new Error("Installer must not request or persist an owner password");
+const nodeMigration = await readFile("migrations/021_device_nodes.sql", "utf8");
+for (const required of ["token_hash text not null unique", "revoked_at timestamptz", "kind in ('notify')", "on delete cascade"]) {
+  if (!nodeMigration.toLowerCase().includes(required)) throw new Error(`Device-node boundary is missing: ${required}`);
+}
 for (const required of ["unique (project_id, path, version)", "foreign key (project_id, user_id)", "size_bytes integer"]) {
   if (!projectMigration.includes(required)) throw new Error(`Project artifact database boundary is missing: ${required}`);
 }

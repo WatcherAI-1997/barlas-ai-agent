@@ -102,11 +102,18 @@ After installation, work from the terminal without copying a token:
 ./barlas approvals
 ./barlas approve APPROVAL_ID
 ./barlas extensions          # capabilities and configuration state
+./barlas nodes               # paired desktop/mobile nodes
+./barlas node-pair           # one-time pairing code
 ```
 
 The extension catalog declares each built-in channel, connector, provider,
 runtime, skill source, and device bridge together with its capabilities, risk
 classes, and required setting names. It never returns secret values.
+
+Device nodes use a separate one-time pairing code and receive an independently
+revocable bearer token. The initial protocol supports heartbeat, capability
+advertising, command acknowledgement, and approval-gated notifications only;
+it deliberately does not expose a shell, camera, microphone, or screen.
 
 For a public HTTPS deployment on a dedicated Linux server, run `./install.sh`
 without `--local` and provide a domain.

@@ -101,3 +101,11 @@ describe("project execution tool registration", () => {
     expect(createBuiltinSkillRegistry().get("project.execution").allowedTools).toContain("projects.get");
   });
 });
+
+describe("device node tool registration", () => {
+  it("exposes notifications only as an approval-gated external action", () => {
+    expect(createBuiltinToolRegistry().list().some((tool) => tool.name === "nodes.notify")).toBe(false);
+    const registry = createBuiltinToolRegistry({ deviceNodes: { notify: async () => null } });
+    expect(registry.list()).toContainEqual(expect.objectContaining({ name: "nodes.notify", risk: "external" }));
+  });
+});
