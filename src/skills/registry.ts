@@ -6,8 +6,11 @@ export interface SkillDefinition {
   allowedTools: string[];
 }
 
+export type SkillMetadata = Omit<SkillDefinition, "instructions"> & { active: boolean };
+
 export class SkillRegistry {
-  private readonly skills = new Map<string, SkillDefinition>();
+  private readonly skills = new Map<string, Map<string, SkillDefinition>>();
+  private readonly activeVersions = new Map<string, string>();
 
   register(skill: SkillDefinition): void {
     if (!/^[a-z][a-z0-9.-]{2,63}$/u.test(skill.id)) {
@@ -16,18 +19,32 @@ export class SkillRegistry {
     if (!/^\d+\.\d+\.\d+$/u.test(skill.version)) {
       throw new Error(`Invalid skill version for ${skill.id}`);
     }
-    if (this.skills.has(skill.id)) throw new Error(`Skill ${skill.id} is already registered`);
-    this.skills.set(skill.id, Object.freeze({ ...skill, allowedTools: [...skill.allowedTools] }));
+    const versions = this.skills.get(skill.id) ?? new Map<string, SkillDefinition>();
+    if (versions.has(skill.version)) throw new Error(`Skill ${skill.id}@${skill.version} is already registered`);
+    versions.set(skill.version, Object.freeze({ ...skill, allowedTools: [...skill.allowedTools] }));
+    this.skills.set(skill.id, versions);
+    this.activeVersions.set(skill.id, skill.version);
   }
 
-  get(id: string): SkillDefinition {
-    const skill = this.skills.get(id);
+  get(id: string, version?: string): SkillDefinition {
+    const activeVersion = version ?? this.activeVersions.get(id);
+    const skill = activeVersion ? this.skills.get(id)?.get(activeVersion) : undefined;
     if (!skill) throw new Error(`Unknown skill: ${id}`);
     return skill;
   }
 
-  list(): Array<Omit<SkillDefinition, "instructions">> {
-    return [...this.skills.values()].map(({ instructions: _instructions, ...metadata }) => metadata);
+  activate(id: string, version: string): SkillDefinition {
+    const skill = this.skills.get(id)?.get(version);
+    if (!skill) throw new Error(`Unknown skill version: ${id}@${version}`);
+    this.activeVersions.set(id, version);
+    return skill;
+  }
+
+  list(): SkillMetadata[] {
+    return [...this.skills.entries()].flatMap(([id, versions]) => [...versions.values()].map((skill) => {
+      const { instructions: _instructions, ...metadata } = skill;
+      return { ...metadata, active: this.activeVersions.get(id) === skill.version };
+    }));
   }
 }
 

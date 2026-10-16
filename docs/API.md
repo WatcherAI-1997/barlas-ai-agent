@@ -58,9 +58,13 @@ or `private`). The worker leases jobs with PostgreSQL row locking, applies
 bounded exponential retries, and records the result or terminal error.
 
 A managed multi-step run uses `jobType: "agent.workflow"`. Its input contains
-an objective, optional context, and one to six ordered steps. Every step names
-an installed versioned skill and receives only the initial context plus the
-previous step result. Unknown skills and oversized workflows are rejected.
+an objective, optional context, and one to six bounded steps. Every step names
+an installed skill and may pin an exact semantic version. `dependsOn` lists only
+earlier named steps; independent steps run concurrently with a hard ceiling of
+three subagents, while dependent steps receive only the initial context and
+their named dependency outputs. Omitting `dependsOn` preserves sequential
+execution. Unknown skills, duplicate names, forward dependencies, cycles, and
+oversized workflows are rejected before execution.
 
 ## Isolated file tools
 
