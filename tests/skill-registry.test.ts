@@ -16,6 +16,43 @@ describe("versioned skill registry", () => {
     expect(registry.get("writing.test").version).toBe("1.0.0");
     expect(registry.list()).toHaveLength(2);
   });
+
+  it("installs and activates the bundled core skill pack", () => {
+    const registry = createBuiltinSkillRegistry();
+    const expected = [
+      "delivery.sdlc-review",
+      "development.code-review",
+      "development.codebase-inspection",
+      "development.simplify",
+      "development.spike",
+      "development.systematic-debugging",
+      "development.test-driven",
+      "documents.docx",
+      "documents.pdf",
+      "email.inbox-triage",
+      "creative.architecture-diagram",
+      "development.github",
+      "media.youtube-content",
+      "notes.obsidian",
+      "productivity.document-actions",
+      "productivity.google-workspace",
+      "productivity.meeting-actions",
+      "productivity.price-monitor",
+      "productivity.weekly-review",
+      "research.arxiv",
+      "research.competitor-monitor",
+      "research.grounded-citations",
+      "web.blocked-page-recovery",
+      "web.computer-use",
+      "writing.humanizer",
+    ];
+    const bundled = registry.list().filter((skill) => expected.includes(skill.id));
+
+    expect(bundled.map((skill) => skill.id).sort()).toEqual([...expected].sort());
+    expect(bundled.every((skill) => skill.active)).toBe(true);
+    expect(bundled.every((skill) => skill.allowedTools.length > 0)).toBe(true);
+    expect(registry.list()).toHaveLength(30);
+  });
 });
 
 describe("subagent tool registration", () => {

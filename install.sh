@@ -340,6 +340,7 @@ else
 fi
 
 printf '\n%s%sInstallation complete.%s\n' "$C_GREEN" "$C_BOLD" "$C_RESET"
+printf 'Built-in skills: 30 installed and active\n'
 printf 'Web address: %s\n' "$public_url"
 printf 'Dashboard access link: ./scripts/dashboard-url.sh --env-file %q\n' "$ENV_FILE"
 printf 'Diagnostics: ./scripts/doctor.sh --env-file %q --require-running\n' "$ENV_FILE"

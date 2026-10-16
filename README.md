@@ -106,6 +106,16 @@ After installation, work from the terminal without copying a token:
 ./barlas node-pair           # one-time pairing code
 ```
 
+The installation includes 30 active built-in skills. The core pack covers
+grounded and academic research, code inspection and delivery, debugging, TDD,
+GitHub, browser operation, architecture diagrams, DOCX/PDF, Markdown notes,
+video transcripts, Google Workspace, meeting and document actions, weekly
+planning, inbox triage, price and competitor monitoring, natural-language
+editing, and blocked-page recovery. The skills are compiled into the Barlas
+image: the installer does not download or execute third-party scripts at
+runtime. Skills that need an optional connector simply expose those actions
+when the connector is configured.
+
 The extension catalog declares each built-in channel, connector, provider,
 runtime, skill source, and device bridge together with its capabilities, risk
 classes, and required setting names. It never returns secret values.

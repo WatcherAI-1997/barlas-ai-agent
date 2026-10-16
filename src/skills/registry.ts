@@ -1,3 +1,5 @@
+import { bundledCoreSkills } from "./bundled.js";
+
 export interface SkillDefinition {
   id: string;
   version: string;
@@ -97,5 +99,6 @@ export function createBuiltinSkillRegistry(): SkillRegistry {
       "projects.artifact.restore", "files.list", "files.read",
     ],
   });
+  for (const skill of bundledCoreSkills) registry.register(skill);
   return registry;
 }
