@@ -30,8 +30,18 @@ describe("Barlas AI Agent languages", () => {
 
   it("publishes a GitHub product description for every selectable language", () => {
     const overview = readFileSync(new URL("../docs/PRODUCT_OVERVIEW_MULTILINGUAL.md", import.meta.url), "utf8");
-    for (const language of supportedLanguages) {
-      expect(overview).toContain(`<a id="${language.code}"></a>`);
+    const anchors = supportedLanguages.map((language) => `<a id="${language.code}"></a>`);
+    for (const [index, language] of supportedLanguages.entries()) {
+      const anchor = anchors[index]!;
+      expect(overview).toContain(anchor);
+      expect(overview).toContain(`[${language.nativeName}](#${language.code})`);
+      const start = overview.indexOf(anchor);
+      const end = index + 1 < anchors.length
+        ? overview.indexOf(anchors[index + 1]!, start)
+        : overview.indexOf("## Shared technical documentation", start);
+      const section = overview.slice(start, end);
+      expect(section.length, `${language.name} overview is too short`).toBeGreaterThan(1_000);
+      expect(section.match(/^- /gmu), `${language.name} overview lacks full product areas`).toHaveLength(5);
     }
     expect(overview.match(/<a id="[^"]+"><\/a>/gu)).toHaveLength(supportedLanguages.length);
   });
