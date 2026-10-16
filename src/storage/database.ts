@@ -2,6 +2,7 @@ import { Pool } from "pg";
 
 import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth/service.js";
 import type { TelegramLink, TelegramLinkStore } from "../auth/telegram-link.js";
+import type { SemanticMemoryStore } from "../memory/semantic.js";
 import type {
   ConnectorProvider,
   ConnectorRecord,
@@ -26,7 +27,7 @@ import type {
   MemoryEntry,
 } from "./types.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -209,6 +210,25 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     };
   }
 
+  async rememberEmbedded(input: {
+    userId: string;
+    content: string;
+    category: string;
+    importance: number;
+    embedding: number[];
+    embeddingModel: string;
+  }): Promise<MemoryEntry> {
+    const result = await this.pool.query<MemoryRow>(
+      `insert into memories (user_id, content, category, importance, embedding, embedding_model)
+       values ($1, $2, $3, $4, $5::real[], $6)
+       returning id, user_id, content, category, importance, created_at`,
+      [input.userId, input.content, input.category, input.importance, input.embedding, input.embeddingModel],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Semantic memory insert returned no row");
+    return mapMemory(row);
+  }
+
   async recall(userId: string, query: string, limit: number): Promise<MemoryEntry[]> {
     const result = await this.pool.query<{
       id: string;
@@ -231,14 +251,29 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       [userId, query, limit],
     );
 
-    return result.rows.map((row) => ({
-      id: row.id,
-      userId: row.user_id,
-      content: row.content,
-      category: row.category,
-      importance: row.importance,
-      createdAt: row.created_at.toISOString(),
-    }));
+    return result.rows.map(mapMemory);
+  }
+
+  async recallSemantic(userId: string, embedding: number[], limit: number): Promise<MemoryEntry[]> {
+    const result = await this.pool.query<MemoryRow>(
+      `select memory.id, memory.user_id, memory.content, memory.category,
+              memory.importance, memory.created_at,
+              coalesce((
+                select sum(item.value * query.value) /
+                  nullif(sqrt(sum(item.value * item.value)) * sqrt(sum(query.value * query.value)), 0)
+                from unnest(memory.embedding) with ordinality as item(value, position)
+                join unnest($2::real[]) with ordinality as query(value, position) using (position)
+              ), 0) as similarity
+       from memories memory
+       where memory.user_id = $1
+         and memory.embedding is not null
+         and cardinality(memory.embedding) = cardinality($2::real[])
+         and (memory.expires_at is null or memory.expires_at > now())
+       order by similarity desc, memory.importance desc, memory.created_at desc
+       limit $3`,
+      [userId, embedding, limit],
+    );
+    return result.rows.map(mapMemory);
   }
 
   async listConversations(userId: string, limit: number): Promise<ConversationSummary[]> {
@@ -1196,6 +1231,26 @@ interface ConnectorRow {
   key_version: number;
   created_at: Date;
   updated_at: Date;
+}
+
+interface MemoryRow {
+  id: string;
+  user_id: string;
+  content: string;
+  category: string;
+  importance: number;
+  created_at: Date;
+}
+
+function mapMemory(row: MemoryRow): MemoryEntry {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    content: row.content,
+    category: row.category,
+    importance: row.importance,
+    createdAt: row.created_at.toISOString(),
+  };
 }
 
 function mapConnector(row: ConnectorRow): ConnectorRecord {

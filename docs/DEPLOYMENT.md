@@ -30,6 +30,8 @@ docker compose -f compose.production.yml --env-file deploy/production.env --prof
 Check container health, then run `deploy/smoke-test.sh` against the public URL.
 Telegram remains disabled until a dedicated bot token and webhook secret are
 configured and the webhook is registered to this deployment's domain.
+Semantic memory remains optional; set `EMBEDDING_MODEL` to an embedding model
+available through the dedicated model API key to enable it.
 
 The one-shot `migrate` service applies the ordered, idempotent SQL files after
 PostgreSQL becomes healthy and before the API is allowed to start.

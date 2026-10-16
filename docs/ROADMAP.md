@@ -10,7 +10,7 @@
 
 - Telegram webhook, durable replies, and approval buttons. *(implemented; credentials pending)*
 - One-time Telegram-to-account linking and shared identity. *(implemented)*
-- Persistent conversations and explicit long-term memory. *(implemented)*
+- Persistent conversations and explicit long-term memory. *(implemented with optional semantic embeddings and lexical fallback)*
 - Web research, files, documents, terminal tools, and task execution. *(SearXNG search, SSRF-protected page reader, Markdown/TXT/CSV creation, isolated files, and restricted inspection implemented)*
 - Model switching and routing. *(fast/deep/private foundation implemented)*
 - Approval gates, audit trail, and usage limits. *(implemented foundation)*

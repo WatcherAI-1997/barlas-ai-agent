@@ -18,6 +18,7 @@ import type { AgentLoop } from "./core/agent-loop.js";
 import type { TelegramLinkService } from "./auth/telegram-link.js";
 import type { GitHubConnector } from "./connectors/github.js";
 import { connectorProviders, type ConnectorService } from "./connectors/vault.js";
+import type { SemanticMemory } from "./memory/semantic.js";
 import type { PersistentAgentRuntime } from "./runs/runtime.js";
 import { QuotaExceededError, type RuntimeGovernance } from "./governance/runtime.js";
 import { agentJobSchema } from "./jobs/agent-handler.js";
@@ -172,6 +173,7 @@ export interface AppDependencies {
   telegramLinks?: Pick<TelegramLinkService, "createCode" | "claim" | "get" | "resolve" | "unlink">;
   connectors?: Pick<ConnectorService, "save" | "list" | "delete">;
   githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
+  memory?: Pick<SemanticMemory, "remember" | "recall">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
   telegram?: {
@@ -193,6 +195,7 @@ function tokenMatches(expected: string, supplied: string): boolean {
 
 export async function buildApp(dependencies: AppDependencies): Promise<FastifyInstance> {
   const app = Fastify({ logger: dependencies.logger ?? false });
+  const memory = dependencies.memory ?? dependencies.database;
   await app.register(sensible);
   if (dependencies.webRoot) {
     await app.register(fastifyStatic, { root: dependencies.webRoot, prefix: "/ui/" });
@@ -466,7 +469,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const conversationId = input.conversationId ?? randomUUID();
     const latestUserMessage = [...input.messages].reverse().find((message) => message.role === "user");
     const memories = latestUserMessage
-      ? await dependencies.database.recall(input.userId, latestUserMessage.content, 5)
+      ? await memory.recall(input.userId, latestUserMessage.content, 5)
       : [];
     const memoryContext = memories.length > 0
       ? [{
@@ -548,7 +551,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const conversationId = parsed.data.conversationId ?? randomUUID();
     const latestUserMessage = [...parsed.data.messages].reverse().find((message) => message.role === "user");
     const memories = latestUserMessage
-      ? await dependencies.database.recall(userId, latestUserMessage.content, 5)
+      ? await memory.recall(userId, latestUserMessage.content, 5)
       : [];
     const memoryContext = memories.length > 0
       ? [{
@@ -720,17 +723,17 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   app.post("/v1/memory", async (request, reply) => {
     const parsed = rememberBodySchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid memory request");
-    const memory = await dependencies.database.remember({
+    const savedMemory = await memory.remember({
       ...parsed.data,
       userId: authorizeUser(request, parsed.data.userId),
     });
-    return reply.code(201).send({ memory });
+    return reply.code(201).send({ memory: savedMemory });
   });
 
   app.get("/v1/memory/search", async (request, reply) => {
     const parsed = recallQuerySchema.safeParse(request.query);
     if (!parsed.success) return reply.badRequest("Invalid memory search query");
-    const memories = await dependencies.database.recall(
+    const memories = await memory.recall(
       authorizeUser(request, parsed.data.userId),
       parsed.data.query,
       parsed.data.limit,
@@ -991,7 +994,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (dependencies.agentRuntime) {
       const telegramUserId = message.from?.id ?? message.chat.id;
       const userId = await dependencies.telegramLinks?.resolve(telegramUserId) ?? `telegram:${telegramUserId}`;
-      const memories = await dependencies.database.recall(userId, message.text, 5);
+      const memories = await memory.recall(userId, message.text, 5);
       const memoryContext = memories.length > 0 ? [{
         role: "system" as const,
         content: ["Use these Barlas AI Agent user memories only when relevant:", ...memories.map((item) => `- [${item.category}] ${item.content}`)].join("\n"),

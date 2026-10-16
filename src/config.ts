@@ -11,6 +11,7 @@ const configSchema = z.object({
   MODEL_PROVIDER: z.enum(["openai"]).default("openai"),
   MODEL_NAME: z.string().min(1),
   MODEL_API_KEY: z.string().min(1),
+  EMBEDDING_MODEL: z.string().min(1).optional(),
   DEEP_MODEL_NAME: z.string().min(1).optional(),
   PRIVATE_MODEL_BASE_URL: z.string().url().optional(),
   PRIVATE_MODEL_NAME: z.string().min(1).optional(),

@@ -13,6 +13,7 @@ import { RuntimeGovernance } from "./governance/runtime.js";
 import { createAgentJobHandler } from "./jobs/agent-handler.js";
 import { JobWorker } from "./jobs/worker.js";
 import { createWorkflowJobHandler } from "./jobs/workflow-handler.js";
+import { OpenAIEmbeddingProvider, SemanticMemory } from "./memory/semantic.js";
 import { OpenAIProvider } from "./providers/openai-provider.js";
 import { Database } from "./storage/database.js";
 import { createBuiltinSkillRegistry } from "./skills/registry.js";
@@ -66,6 +67,12 @@ const modelProvider = new ModelRouter({
   deep: deepProvider,
   private: privateProvider,
 });
+const memory = new SemanticMemory(
+  database,
+  config.EMBEDDING_MODEL
+    ? new OpenAIEmbeddingProvider({ apiKey: config.MODEL_API_KEY, model: config.EMBEDDING_MODEL })
+    : undefined,
+);
 const skillRegistry = createBuiltinSkillRegistry();
 const governance = new RuntimeGovernance(database, {
   chat: config.DAILY_CHAT_QUOTA,
@@ -146,6 +153,7 @@ const app = await buildApp({
   governance,
   authService,
   telegramLinks,
+  memory,
   ...(connectors && githubConnector ? { connectors, githubConnector } : {}),
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },

@@ -1,4 +1,4 @@
-create table connector_credentials (
+create table if not exists connector_credentials (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references user_accounts(id) on delete cascade,
   provider text not null check (provider in ('github', 'google_drive', 'gmail', 'google_calendar')),
@@ -13,7 +13,7 @@ create table connector_credentials (
   unique (user_id, provider, label)
 );
 
-create index connector_credentials_user_provider_idx
+create index if not exists connector_credentials_user_provider_idx
   on connector_credentials (user_id, provider, updated_at desc);
 
 comment on table connector_credentials is

@@ -138,6 +138,14 @@ where possible. Repository mutation, webhooks, and GitHub Actions are not enable
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.
 
+When `EMBEDDING_MODEL` is configured, new memories also receive a bounded
+embedding and recall merges PostgreSQL full-text matches with cosine-ranked
+semantic candidates from the same user only. Embeddings are stored as native
+PostgreSQL arrays, so the feature does not require a separate vector database.
+Provider errors or invalid vectors fall back to lexical recall and never block
+chat. Existing memories continue to work and can be embedded later by an
+explicit backfill process.
+
 The autonomous endpoint accepts the same conversation fields as chat plus
 `maxSteps` (1–12, default configured by `AGENT_MAX_STEPS`), an optional
 `maxTotalTokens` budget that cannot exceed the operator's hard limit, and an
