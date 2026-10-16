@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import JSZip from "jszip";
 
 import { DocumentReader, DocumentWriter } from "../src/tools/documents.js";
 import { FileWorkspace } from "../src/tools/file-workspace.js";
@@ -66,6 +67,23 @@ describe("document writer", () => {
     const result = await new DocumentReader(workspace).extract("user-a", "reports/report.pdf");
     expect(result).toMatchObject({ format: "pdf", truncated: false });
     expect(result.text).toContain("Barlas PDF report");
+  });
+
+  it("extracts shared strings from XLSX and slide text from PPTX", async () => {
+    const root = await mkdtemp(join(tmpdir(), "barlas-documents-"));
+    roots.push(root);
+    const workspace = new FileWorkspace(root);
+    const spreadsheet = new JSZip();
+    spreadsheet.file("xl/sharedStrings.xml", '<sst><si><t>Revenue</t></si><si><t>October</t></si></sst>');
+    spreadsheet.file("xl/worksheets/sheet1.xml", '<worksheet><sheetData><row><c t="s"><v>0</v></c><c t="s"><v>1</v></c><c><v>42</v></c></row></sheetData></worksheet>');
+    await workspace.writeBuffer("user-a", "reports/data.xlsx", await spreadsheet.generateAsync({ type: "nodebuffer" }));
+
+    const slides = new JSZip();
+    slides.file("ppt/slides/slide1.xml", '<p:sld xmlns:p="p" xmlns:a="a"><a:t>Plan</a:t><a:t>Ship safely</a:t></p:sld>');
+    await workspace.writeBuffer("user-a", "reports/deck.pptx", await slides.generateAsync({ type: "nodebuffer" }));
+    const reader = new DocumentReader(workspace);
+    await expect(reader.extract("user-a", "reports/data.xlsx")).resolves.toMatchObject({ format: "xlsx", text: "Sheet 1\nRevenue\tOctober\t42" });
+    await expect(reader.extract("user-a", "reports/deck.pptx")).resolves.toMatchObject({ format: "pptx", text: "Slide 1\nPlan\nShip safely" });
   });
 });
 

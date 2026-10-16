@@ -25,6 +25,7 @@ export class ScheduleWorker {
       governance?: RuntimeGovernance;
       contextForSchedule?: (schedule: AgentSchedule) => Promise<AgentRunRecord["messages"]>;
       onError?: (error: unknown) => void;
+      isPaused?: () => Promise<boolean>;
     } = {},
   ) { this.workerId = `barlas-scheduler-${randomUUID()}`; }
 
@@ -32,6 +33,7 @@ export class ScheduleWorker {
   async stop(): Promise<void> { this.stopping = true; if (this.timer) clearTimeout(this.timer); this.timer = undefined; while (this.running) await new Promise((resolve) => setTimeout(resolve, 10)); }
 
   async runOnce(): Promise<number> {
+    if (await this.options.isPaused?.()) return 0;
     const schedules = await this.store.claimDueSchedules({ workerId: this.workerId, limit: this.options.batchSize ?? 4, leaseSeconds: this.options.leaseSeconds ?? 300 });
     for (const schedule of schedules) await this.dispatch(schedule);
     return schedules.length;

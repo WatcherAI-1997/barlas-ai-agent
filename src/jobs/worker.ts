@@ -13,6 +13,7 @@ export interface JobWorkerOptions {
   retryBaseMs?: number;
   onError?: (error: unknown) => void;
   governance?: RuntimeGovernance;
+  isPaused?: () => Promise<boolean>;
 }
 
 export class JobWorker {
@@ -22,6 +23,7 @@ export class JobWorker {
   private readonly leaseSeconds: number;
   private readonly batchSize: number;
   private readonly retryBaseMs: number;
+  private readonly pausedCheck: () => Promise<boolean>;
   private timer: NodeJS.Timeout | undefined;
   private running = false;
   private stopping = false;
@@ -35,6 +37,7 @@ export class JobWorker {
     this.leaseSeconds = options.leaseSeconds ?? 300;
     this.batchSize = options.batchSize ?? 4;
     this.retryBaseMs = options.retryBaseMs ?? 2_000;
+    this.pausedCheck = options.isPaused ?? (async () => false);
     this.onError = options.onError ?? (() => undefined);
     this.governance = options.governance;
   }
@@ -61,6 +64,7 @@ export class JobWorker {
   }
 
   async runOnce(): Promise<number> {
+    if (await this.pausedCheck()) return 0;
     const jobs = await this.store.claimJobs({
       workerId: this.workerId,
       limit: this.batchSize,

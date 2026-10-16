@@ -20,6 +20,7 @@ export class AgentRunWorker {
       retryBaseMs?: number;
       onFinished?: (run: AgentRunRecord) => Promise<void>;
       onError?: (error: unknown) => void;
+      isPaused?: () => Promise<boolean>;
     } = {},
   ) {
     this.workerId = options.workerId ?? `barlas-agent-run-worker-${randomUUID()}`;
@@ -39,6 +40,7 @@ export class AgentRunWorker {
   }
 
   async runOnce(): Promise<number> {
+    if (await this.options.isPaused?.()) return 0;
     const runs = await this.store.claimAgentRuns({
       workerId: this.workerId,
       limit: this.options.batchSize ?? 2,

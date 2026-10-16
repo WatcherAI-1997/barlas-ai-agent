@@ -74,6 +74,9 @@ describe("production installer", () => {
     expect(cli).toContain('if ($LocalCommand -eq "voice"');
     expect(cli).toContain('"auth-status"');
     expect(cli).toContain("voice-test=1");
+    expect(cli).toContain('$LocalCommand -eq "backup"');
+    expect(cli).toContain('$RequiresStoppedGateway');
+    expect(cli).toContain('$env:BARLAS_NATIVE_DATA');
     expect(cli).toContain("Open the private microphone and voice check now?");
     expect(nativeUpdater).toContain('ValidateSet("check", "update", "rollback", "repair")');
     expect(nativeUpdater).toContain("Rollback failed; restoring the current version");

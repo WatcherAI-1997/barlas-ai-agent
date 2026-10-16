@@ -57,6 +57,9 @@ import {
   agentProfileInstruction,
   type AgentProfileService,
 } from "./agents/profiles.js";
+import type { RuntimeControl, RuntimeControlState } from "./system/runtime-control.js";
+
+class RuntimePausedError extends Error {}
 
 const chatBodySchema = z.object({
   userId: z.string().min(1).max(128),
@@ -393,6 +396,7 @@ export interface AppDependencies {
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
+  runtimeControl?: Pick<RuntimeControl, "state" | "isPaused" | "pause" | "resume">;
   defaultSpeechVoice?: SpeechVoice;
   agentIdentity?: {
     name: string;
@@ -511,6 +515,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (error instanceof OrganizationAuthorizationError) {
       return reply.code(403).send({ error: error.message });
     }
+    if (error instanceof RuntimePausedError) {
+      return reply.code(503).send({ error: error.message, paused: true });
+    }
     return reply.send(error);
   });
 
@@ -628,6 +635,31 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (principal.authType !== "service" && principal.role !== "owner") throw new AuthorizationError();
     return principal;
   };
+
+  const assertRuntimeActive = async (): Promise<void> => {
+    if (await dependencies.runtimeControl?.isPaused()) {
+      throw new RuntimePausedError("Barlas is paused by its owner");
+    }
+  };
+
+  app.get("/v1/system/control", async (request) => {
+    requireOwner(request);
+    return await dependencies.runtimeControl?.state() ?? { paused: false } satisfies RuntimeControlState;
+  });
+
+  app.post("/v1/system/pause", async (request, reply) => {
+    requireOwner(request);
+    if (!dependencies.runtimeControl) return reply.notFound();
+    const parsed = z.object({ reason: z.string().trim().max(500).default("Paused by owner") }).strict().safeParse(request.body ?? {});
+    if (!parsed.success) return reply.badRequest("Invalid pause request");
+    return await dependencies.runtimeControl.pause(parsed.data.reason);
+  });
+
+  app.post("/v1/system/resume", async (request, reply) => {
+    requireOwner(request);
+    if (!dependencies.runtimeControl) return reply.notFound();
+    return await dependencies.runtimeControl.resume();
+  });
 
   app.get("/v1/me", async (request) => {
     const principal = principalFor(request);
@@ -1189,6 +1221,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   const runChat = async (input: z.infer<typeof chatBodySchema>) => {
+    await assertRuntimeActive();
     await dependencies.governance?.consume(input.userId, "chat");
     const conversationId = input.conversationId ?? randomUUID();
     const selectedProfile = dependencies.agentProfiles
@@ -1366,6 +1399,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   app.post("/v1/agent/run", async (request, reply) => {
+    await assertRuntimeActive();
     if (!dependencies.agentRuntime && !dependencies.agentLoop) return reply.notFound();
     const parsed = agentRunBodySchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid agent run request");
@@ -1849,6 +1883,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   app.post("/v1/jobs", async (request, reply) => {
+    await assertRuntimeActive();
     const parsed = createJobSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid job request");
     const userId = authorizeUser(request, parsed.data.userId);
@@ -1890,6 +1925,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   app.post("/v1/schedules", async (request, reply) => {
+    await assertRuntimeActive();
     if (!dependencies.schedules) return reply.notFound();
     const parsed = scheduleCreateSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid schedule request");

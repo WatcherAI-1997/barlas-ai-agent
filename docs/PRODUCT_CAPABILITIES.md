@@ -14,13 +14,13 @@ planned functionality as complete.
 | Extension discovery | Typed capability, risk and configuration catalog | Implemented |
 | Continuous terminal agent | Persistent conversations, sessions and slash commands | Implemented |
 | Autonomous tool loop | Durable bounded runs, recovery, cancellation and approval continuation | Implemented |
-| Skills | 30 built-in workflows plus versioned custom skills | Implemented |
+| Skills | 47 built-in workflows plus versioned custom skills | Implemented |
 | Third-party skill safety | Ed25519 packages, explicit publisher trust, evaluation gate and rollback | Implemented |
 | Local models | Ollama chat and tool calls without an API key | Implemented |
 | Research and coding | Search with citations, browser, GitHub, debugging, TDD, review and isolated execution | Implemented |
 | Memory and planning | Semantic/lexical memory, projects, goals, ordered plans and artifact versions | Implemented |
 | Multi-agent execution | Bounded parallel workflows and non-recursive analytical subagents | Implemented |
-| Multimodal work | Images, PDF/DOCX, audio transcription and speech replies | Implemented; provider-dependent |
+| Multimodal work | Images, PDF/DOCX/XLSX/PPTX, audio transcription and speech replies | Implemented; provider-dependent |
 | Wider channel ecosystem | Additional official adapters where safe local operation is possible | Planned |
 | Desktop/mobile control | Windows tray node with DPAPI token, current-user autostart, notifications only, and no remote shell | Implemented foundation; Authenticode/mobile/camera/screen pending |
 | Voice conversation | Explicit-consent web push-to-talk with ephemeral recordings and spoken contextual replies | Implemented; full-duplex interruption planned |

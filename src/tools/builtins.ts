@@ -138,7 +138,7 @@ export function createBuiltinToolRegistry(options: {
     });
     registry.register({
       name: "documents.extract",
-      description: "Extract bounded plain text from a PDF or DOCX document in the current user's isolated workspace.",
+      description: "Extract bounded text from PDF, DOCX, XLSX, or PPTX in the current user's isolated workspace.",
       risk: "read",
       inputSchema: z.object({ path: z.string().min(1).max(1_000) }).strict(),
       execute: async (input, context) => documentReader.extract(context.userId, (input as { path: string }).path),

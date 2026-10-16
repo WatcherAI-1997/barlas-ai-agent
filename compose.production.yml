@@ -15,6 +15,7 @@ services:
       PORT: 17840
       DATABASE_URL: postgresql://barlas_agent:${POSTGRES_PASSWORD}@database:5432/barlas_agent
       WORKSPACE_ROOT: /var/lib/barlas/workspaces
+      BARLAS_STATE_DIR: /var/lib/barlas/workspaces
       WEB_ROOT: /app/web
     expose:
       - "17840"

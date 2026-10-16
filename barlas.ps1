@@ -143,6 +143,19 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
         Open-VoiceTest
         exit 0
     }
+    if ($LocalCommand -eq "backup") {
+        $BackupAction = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "create" }
+        $RequiresStoppedGateway = $BackupAction -in @("create", "restore")
+        $env:BARLAS_NATIVE_DATA = Join-Path $BarlasHome "data"
+        if ($RequiresStoppedGateway) { & (Join-Path $RootDir "scripts\stop-native.ps1") }
+        try {
+            & $NodeExe (Join-Path $RootDir "dist\src\cli.js") @Arguments
+            $BackupExitCode = $LASTEXITCODE
+        } finally {
+            if ($RequiresStoppedGateway) { & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady }
+        }
+        exit $BackupExitCode
+    }
     if ($LocalCommand -eq "logs") {
         $LogFile = Join-Path $BarlasHome "logs\native.out.log"
         if (-not (Test-Path -LiteralPath $LogFile -PathType Leaf)) { throw "Barlas log is not available yet." }

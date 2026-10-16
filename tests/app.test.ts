@@ -122,6 +122,27 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("persists owner-controlled emergency pause and rejects new turns while paused", async () => {
+    const deps = dependencies();
+    let paused = false;
+    const runtimeControl = {
+      state: vi.fn(async () => ({ paused })),
+      isPaused: vi.fn(async () => paused),
+      pause: vi.fn(async () => ({ paused: (paused = true), reason: "maintenance" })),
+      resume: vi.fn(async () => ({ paused: (paused = false) })),
+    };
+    const app = await buildApp({ apiToken, ...deps, runtimeControl });
+    const headers = { authorization: `Bearer ${apiToken}` };
+
+    expect((await app.inject({ method: "POST", url: "/v1/system/pause", headers, payload: { reason: "maintenance" } })).statusCode).toBe(200);
+    const blocked = await app.inject({ method: "POST", url: "/v1/chat", headers, payload: { userId: "user-1", messages: [{ role: "user", content: "hello" }] } });
+    expect(blocked.statusCode).toBe(503);
+    expect(blocked.json()).toMatchObject({ paused: true });
+    expect((await app.inject({ method: "POST", url: "/v1/system/resume", headers, payload: {} })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/v1/system/control", headers })).json()).toMatchObject({ paused: false });
+    await app.close();
+  });
+
   it("lists extension capabilities and configuration state", async () => {
     const deps = dependencies();
     const extensionCatalog = createBuiltinExtensionCatalog({

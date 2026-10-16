@@ -122,6 +122,16 @@ context until `/new` is used. `/sessions` lists earlier conversations and
 `/nodes`, `/approvals`, `/approve ID`, `/reject ID`, and `/cancel RUN_ID`, so
 routine operation does not require leaving the chat.
 
+Operational controls are built into the same CLI. `barlas pause "maintenance"`
+atomically blocks new turns, queued workers, and scheduled dispatch while the
+gateway stays available for inspection; `barlas resume` continues processing.
+Create a portable, checksummed state archive with `barlas backup create`, verify
+it with `barlas backup verify FILE`, and restore it explicitly with
+`barlas backup restore FILE --force`. Native Windows backup and restore stop the
+gateway around the filesystem operation so the embedded database is captured
+consistently. Shell completion is available through
+`barlas completion powershell|bash|zsh|fish`.
+
 Create independent agent profiles with their own identity, model-routing class,
 and optional project workspace:
 
@@ -192,12 +202,14 @@ also available as `install-node-windows.ps1` for a different Windows device.
 irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-node-windows.ps1 | iex
 ```
 
-The installation includes 30 active built-in skills. The core pack covers
+The installation includes 47 active built-in skills. The core pack covers
 grounded and academic research, code inspection and delivery, debugging, TDD,
 GitHub, browser operation, architecture diagrams, DOCX/PDF, Markdown notes,
 video transcripts, Google Workspace, meeting and document actions, weekly
-planning, inbox triage, price and competitor monitoring, natural-language
-editing, and blocked-page recovery. The skills are compiled into the Barlas
+planning, inbox triage, price and competitor monitoring, spreadsheet and
+presentation extraction, infographics, web/generative design, songwriting,
+knowledge maps, connected team systems, language-specific debugging,
+natural-language editing, and blocked-page recovery. The skills are compiled into the Barlas
 image: the installer does not download or execute third-party scripts at
 runtime. Skills that need an optional connector simply expose those actions
 when the connector is configured.

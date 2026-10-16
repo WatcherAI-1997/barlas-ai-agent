@@ -41,8 +41,10 @@ import { DeviceNodeService } from "./nodes/service.js";
 import { createModelProvider } from "./providers/factory.js";
 import { runRuntimeShutdownHook } from "./runtime-lifecycle.js";
 import { AgentProfileService } from "./agents/profiles.js";
+import { RuntimeControl } from "./system/runtime-control.js";
 
 const config = loadConfig();
+const runtimeControl = new RuntimeControl();
 const openAIServiceApiKey = config.MEDIA_API_KEY ?? (config.MODEL_PROVIDER === "openai" ? config.MODEL_API_KEY : undefined);
 const database = new Database(config.DATABASE_URL);
 const authService = new AuthService(database, config.SESSION_TTL_HOURS);
@@ -195,6 +197,7 @@ const slack = config.SLACK_BOT_TOKEN && config.SLACK_APP_TOKEN && config.SLACK_S
   ? { socketSecret: config.BARLAS_API_TOKEN, client: new SlackClient(config.SLACK_BOT_TOKEN, config.SLACK_APP_TOKEN) }
   : undefined;
 const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
+  isPaused: () => runtimeControl.isPaused(),
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
   batchSize: config.JOB_WORKER_BATCH_SIZE,
   leaseSeconds: config.JOB_LEASE_SECONDS,
@@ -224,6 +227,7 @@ const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
   onError: (error) => console.error("Barlas AI Agent schedule worker error", error),
 });
 const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
+  isPaused: () => runtimeControl.isPaused(),
   pollIntervalMs: config.AGENT_RUN_WORKER_POLL_MS,
   batchSize: config.AGENT_RUN_WORKER_BATCH_SIZE,
   leaseSeconds: config.AGENT_RUN_LEASE_SECONDS,
@@ -300,6 +304,7 @@ const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
   onError: (error) => console.error("Barlas AI Agent autonomous run worker error", error),
 });
 const jobWorker = new JobWorker(database, {
+  isPaused: () => runtimeControl.isPaused(),
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
   batchSize: config.JOB_WORKER_BATCH_SIZE,
   leaseSeconds: config.JOB_LEASE_SECONDS,
@@ -336,6 +341,7 @@ const app = await buildApp({
   ...(mcpConnector ? { mcpConnector } : {}),
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
+  runtimeControl,
   defaultSpeechVoice: config.DEFAULT_SPEECH_VOICE,
   agentIdentity: {
     name: config.AGENT_NAME,

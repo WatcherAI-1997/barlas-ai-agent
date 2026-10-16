@@ -7,6 +7,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
+import {
+  createStateBackup,
+  defaultBackupName,
+  defaultStateDirectory,
+  restoreStateBackup,
+  verifyStateBackup,
+} from "./system/backup.js";
 
 import {
   createSignedSkillPackage,
@@ -422,11 +429,50 @@ async function audit(ctx: CliContext): Promise<void> {
 }
 
 async function doctor(ctx: CliContext): Promise<void> {
-  const [health, ready] = await Promise.all([
+  const [health, ready, control] = await Promise.all([
     ctx.api.request<{ status: string }>("/health"),
     ctx.api.request<{ status: string }>("/ready"),
+    ctx.api.request<{ paused: boolean }>("/v1/system/control"),
   ]);
-  output.write(`API: ${health.status}\nRuntime: ${ready.status}\nGateway: authenticated\nURL: ${ctx.baseUrl}\n`);
+  output.write(`API: ${health.status}\nRuntime: ${ready.status}${control.paused ? " (paused)" : ""}\nGateway: authenticated\nURL: ${ctx.baseUrl}\n`);
+}
+
+async function runtimeControl(ctx: CliContext, actionName: "status" | "pause" | "resume", reason = ""): Promise<void> {
+  const path = actionName === "status" ? "/v1/system/control" : `/v1/system/${actionName}`;
+  const state = await ctx.api.request<{ paused: boolean; reason?: string; changedAt?: string }>(path, actionName === "status" ? {} : {
+    method: "POST",
+    body: JSON.stringify(actionName === "pause" ? { reason: reason || "Paused by owner" } : {}),
+  });
+  output.write(`Runtime: ${state.paused ? "paused" : "active"}${state.reason ? `\nReason: ${state.reason}` : ""}${state.changedAt ? `\nChanged: ${state.changedAt}` : ""}\n`);
+}
+
+const completionCommands = [
+  "agent", "agents", "approvals", "approve", "audit", "backup", "channels", "chat", "completion",
+  "config", "configure", "cron", "daemon", "dashboard", "devices", "doctor", "extensions", "gateway",
+  "health", "integrations", "jobs", "logs", "memory", "models", "node", "nodes", "onboard", "pause",
+  "plugins", "projects", "reject", "repair", "resume", "runs", "schedules", "security", "sessions",
+  "skills", "status", "system", "tasks", "terminal", "tools", "transcripts", "tui", "uninstall", "update", "voice",
+];
+
+export function generateShellCompletion(shell: string): string {
+  const words = completionCommands.join(" ");
+  if (shell === "bash") return `complete -W '${words}' barlas\n`;
+  if (shell === "zsh") return `#compdef barlas\n_arguments '1:command:(${words})'\n`;
+  if (shell === "fish") return completionCommands.map((command) => `complete -c barlas -f -a '${command}'`).join("\n") + "\n";
+  if (["powershell", "pwsh"].includes(shell)) return `Register-ArgumentCompleter -Native -CommandName barlas -ScriptBlock { param($wordToComplete) '${words}'.Split(' ') | Where-Object { $_ -like \"$wordToComplete*\" } | ForEach-Object { [Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) } }\n`;
+  throw new Error("Shell must be bash, zsh, fish, or powershell");
+}
+
+async function backupCommand(args: string[]): Promise<void> {
+  const actionName = args[1] ?? "create";
+  const archive = args[2] && !args[2]!.startsWith("--") ? args[2]! : defaultBackupName();
+  const source = option(args, "--source") ?? defaultStateDirectory();
+  const target = option(args, "--target") ?? defaultStateDirectory();
+  const summary = actionName === "create" ? await createStateBackup(source, archive)
+    : actionName === "verify" ? await verifyStateBackup(archive)
+      : actionName === "restore" ? await restoreStateBackup(archive, target, args.includes("--force"))
+        : (() => { throw new Error("Backup action must be create, verify, or restore"); })();
+  output.write(`Backup ${actionName}: ${summary.archive}\nFiles: ${summary.files}\nBytes: ${summary.bytes}\nCreated: ${summary.createdAt}\n`);
 }
 
 async function action(ctx: CliContext, resource: "agent-runs" | "jobs" | "schedules", id: string, verb: string): Promise<void> {
@@ -634,6 +680,9 @@ function help(): void {
   voice test                        приватная проверка микрофона и голоса (Windows)
 
 Работа:
+  pause [причина]                   аварийно остановить новые задачи и workers
+  resume                            продолжить работу после общей паузы
+  system status                     показать состояние общей паузы
   runs                              последние запуски
   runs cancel <id>                  отменить запуск
   jobs                              фоновые задачи
@@ -674,6 +723,10 @@ function help(): void {
   audit                             журнал действий
 
 Система Windows:
+  backup create [file] [--source DIR] создать проверяемый архив состояния
+  backup verify FILE                 проверить CRC, состав и SHA-256
+  backup restore FILE --force        восстановить состояние с проверкой путей
+  completion SHELL                  completion для bash/zsh/fish/powershell
   gateway status                    состояние Gateway
   gateway start|stop|restart        управление Gateway
   gateway health                    диагностика Gateway
@@ -762,6 +815,8 @@ async function tui(ctx: CliContext): Promise<void> {
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const command = args[0] ?? (process.stdin.isTTY ? "tui" : "help");
   if (["help", "--help", "-h"].includes(command)) { help(); return; }
+  if (command === "completion") { output.write(generateShellCompletion(args[1] ?? "")); return; }
+  if (command === "backup") return backupCommand(args);
   if (command === "skills" && args[1] === "verify") return verifySkillPackageFile(args[2] ?? "");
   if (command === "skills" && args[1] === "keygen") return createSkillSigningKey(args[2] ?? "");
   if (command === "skills" && args[1] === "sign") return signSkillPackageFile(args[2] ?? "", args[3] ?? "", args[4] ?? "");
@@ -775,6 +830,9 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     return signSkillCatalogFile(args[3] ?? "", args[4] ?? "", args[5] ?? "", option(args, "--name") ?? "");
   }
   const ctx = await context();
+  if (command === "pause") return runtimeControl(ctx, "pause", args.slice(1).join(" ").trim());
+  if (command === "resume") return runtimeControl(ctx, "resume");
+  if (command === "system" && (args[1] ?? "status") === "status") return runtimeControl(ctx, "status");
   if (["tui", "chat", "terminal"].includes(command)) return tui(ctx);
   if (["ask", "agent"].includes(command)) {
     const profileId = option(args, "--profile");

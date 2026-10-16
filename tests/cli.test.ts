@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { BarlasApiClient, renderRows } from "../src/cli.js";
+import { BarlasApiClient, generateShellCompletion, renderRows } from "../src/cli.js";
 
 describe("Barlas CLI", () => {
   it("authenticates API requests without exposing the token in the URL", async () => {
@@ -23,5 +23,13 @@ describe("Barlas CLI", () => {
     expect(rendered).toContain("run-1");
     expect(rendered).toContain("completed");
     expect(rendered).not.toContain("x".repeat(51));
+  });
+
+  it("generates completion scripts for supported shells", () => {
+    expect(generateShellCompletion("bash")).toContain("complete -W");
+    expect(generateShellCompletion("zsh")).toContain("#compdef barlas");
+    expect(generateShellCompletion("fish")).toContain("complete -c barlas");
+    expect(generateShellCompletion("powershell")).toContain("Register-ArgumentCompleter");
+    expect(() => generateShellCompletion("cmd")).toThrow(/Shell must/u);
   });
 });

@@ -14,6 +14,10 @@ ideas from selected MIT-licensed skill documents published by Nous Research:
   triage;
 - Google Workspace, Markdown notes, video transcripts, architecture diagrams,
   browser operation, price monitoring, and natural-language editing.
+- spreadsheet and presentation analysis, infographics, web and generative
+  design, songwriting, GIF research, knowledge maps, maps, connected team
+  databases/files/pages, meeting pipelines, language-specific debugging,
+  declarative skill authoring, and product dogfooding.
 
 The adaptations use Barlas' own isolated tool names, approval model, and
 runtime. Upstream scripts, package hooks, credentials, and platform-specific

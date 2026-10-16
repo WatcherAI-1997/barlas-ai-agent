@@ -51,7 +51,7 @@ describe("versioned skill registry", () => {
     expect(bundled.map((skill) => skill.id).sort()).toEqual([...expected].sort());
     expect(bundled.every((skill) => skill.active)).toBe(true);
     expect(bundled.every((skill) => skill.allowedTools.length > 0)).toBe(true);
-    expect(registry.list()).toHaveLength(30);
+    expect(registry.list()).toHaveLength(47);
   });
 });
 
