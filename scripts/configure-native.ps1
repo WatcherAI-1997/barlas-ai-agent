@@ -146,6 +146,20 @@ function Read-BoundedInteger([string]$Prompt, [string]$Default, [int64]$Minimum,
         [int64]::TryParse([string]$Candidate, [ref]$Parsed) -and $Parsed -ge $Minimum -and $Parsed -le $Maximum
     } "Enter a whole number between $Minimum and $Maximum."
 }
+function Read-ModelSelection([string]$Provider, [string]$Prompt, [string]$Default) {
+    if ($Provider -eq "codex_cli" -or $Provider -eq "openai") {
+        $Values = @("gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini", "gpt-5.4-nano", "custom")
+    } elseif ($Provider -eq "anthropic") {
+        $Values = @("claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-1", "custom")
+    } else {
+        $Values = @("qwen3:8b", "qwen3:14b", "qwen3:30b", "gpt-oss:20b", "gpt-oss:120b", "llama3.3", "deepseek-r1", "custom")
+    }
+    $Labels = @($Values | ForEach-Object { if ($_ -eq "custom") { "Any other current, future, or installed model ID" } else { $_ } })
+    $MenuDefault = if ($Default -in $Values) { $Default } else { "custom" }
+    $Selected = Read-MappedChoice $Prompt $Values $Labels $MenuDefault
+    if ($Selected -ne "custom") { return $Selected }
+    return Read-ValidatedPlain "Model ID" $Default { param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and -not ([string]$Value).Contains("`r") -and -not ([string]$Value).Contains("`n") } "Model ID cannot be blank."
+}
 function Write-Step([int]$Number, [int]$Total, [string]$Title) {
     Write-Host "`n[$Number/$Total] $Title" -ForegroundColor Cyan
 }
@@ -201,14 +215,14 @@ function Configure-Models {
     $Provider = Read-MappedChoice "Model access" @("codex_cli", "openai", "anthropic", "ollama") @("OpenAI account - browser sign-in, no API key", "OpenAI API - usage-based key", "Anthropic API - usage-based key", "Ollama - local and private") (Current "MODEL_PROVIDER" "codex_cli")
     Set-Value "MODEL_PROVIDER" $Provider
     if ($Provider -eq "codex_cli") {
-        & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status *> $null
-        if ($LASTEXITCODE -ne 0) { & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action login }
-        if (-not $?) { throw "OpenAI account sign-in did not complete" }
+        $AuthState = & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status -Quiet
+        if ($AuthState -ne "connected") { & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action login }
         Set-Value "MODEL_API_KEY" ""
     }
-    $DefaultModel = if ($Provider -eq "ollama") { "qwen3:8b" } elseif ($Provider -eq "anthropic") { "claude-sonnet-4-5" } elseif ($Provider -eq "codex_cli") { "gpt-5.6-sol" } else { "gpt-5" }
-    Set-Value "MODEL_NAME" (Read-Plain "Default model" (Current "MODEL_NAME" $DefaultModel))
-    Set-Value "DEEP_MODEL_NAME" (Read-Plain "Deep model" (Current "DEEP_MODEL_NAME" (Current "MODEL_NAME")))
+    $DefaultModel = if ($Provider -eq "ollama") { "qwen3:8b" } elseif ($Provider -eq "anthropic") { "claude-sonnet-4-5" } else { "gpt-6.1-sol" }
+    Set-Value "MODEL_NAME" (Read-ModelSelection $Provider "Default model" (Current "MODEL_NAME" $DefaultModel))
+    $DeepDefault = if ($Provider -in @("codex_cli", "openai")) { "gpt-6-astra" } else { Current "DEEP_MODEL_NAME" (Current "MODEL_NAME") }
+    Set-Value "DEEP_MODEL_NAME" (Read-ModelSelection $Provider "Deep model" (Current "DEEP_MODEL_NAME" $DeepDefault))
     if ($Provider -eq "ollama") {
         Set-Value "MODEL_API_KEY" ""
         Set-Value "OLLAMA_BASE_URL" (Read-Plain "Ollama URL" (Current "OLLAMA_BASE_URL" "http://127.0.0.1:11434"))

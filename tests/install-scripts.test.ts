@@ -23,6 +23,7 @@ describe("production installer", () => {
     const configure = await readFile(join(root, "scripts", "configure-native.ps1"), "utf8");
     const nativeUpdater = await readFile(join(root, "scripts", "update-native.ps1"), "utf8");
     const nativeUninstaller = await readFile(join(root, "scripts", "uninstall-native.ps1"), "utf8");
+    const modelAuth = await readFile(join(root, "scripts", "model-auth-native.ps1"), "utf8");
     const installerMenuTest = await readFile(join(root, "tests", "powershell-installer-menu.ps1"), "utf8");
     const configureMenuTest = await readFile(join(root, "tests", "powershell-configure-menu.ps1"), "utf8");
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
@@ -44,6 +45,10 @@ describe("production installer", () => {
       "OpenAI account - browser sign-in, no API key",
       "Ollama - local and private",
       '"qwen3:8b"',
+      '"gpt-6-astra"',
+      '"gpt-6.1-sol"',
+      '"custom"',
+      "Any other current or future model ID",
     ]) expect(installer).toContain(required);
     expect(installer).not.toContain("$Answer.StartsWith($Candidate)");
     expect(installer).not.toContain("Docker");
@@ -53,6 +58,8 @@ describe("production installer", () => {
     expect(configure).toContain("Protect-File");
     expect(configure).toContain("Read-ArrowChoice");
     expect(configure).toContain("Read-MappedChoice");
+    expect(configure).toContain("Read-ModelSelection");
+    expect(configure).toContain("Any other current, future, or installed model ID");
     expect(configure).toContain("[int]::TryParse");
     expect(configure).not.toContain('Read-Plain "Provider: openai, anthropic, or local ollama"');
     expect(installerMenuTest).toContain("invalid environment provider was accepted");
@@ -72,6 +79,10 @@ describe("production installer", () => {
     expect(nativeUninstaller).toContain("Type UNINSTALL to continue");
     expect(nativeUninstaller).toContain("uninstalled-native.env");
     expect(nativeUninstaller).toContain("Protect-File");
+    expect(modelAuth).toContain('[switch]$Quiet');
+    expect(modelAuth).toContain('$ErrorActionPreference = "Continue"');
+    expect(modelAuth).toContain('Write-Output "disconnected"');
+    expect(modelAuth).not.toContain("exit $LASTEXITCODE");
     expect(dashboard).toContain("#token=$Token");
     expect(cli).toContain("dist/src/cli.js");
     for (const required of [

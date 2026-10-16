@@ -163,6 +163,26 @@ function Read-OwnerLanguage {
     }
 }
 
+function Read-ModelSelection([string]$Provider, [string]$Title, [string]$Default) {
+    if ($NonInteractive) { return $Default }
+    if ($Provider -eq "codex_cli" -or $Provider -eq "openai") {
+        $Values = @("gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini", "gpt-5.4-nano", "custom")
+        $Labels = @("GPT-6 Astra - maximum capability", "GPT-6.1 Sol - powerful and efficient", "GPT-6 Sol - coding and agents", "GPT-6 Luna - fast and economical", "GPT-5.6 Sol", "GPT-5.6 Terra", "GPT-5.6 Luna", "GPT-5.5", "GPT-5.5 Pro", "GPT-5.4", "GPT-5.4 Pro", "GPT-5.4 Mini", "GPT-5.4 Nano", "Any other current or future model ID")
+    } elseif ($Provider -eq "anthropic") {
+        $Values = @("claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-1", "custom")
+        $Labels = @("Claude Sonnet 4.5", "Claude Haiku 4.5", "Claude Opus 4.1", "Any other current or future model ID")
+    } else {
+        $Values = @("qwen3:8b", "qwen3:14b", "qwen3:30b", "gpt-oss:20b", "gpt-oss:120b", "llama3.3", "deepseek-r1", "custom")
+        $Labels = @("Qwen 3 8B - recommended for laptops", "Qwen 3 14B", "Qwen 3 30B", "GPT-OSS 20B", "GPT-OSS 120B", "Llama 3.3", "DeepSeek R1", "Any installed Ollama model ID")
+    }
+    $MenuDefault = if ($Default -in $Values) { $Default } else { "custom" }
+    $Selected = Read-MenuChoice "" $Title $Values $Labels $MenuDefault
+    if ($Selected -ne "custom") { return $Selected }
+    return Read-ValidatedValue "" "Model ID" $Default {
+        param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and -not ([string]$Value).Contains("`r") -and -not ([string]$Value).Contains("`n")
+    } "Model ID cannot be blank."
+}
+
 function New-RandomHex([int]$Bytes) {
     $Buffer = New-Object byte[] $Bytes
     ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($Buffer)
@@ -209,20 +229,17 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     $ProviderAliases = @{ "openai account" = "codex_cli"; "openai oauth" = "codex_cli"; "cli oauth" = "codex_cli"; "openai api" = "openai"; "openai codex" = "codex_cli"; "anthropic api" = "anthropic"; "local ollama" = "ollama" }
     $ModelProvider = Read-MenuChoice "MODEL_PROVIDER" "Model access" @("codex_cli", "openai", "anthropic", "ollama") @("OpenAI account - browser sign-in, no API key", "OpenAI API - usage-based key", "Anthropic API - usage-based key", "Ollama - local and private") "codex_cli" $ProviderAliases
     if ($ModelProvider -eq "codex_cli") {
-        & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status *> $null
-        if ($LASTEXITCODE -ne 0) {
+        $AuthState = & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status -Quiet
+        if ($AuthState -ne "connected") {
             if ($NonInteractive) { throw "MODEL_PROVIDER=codex_cli requires an existing OpenAI account sign-in." }
             & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action login
-            if (-not $?) { throw "OpenAI account sign-in did not complete." }
         }
     }
-    $DefaultModel = if ($ModelProvider -eq "ollama") { "qwen3:8b" } elseif ($ModelProvider -eq "anthropic") { "claude-sonnet-4-5" } elseif ($ModelProvider -eq "codex_cli") { "gpt-5.6-sol" } else { "gpt-5" }
-    $ModelName = Read-ValidatedValue "MODEL_NAME" "Fast/default model name" $DefaultModel {
-        param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and -not ([string]$Value).Contains("`r") -and -not ([string]$Value).Contains("`n")
-    } "Model name cannot be blank."
-    $DeepModelName = Read-ValidatedValue "DEEP_MODEL_NAME" "Deep model name" $ModelName {
-        param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and -not ([string]$Value).Contains("`r") -and -not ([string]$Value).Contains("`n")
-    } "Deep model name cannot be blank."
+    $DefaultModel = if ($ModelProvider -eq "ollama") { "qwen3:8b" } elseif ($ModelProvider -eq "anthropic") { "claude-sonnet-4-5" } else { "gpt-6.1-sol" }
+    $EnvironmentModel = [Environment]::GetEnvironmentVariable("MODEL_NAME")
+    $ModelName = if ($EnvironmentModel) { $EnvironmentModel } else { Read-ModelSelection $ModelProvider "Default model" $DefaultModel }
+    $EnvironmentDeepModel = [Environment]::GetEnvironmentVariable("DEEP_MODEL_NAME")
+    $DeepModelName = if ($EnvironmentDeepModel) { $EnvironmentDeepModel } else { Read-ModelSelection $ModelProvider "Deep model" $(if ($ModelProvider -in @("codex_cli", "openai")) { "gpt-6-astra" } else { $ModelName }) }
     $MediaApiKey = ""
     if ($ModelProvider -ne "openai") {
         $MediaApiKey = Read-Value "MEDIA_API_KEY" "Optional OpenAI key for media features" "" -Secret
