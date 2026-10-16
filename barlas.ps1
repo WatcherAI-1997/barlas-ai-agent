@@ -36,7 +36,7 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
     $LocalCommand = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
     $ConfigureScript = Join-Path $RootDir "scripts\configure-native.ps1"
     if ($LocalCommand -in @("onboard", "configure")) {
-        $Profiles = @("quick", "private", "developer", "server", "import")
+        $Profiles = @("complete", "quick", "private", "developer", "server", "import")
         $Requested = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "" }
         $Section = if ($LocalCommand -eq "onboard" -or $Requested -in $Profiles -or -not $Requested) { "all" } else { $Requested }
         $Profile = if ($Requested -in $Profiles) { $Requested } else { "" }
@@ -66,8 +66,12 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
         }
         exit 0
     }
-    if ($LocalCommand -eq "models" -and $Arguments.Count -gt 1 -and $Arguments[1] -in @("status", "configure")) {
+    if ($LocalCommand -eq "models" -and $Arguments.Count -gt 1 -and $Arguments[1] -in @("status", "configure", "login", "logout", "auth-status")) {
         if ($Arguments[1] -eq "status") { & $ConfigureScript -Action models-status }
+        elseif ($Arguments[1] -in @("login", "logout", "auth-status")) {
+            $AuthAction = if ($Arguments[1] -eq "auth-status") { "status" } else { $Arguments[1] }
+            & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action $AuthAction
+        }
         else {
             & $ConfigureScript -Action wizard -Section models
             if ($?) { & (Join-Path $RootDir "scripts\stop-native.ps1"); & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady }

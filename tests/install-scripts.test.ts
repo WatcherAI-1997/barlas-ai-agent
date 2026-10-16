@@ -32,7 +32,7 @@ describe("production installer", () => {
       'BARLAS_INSTALL_MODE = "native"',
       "Protect-SecretFile",
       "RandomNumberGenerator",
-      'BROWSER_WS_ENDPOINT = "local://chromium"',
+      "BROWSER_WS_ENDPOINT = $BrowserEndpoint",
       "scripts\\start-native.ps1",
       "BARLAS PERSONAL SETUP",
       "Read-MenuChoice",
@@ -40,8 +40,9 @@ describe("production installer", () => {
       "Read-ValidatedValue",
       "[int]::TryParse",
       "Use Up/Down and Enter. Number keys also work.",
-      '"openai codex" = "openai"',
-      "Ollama - local and private, no cloud key",
+      '"openai codex" = "codex_cli"',
+      "OpenAI account - browser sign-in, no API key",
+      "Ollama - local and private",
       '"qwen3:8b"',
     ]) expect(installer).toContain(required);
     expect(installer).not.toContain("$Answer.StartsWith($Candidate)");
@@ -56,12 +57,13 @@ describe("production installer", () => {
     expect(configure).not.toContain('Read-Plain "Provider: openai, anthropic, or local ollama"');
     expect(installerMenuTest).toContain("invalid environment provider was accepted");
     expect(configureMenuTest).toContain("invalid existing default");
-    for (const profile of ["quick", "private", "developer", "server", "import"]) expect(configure).toContain(`\"${profile}\"`);
+    for (const profile of ["complete", "quick", "private", "developer", "server", "import"]) expect(configure).toContain(`\"${profile}\"`);
     for (const section of ["identity", "memory", "integrations", "automations", "security"]) expect(configure).toContain(`\"${section}\"`);
     expect(configure).toContain("Import existing Barlas configuration");
     expect(configure).toContain("Imported $Imported supported settings");
     expect(cli).toContain("doctor-native.ps1");
     expect(cli).toContain('if ($LocalCommand -eq "voice"');
+    expect(cli).toContain('"auth-status"');
     expect(cli).toContain("voice-test=1");
     expect(cli).toContain("Open the private microphone and voice check now?");
     expect(nativeUpdater).toContain('ValidateSet("check", "update", "rollback", "repair")');

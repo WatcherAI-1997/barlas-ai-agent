@@ -56,7 +56,7 @@ export interface BuiltinExtensionAvailability {
   slack: boolean;
   privateModel: boolean;
   deviceNodes: boolean;
-  modelProvider: "openai" | "anthropic" | "ollama";
+  modelProvider: "codex_cli" | "openai" | "anthropic" | "ollama";
 }
 
 export function createBuiltinExtensionCatalog(availability: BuiltinExtensionAvailability): ExtensionCatalog {
@@ -73,6 +73,7 @@ export function createBuiltinExtensionCatalog(availability: BuiltinExtensionAvai
   add({ id: "connector.mcp", name: "Model Context Protocol", description: "Connect approved MCP servers and expose their tools to Barlas.", kind: "connector", capabilities: ["tools.discover", "tools.execute"], risks: ["external", "write"], configuration: ["CONNECTOR_VAULT_KEY"] }, () => availability.mcp);
   add({ id: "provider.anthropic", name: "Anthropic", description: "Native Anthropic Messages API provider with durable tool continuations.", kind: "provider", capabilities: ["chat", "tools"], risks: ["external"], configuration: ["MODEL_API_KEY", "MODEL_NAME"] }, () => availability.modelProvider === "anthropic");
   add({ id: "provider.openai", name: "OpenAI", description: "Native OpenAI model, media and embedding provider.", kind: "provider", capabilities: ["chat", "embeddings", "media", "tools"], risks: ["external"], configuration: ["MODEL_API_KEY", "MODEL_NAME"] }, () => availability.modelProvider === "openai");
+  add({ id: "provider.openai-account", name: "OpenAI account", description: "Browser-authenticated local model access through the bundled official CLI.", kind: "provider", capabilities: ["chat", "tools"], risks: ["external"], configuration: ["MODEL_NAME"] }, () => availability.modelProvider === "codex_cli");
   add({ id: "provider.ollama", name: "Ollama", description: "Free local models through the native Ollama chat and tool API.", kind: "provider", capabilities: ["chat", "local", "tools"], risks: ["none"], configuration: ["OLLAMA_BASE_URL", "MODEL_NAME"] }, () => availability.modelProvider === "ollama");
   add({ id: "provider.openai-compatible", name: "OpenAI-compatible private model", description: "Optional self-hosted or compatible private model route.", kind: "provider", capabilities: ["chat", "tools"], risks: ["external"], configuration: ["PRIVATE_MODEL_API_KEY", "PRIVATE_MODEL_BASE_URL", "PRIVATE_MODEL_NAME"] }, () => availability.privateModel);
   add({ id: "runtime.browser", name: "Managed browser", description: "Isolated Playwright browser navigation and extraction.", kind: "runtime", capabilities: ["browser.navigate", "browser.read"], risks: ["external", "read"], configuration: ["BROWSER_WS_ENDPOINT"] }, () => availability.browser);

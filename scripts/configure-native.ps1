@@ -2,8 +2,8 @@
 param(
     [ValidateSet("wizard", "list", "get", "set", "unset", "file", "schema", "validate", "models-status", "channels-status", "security-audit")]
     [string]$Action = "wizard",
-    [ValidateSet("all", "general", "identity", "models", "memory", "channels", "integrations", "automations", "security", "agent")][string]$Section = "all",
-    [ValidateSet("", "quick", "private", "developer", "server", "import")][string]$Profile = "",
+    [ValidateSet("all", "general", "identity", "models", "memory", "tools", "channels", "integrations", "automations", "security", "agent")][string]$Section = "all",
+    [ValidateSet("", "complete", "quick", "private", "developer", "server", "import")][string]$Profile = "",
     [string]$Key,
     [string]$Value
 )
@@ -17,7 +17,8 @@ $AllowedKeys = @(
     "TRANSCRIPTION_MODEL", "SPEECH_MODEL", "DEFAULT_SPEECH_VOICE", "EMBEDDING_MODEL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET",
     "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED", "AGENT_MAX_STEPS", "AGENT_MAX_TOTAL_TOKENS", "AGENT_MAX_OUTPUT_TOKENS_PER_STEP",
     "DAILY_CHAT_QUOTA", "DAILY_TOOL_QUOTA", "DAILY_JOB_QUOTA", "AGENT_NAME", "AGENT_STYLE", "AGENT_INSTRUCTIONS",
-    "JOB_WORKER_ENABLED", "AGENT_RUN_WORKER_ENABLED", "SESSION_TTL_HOURS", "MAX_WORKSPACE_FILE_BYTES"
+    "JOB_WORKER_ENABLED", "AGENT_RUN_WORKER_ENABLED", "SESSION_TTL_HOURS", "MAX_WORKSPACE_FILE_BYTES",
+    "BROWSER_WS_ENDPOINT", "SEARXNG_BASE_URL", "LOG_LEVEL", "TELEGRAM_BOT_API_BASE_URL", "TELEGRAM_MAX_UPLOAD_BYTES"
 )
 $SecretKeys = @("MODEL_API_KEY", "MEDIA_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "DISCORD_BOT_TOKEN", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "BARLAS_API_TOKEN", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY")
 
@@ -138,6 +139,13 @@ function Read-ValidatedPlain([string]$Prompt, [string]$Default, [scriptblock]$Va
         Write-Host $ErrorMessage -ForegroundColor Yellow
     }
 }
+function Read-BoundedInteger([string]$Prompt, [string]$Default, [int64]$Minimum, [int64]$Maximum) {
+    return Read-ValidatedPlain $Prompt $Default {
+        param($Candidate)
+        $Parsed = [int64]0
+        [int64]::TryParse([string]$Candidate, [ref]$Parsed) -and $Parsed -ge $Minimum -and $Parsed -le $Maximum
+    } "Enter a whole number between $Minimum and $Maximum."
+}
 function Write-Step([int]$Number, [int]$Total, [string]$Title) {
     Write-Host "`n[$Number/$Total] $Title" -ForegroundColor Cyan
 }
@@ -163,7 +171,7 @@ function Save-Settings {
     } finally { Remove-Item -LiteralPath $Temporary -Force -ErrorAction SilentlyContinue }
 }
 function Configure-General {
-    Write-Step 1 9 "General"
+    Write-Step 1 10 "General"
     $Port = Read-ValidatedPlain "Local web port" (Current "PORT" "17840") {
         param($Candidate)
         $Parsed = 0
@@ -178,7 +186,7 @@ function Configure-General {
     Set-Value "OWNER_LANGUAGE" (Read-Plain "Language code" (Current "OWNER_LANGUAGE" "ru"))
 }
 function Configure-Identity {
-    Write-Step 2 9 "Agent identity"
+    Write-Step 2 10 "Agent identity"
     $Name = Read-Plain "Agent name" (Current "AGENT_NAME" "Barlas")
     if ($Name.Length -lt 1 -or $Name.Length -gt 80) { throw "Agent name must be between 1 and 80 characters" }
     Set-Value "AGENT_NAME" $Name
@@ -189,15 +197,22 @@ function Configure-Identity {
     Set-Value "AGENT_INSTRUCTIONS" $Instructions
 }
 function Configure-Models {
-    Write-Step 3 9 "Models and voice"
-    $Provider = Read-MappedChoice "Model provider" @("openai", "anthropic", "ollama") @("OpenAI API - cloud key required", "Anthropic API - cloud key required", "Ollama - local and private, no cloud key") (Current "MODEL_PROVIDER" "openai")
+    Write-Step 3 10 "Models and voice"
+    $Provider = Read-MappedChoice "Model access" @("codex_cli", "openai", "anthropic", "ollama") @("OpenAI account - browser sign-in, no API key", "OpenAI API - usage-based key", "Anthropic API - usage-based key", "Ollama - local and private") (Current "MODEL_PROVIDER" "codex_cli")
     Set-Value "MODEL_PROVIDER" $Provider
-    Set-Value "MODEL_NAME" (Read-Plain "Default model" (Current "MODEL_NAME"))
+    if ($Provider -eq "codex_cli") {
+        & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status *> $null
+        if ($LASTEXITCODE -ne 0) { & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action login }
+        if (-not $?) { throw "OpenAI account sign-in did not complete" }
+        Set-Value "MODEL_API_KEY" ""
+    }
+    $DefaultModel = if ($Provider -eq "ollama") { "qwen3:8b" } elseif ($Provider -eq "anthropic") { "claude-sonnet-4-5" } elseif ($Provider -eq "codex_cli") { "gpt-5.6-sol" } else { "gpt-5" }
+    Set-Value "MODEL_NAME" (Read-Plain "Default model" (Current "MODEL_NAME" $DefaultModel))
     Set-Value "DEEP_MODEL_NAME" (Read-Plain "Deep model" (Current "DEEP_MODEL_NAME" (Current "MODEL_NAME")))
     if ($Provider -eq "ollama") {
         Set-Value "MODEL_API_KEY" ""
         Set-Value "OLLAMA_BASE_URL" (Read-Plain "Ollama URL" (Current "OLLAMA_BASE_URL" "http://127.0.0.1:11434"))
-    } else {
+    } elseif ($Provider -ne "codex_cli") {
         $NewKey = Read-Secret "Model API key (blank keeps current)"
         if ($NewKey) { Set-Value "MODEL_API_KEY" $NewKey }
     }
@@ -215,17 +230,32 @@ function Configure-Models {
     }
 }
 function Configure-Memory {
-    Write-Step 4 9 "Memory"
+    Write-Step 4 10 "Memory"
     $Mode = Read-Choice "Memory mode" @("standard", "semantic") "$(if (Current 'EMBEDDING_MODEL') { 'semantic' } else { 'standard' })"
     if ($Mode -eq "semantic") {
         Set-Value "EMBEDDING_MODEL" (Read-Plain "Embedding model" (Current "EMBEDDING_MODEL" "text-embedding-3-small"))
     } else { $Settings.Remove("EMBEDDING_MODEL") }
 }
+function Configure-Tools {
+    Write-Step 5 10 "Browser and tools"
+    $BrowserMode = Read-MappedChoice "Managed browser" @("enabled", "disabled") @("Enabled - browser actions remain approval-bound", "Disabled") "$(if (Current 'BROWSER_WS_ENDPOINT') { 'enabled' } else { 'disabled' })"
+    if ($BrowserMode -eq "enabled") { Set-Value "BROWSER_WS_ENDPOINT" "local://chromium" }
+    else { $Settings.Remove("BROWSER_WS_ENDPOINT") }
+    $SearchMode = Read-MappedChoice "Private web search endpoint" @("keep", "configure", "disable") @("Keep current setting", "Configure a SearXNG HTTPS endpoint", "Disable dedicated search endpoint") "keep"
+    if ($SearchMode -eq "configure") {
+        $Endpoint = Read-ValidatedPlain "SearXNG URL" (Current "SEARXNG_BASE_URL" "https://search.example.com") {
+            param($Candidate) [Uri]::IsWellFormedUriString([string]$Candidate, [UriKind]::Absolute) -and ([Uri]$Candidate).Scheme -eq "https"
+        } "Enter a valid HTTPS URL."
+        Set-Value "SEARXNG_BASE_URL" $Endpoint
+    } elseif ($SearchMode -eq "disable") { $Settings.Remove("SEARXNG_BASE_URL") }
+    Set-Value "LOG_LEVEL" (Read-MappedChoice "Diagnostic logging" @("warn", "info", "debug") @("Minimal", "Normal", "Detailed") (Current "LOG_LEVEL" "info"))
+    Write-Host "Code execution stays isolated and approval-bound; native Windows never enables a hidden remote shell." -ForegroundColor DarkGray
+}
 function Configure-Channels {
-    Write-Step 5 9 "Channels"
+    Write-Step 6 10 "Channels"
     $Configured = -not [string]::IsNullOrWhiteSpace((Current "TELEGRAM_BOT_TOKEN"))
     Write-Host "Telegram: $(if ($Configured) { 'configured' } else { 'disabled' })"
-    $Choice = Read-Plain "Telegram action: keep, configure, disable" "keep"
+    $Choice = Read-MappedChoice "Telegram" @("keep", "configure", "disable") @("Keep current setting", "Connect or replace bot", "Disable Telegram") "keep"
     if ($Choice -eq "configure") {
         $TelegramToken = Read-Secret "Telegram bot token"
         if ($TelegramToken.Length -lt 20) { throw "Telegram bot token is invalid" }
@@ -234,10 +264,10 @@ function Configure-Channels {
         Set-Value "TELEGRAM_POLLING_ENABLED" "true"
     } elseif ($Choice -eq "disable") {
         foreach ($Name in @("TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_POLLING_ENABLED")) { $Settings.Remove($Name) }
-    } elseif ($Choice -ne "keep") { throw "Choose keep, configure, or disable" }
+    }
     $DiscordConfigured = -not [string]::IsNullOrWhiteSpace((Current "DISCORD_BOT_TOKEN"))
     Write-Host "Discord: $(if ($DiscordConfigured) { 'configured (Gateway)' } else { 'disabled' })"
-    $DiscordChoice = Read-Plain "Discord action: keep, configure, disable" "keep"
+    $DiscordChoice = Read-MappedChoice "Discord" @("keep", "configure", "disable") @("Keep current setting", "Connect or replace bot", "Disable Discord") "keep"
     if ($DiscordChoice -eq "configure") {
         $DiscordToken = Read-Secret "Discord bot token"
         if ($DiscordToken.Length -lt 20) { throw "Discord bot token is invalid" }
@@ -245,10 +275,10 @@ function Configure-Channels {
         Set-Value "DISCORD_GATEWAY_ENABLED" "true"
     } elseif ($DiscordChoice -eq "disable") {
         foreach ($Name in @("DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED")) { $Settings.Remove($Name) }
-    } elseif ($DiscordChoice -ne "keep") { throw "Choose keep, configure, or disable" }
+    }
     $SlackConfigured = (Current "SLACK_BOT_TOKEN") -and (Current "SLACK_APP_TOKEN")
     Write-Host "Slack: $(if ($SlackConfigured) { 'configured (Socket Mode)' } else { 'disabled' })"
-    $SlackChoice = Read-Plain "Slack action: keep, configure, disable" "keep"
+    $SlackChoice = Read-MappedChoice "Slack" @("keep", "configure", "disable") @("Keep current setting", "Connect or replace app", "Disable Slack") "keep"
     if ($SlackChoice -eq "configure") {
         $SlackBotToken = Read-Secret "Slack bot token (xoxb-...)"
         $SlackAppToken = Read-Secret "Slack app token (xapp-...)"
@@ -258,37 +288,36 @@ function Configure-Channels {
         Set-Value "SLACK_SOCKET_MODE_ENABLED" "true"
     } elseif ($SlackChoice -eq "disable") {
         foreach ($Name in @("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED")) { $Settings.Remove($Name) }
-    } elseif ($SlackChoice -ne "keep") { throw "Choose keep, configure, or disable" }
+    }
 }
 function Configure-Integrations {
-    Write-Step 6 9 "Integrations and skills"
+    Write-Step 7 10 "Integrations and skills"
     Write-Host "After restart, run: barlas integrations add PROVIDER LABEL" -ForegroundColor Cyan
     Write-Host "Supported providers: github, google_drive, gmail, google_calendar, mcp_http." -ForegroundColor DarkGray
     Write-Host "The token is entered with hidden input, encrypted in the vault, and can be tested with: barlas integrations test ID" -ForegroundColor DarkGray
     Write-Host "Built-in skills are ready. Signed catalog skills always require explicit trust and evaluation." -ForegroundColor DarkGray
 }
 function Configure-Automations {
-    Write-Step 7 9 "Automations and limits"
-    $Steps = Read-Plain "Maximum steps per run" (Current "AGENT_MAX_STEPS" "8")
-    if ($Steps -notmatch '^\d+$' -or [int]$Steps -lt 1 -or [int]$Steps -gt 12) { throw "Steps must be between 1 and 12" }
-    Set-Value "AGENT_MAX_STEPS" $Steps
-    Set-Value "AGENT_MAX_TOTAL_TOKENS" (Read-Plain "Maximum total tokens" (Current "AGENT_MAX_TOTAL_TOKENS" "50000"))
-    Set-Value "DAILY_CHAT_QUOTA" (Read-Plain "Daily chat quota" (Current "DAILY_CHAT_QUOTA" "500"))
-    Set-Value "DAILY_TOOL_QUOTA" (Read-Plain "Daily tool quota" (Current "DAILY_TOOL_QUOTA" "1000"))
-    Set-Value "DAILY_JOB_QUOTA" (Read-Plain "Daily job quota" (Current "DAILY_JOB_QUOTA" "100"))
+    Write-Step 8 10 "Automations and limits"
+    Set-Value "AGENT_MAX_STEPS" (Read-BoundedInteger "Maximum steps per run" (Current "AGENT_MAX_STEPS" "8") 1 12)
+    Set-Value "AGENT_MAX_TOTAL_TOKENS" (Read-BoundedInteger "Maximum total tokens" (Current "AGENT_MAX_TOTAL_TOKENS" "50000") 1000 1000000)
+    Set-Value "DAILY_CHAT_QUOTA" (Read-BoundedInteger "Daily chat quota" (Current "DAILY_CHAT_QUOTA" "500") 1 100000)
+    Set-Value "DAILY_TOOL_QUOTA" (Read-BoundedInteger "Daily tool quota" (Current "DAILY_TOOL_QUOTA" "1000") 1 100000)
+    Set-Value "DAILY_JOB_QUOTA" (Read-BoundedInteger "Daily job quota" (Current "DAILY_JOB_QUOTA" "100") 1 10000)
     Set-Value "JOB_WORKER_ENABLED" (Read-Choice "Scheduled jobs" @("true", "false") (Current "JOB_WORKER_ENABLED" "true"))
     Set-Value "AGENT_RUN_WORKER_ENABLED" (Read-Choice "Background agent runs" @("true", "false") (Current "AGENT_RUN_WORKER_ENABLED" "true"))
 }
 function Configure-Security {
-    Write-Step 8 9 "Security"
+    Write-Step 9 10 "Security"
     Write-Host "Gateway stays bound to 127.0.0.1. Secrets remain in the protected native configuration." -ForegroundColor DarkGray
-    $FileLimit = Read-Plain "Maximum workspace file bytes" (Current "MAX_WORKSPACE_FILE_BYTES" "2000000000")
-    if ($FileLimit -notmatch '^\d+$' -or [int64]$FileLimit -lt 1000000 -or [int64]$FileLimit -gt 10000000000000) { throw "File limit must be between 1 MB and 10 TB" }
-    Set-Value "MAX_WORKSPACE_FILE_BYTES" $FileLimit
-    Set-Value "SESSION_TTL_HOURS" (Read-Plain "Session lifetime in hours" (Current "SESSION_TTL_HOURS" "168"))
+    Set-Value "MAX_WORKSPACE_FILE_BYTES" (Read-BoundedInteger "Maximum workspace file bytes" (Current "MAX_WORKSPACE_FILE_BYTES" "2000000000") 1000000 10000000000000)
+    Set-Value "SESSION_TTL_HOURS" (Read-BoundedInteger "Session lifetime in hours" (Current "SESSION_TTL_HOURS" "168") 1 720)
 }
 function Apply-Profile([string]$SelectedProfile) {
-    if ($SelectedProfile -eq "quick") {
+    if ($SelectedProfile -eq "complete") {
+        Set-Value "AGENT_STYLE" (Current "AGENT_STYLE" "balanced")
+        Set-Value "JOB_WORKER_ENABLED" "true"; Set-Value "AGENT_RUN_WORKER_ENABLED" "true"
+    } elseif ($SelectedProfile -eq "quick") {
         Set-Value "AGENT_STYLE" (Current "AGENT_STYLE" "balanced")
         Set-Value "JOB_WORKER_ENABLED" "true"; Set-Value "AGENT_RUN_WORKER_ENABLED" "true"
     } elseif ($SelectedProfile -eq "private") {
@@ -336,11 +365,11 @@ if ($Action -eq "validate") {
     if ((Current "HOST" "127.0.0.1") -ne "127.0.0.1") { $Problems += "HOST must remain 127.0.0.1 in native mode" }
     $Port = Current "PORT"
     if ($Port -notmatch '^\d+$' -or [int]$Port -lt 1024 -or [int]$Port -gt 65535) { $Problems += "PORT is invalid" }
-    if ((Current "MODEL_PROVIDER") -notin @("openai", "anthropic", "ollama")) { $Problems += "MODEL_PROVIDER is invalid" }
+    if ((Current "MODEL_PROVIDER") -notin @("codex_cli", "openai", "anthropic", "ollama")) { $Problems += "MODEL_PROVIDER is invalid" }
     foreach ($Required in @("MODEL_NAME", "BARLAS_GATEWAY_TOKEN", "BARLAS_API_TOKEN", "CONNECTOR_VAULT_KEY")) {
         if ([string]::IsNullOrWhiteSpace((Current $Required))) { $Problems += "$Required is missing" }
     }
-    if ((Current "MODEL_PROVIDER") -ne "ollama" -and [string]::IsNullOrWhiteSpace((Current "MODEL_API_KEY"))) { $Problems += "MODEL_API_KEY is missing" }
+    if ((Current "MODEL_PROVIDER") -notin @("ollama", "codex_cli") -and [string]::IsNullOrWhiteSpace((Current "MODEL_API_KEY"))) { $Problems += "MODEL_API_KEY is missing" }
     if ((Current "BARLAS_GATEWAY_TOKEN").Length -lt 32) { $Problems += "BARLAS_GATEWAY_TOKEN is too short" }
     if ((Current "AGENT_NAME" "Barlas").Length -gt 80) { $Problems += "AGENT_NAME is too long" }
     if ((Current "AGENT_STYLE" "balanced") -notin @("balanced", "concise", "warm", "analytical", "creative")) { $Problems += "AGENT_STYLE is invalid" }
@@ -374,7 +403,10 @@ if ($Action -eq "models-status") {
     Write-Output "Deep model: $(Current 'DEEP_MODEL_NAME')"
     if ((Current "MODEL_PROVIDER") -eq "ollama") { Write-Output "Ollama URL: $(Current 'OLLAMA_BASE_URL' 'http://127.0.0.1:11434')" }
     Write-Output "Vision model: $(Current 'VISION_MODEL' 'disabled')"
-    Write-Output "API key: $(if ((Current 'MODEL_PROVIDER') -eq 'ollama') { 'not required' } elseif (Current 'MODEL_API_KEY') { 'configured' } else { 'missing' })"
+    Write-Output "Authentication: $(if ((Current 'MODEL_PROVIDER') -eq 'codex_cli') { 'OpenAI account session' } elseif ((Current 'MODEL_PROVIDER') -eq 'ollama') { 'local, no key' } elseif (Current 'MODEL_API_KEY') { 'API key configured' } else { 'missing' })"
+    if ((Current "MODEL_PROVIDER") -eq "codex_cli") {
+        & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status
+    }
     if ((Current "MODEL_PROVIDER") -eq "ollama") {
         $BaseUrl = Current "OLLAMA_BASE_URL" "http://127.0.0.1:11434"
         try {
@@ -409,12 +441,13 @@ Write-Host "  Press Enter to keep a value. Secrets are never displayed." -Foregr
 if ($Section -eq "all") {
     if (-not $Profile) {
         Write-Host "`nSetup profiles" -ForegroundColor Cyan
+        Write-Host "  complete   Every important setting, guided step by step"
         Write-Host "  quick      Essential choices, sensible defaults"
         Write-Host "  private    Local Ollama, no cloud key, no external channels"
         Write-Host "  developer  Advanced limits, tools and diagnostics"
         Write-Host "  server     Higher worker limits with hardened checks"
         Write-Host "  import     Import a previous Barlas configuration"
-        $Profile = Read-Choice "Choose profile" @("quick", "private", "developer", "server", "import") "quick"
+        $Profile = Read-MappedChoice "Setup depth" @("complete", "quick", "private", "developer", "server", "import") @("Complete - all important settings", "Quick - essentials only", "Private - local models and no external channels", "Developer - extended tools and limits", "Server - higher worker limits", "Import - existing Barlas configuration") "complete"
     }
     if ($Profile -eq "import") { Import-BarlasConfig } else { Apply-Profile $Profile }
 }
@@ -422,19 +455,20 @@ if ($Section -eq "all") {
 $Sections = if ($Section -eq "all") {
     if ($Profile -eq "quick") { @("general", "identity", "models", "channels", "security") }
     elseif ($Profile -eq "import") { @("security") }
-    else { @("general", "identity", "models", "memory", "channels", "integrations", "automations", "security") }
+    else { @("general", "identity", "models", "memory", "tools", "channels", "integrations", "automations", "security") }
 } elseif ($Section -eq "agent") { @("identity", "automations") } else { @($Section) }
 
 if ("general" -in $Sections) { Configure-General }
 if ("identity" -in $Sections) { Configure-Identity }
 if ("models" -in $Sections) { Configure-Models }
 if ("memory" -in $Sections) { Configure-Memory }
+if ("tools" -in $Sections) { Configure-Tools }
 if ("channels" -in $Sections) { Configure-Channels }
 if ("integrations" -in $Sections) { Configure-Integrations }
 if ("automations" -in $Sections) { Configure-Automations }
 if ("security" -in $Sections) { Configure-Security }
 Save-Settings
-Write-Step 9 9 "Review"
+Write-Step 10 10 "Review"
 Write-Host "  Profile:       $(if ($Profile) { $Profile } else { 'custom' })"
 Write-Host "  Agent:         $(Current 'AGENT_NAME' 'Barlas') ($(Current 'AGENT_STYLE' 'balanced'))"
 Write-Host "  Model:         $(Current 'MODEL_PROVIDER') / $(Current 'MODEL_NAME')"

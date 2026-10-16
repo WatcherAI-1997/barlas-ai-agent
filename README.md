@@ -108,10 +108,10 @@ barlas
 barlas ask "Проверь проект и составь план"
 ```
 
-Run `barlas onboard` for the full guided setup. It offers `quick`, `private`,
+Run `barlas onboard` for the full guided setup. It offers `complete`, `quick`, `private`,
 `developer`, `server`, and `import` profiles, then configures the agent identity,
-models and voice, memory, channels, integrations, automations, and security.
-Use commands such as `barlas configure identity`, `barlas configure models`, or
+model authentication and voice, memory, browser/tools, channels, integrations,
+automations, and security. Use commands such as `barlas configure identity`, `barlas configure models`, or
 `barlas configure channels` to revisit one section. The gateway restarts and a
 live diagnostic runs automatically after onboarding.
 
@@ -228,9 +228,13 @@ The maintained [product capability map](docs/PRODUCT_CAPABILITIES.md) shows what
 is implemented, what is only a foundation, and what still remains; the project
 does not label planned work as finished functionality.
 
-Text and autonomous tool execution can use native OpenAI Responses, native
-Anthropic Messages, or a free local Ollama model
-(`MODEL_PROVIDER=openai|anthropic|ollama`). The Windows wizard can install
+Text and autonomous tool execution can use an OpenAI account through secure
+browser sign-in, native OpenAI Responses with an API key, native Anthropic
+Messages, or a free local Ollama model
+(`MODEL_PROVIDER=codex_cli|openai|anthropic|ollama`). The account session stays
+in the official CLI credential store; Barlas neither copies nor displays its
+OAuth tokens. Use `barlas models login`, `barlas models auth-status`, and
+`barlas models logout` to manage it. The Windows wizard can install
 Ollama with `winget`, start its local API, and pull the selected model. Ollama
 chat and tool continuations stay on the configured local endpoint and have zero
 provider cost. OpenAI-only media and embeddings remain optional through a

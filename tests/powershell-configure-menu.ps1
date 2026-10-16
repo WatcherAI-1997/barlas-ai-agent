@@ -28,6 +28,11 @@ try {
     $Selected = Read-MappedChoice "Provider" @("openai", "anthropic", "ollama") @("OpenAI", "Anthropic", "Ollama") "openai"
     Assert-Equal "anthropic" $Selected "large numeric input retry"
 
+    $script:Answers.Enqueue("999999999999999999999999999")
+    $script:Answers.Enqueue("12")
+    $Bounded = Read-BoundedInteger "Maximum steps" "8" 1 12
+    Assert-Equal "12" $Bounded "bounded integer retry"
+
     Write-Output "OK onboarding menu behavior"
 }
 finally {

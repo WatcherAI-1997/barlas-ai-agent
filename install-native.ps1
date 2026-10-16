@@ -193,6 +193,7 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     Write-Host ""
     Write-Host "BARLAS PERSONAL SETUP" -ForegroundColor White
     Write-Host "Use Up/Down and Enter. Number keys also work." -ForegroundColor DarkGray
+    $SetupMode = Read-MenuChoice "BARLAS_SETUP_MODE" "Setup experience" @("complete", "quick") @("Complete - configure the full agent now", "Quick - essential settings with safe defaults") "complete"
     $Port = Read-ValidatedValue "BARLAS_HTTP_PORT" "Local web port" "17840" {
         param($Value)
         $Parsed = 0
@@ -205,9 +206,17 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
         param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and ([string]$Value).Length -le 80
     } "Enter a display name up to 80 characters."
     $OwnerLanguage = Read-OwnerLanguage
-    $ProviderAliases = @{ "openai api" = "openai"; "openai codex" = "openai"; "anthropic api" = "anthropic"; "local ollama" = "ollama" }
-    $ModelProvider = Read-MenuChoice "MODEL_PROVIDER" "Model provider" @("openai", "anthropic", "ollama") @("OpenAI API - cloud key required", "Anthropic API - cloud key required", "Ollama - local and private, no cloud key") "openai" $ProviderAliases
-    $DefaultModel = if ($ModelProvider -eq "ollama") { "qwen3:8b" } elseif ($ModelProvider -eq "anthropic") { "claude-sonnet-4-5" } else { "gpt-5" }
+    $ProviderAliases = @{ "openai account" = "codex_cli"; "openai oauth" = "codex_cli"; "cli oauth" = "codex_cli"; "openai api" = "openai"; "openai codex" = "codex_cli"; "anthropic api" = "anthropic"; "local ollama" = "ollama" }
+    $ModelProvider = Read-MenuChoice "MODEL_PROVIDER" "Model access" @("codex_cli", "openai", "anthropic", "ollama") @("OpenAI account - browser sign-in, no API key", "OpenAI API - usage-based key", "Anthropic API - usage-based key", "Ollama - local and private") "codex_cli" $ProviderAliases
+    if ($ModelProvider -eq "codex_cli") {
+        & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status *> $null
+        if ($LASTEXITCODE -ne 0) {
+            if ($NonInteractive) { throw "MODEL_PROVIDER=codex_cli requires an existing OpenAI account sign-in." }
+            & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action login
+            if (-not $?) { throw "OpenAI account sign-in did not complete." }
+        }
+    }
+    $DefaultModel = if ($ModelProvider -eq "ollama") { "qwen3:8b" } elseif ($ModelProvider -eq "anthropic") { "claude-sonnet-4-5" } elseif ($ModelProvider -eq "codex_cli") { "gpt-5.6-sol" } else { "gpt-5" }
     $ModelName = Read-ValidatedValue "MODEL_NAME" "Fast/default model name" $DefaultModel {
         param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and -not ([string]$Value).Contains("`r") -and -not ([string]$Value).Contains("`n")
     } "Model name cannot be blank."
@@ -219,13 +228,56 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
         $MediaApiKey = Read-Value "MEDIA_API_KEY" "Optional OpenAI key for media features" "" -Secret
         $VisionModel = if ($MediaApiKey) { Read-Value "VISION_MODEL" "OpenAI vision/PDF model name" "gpt-4.1-mini" } else { "" }
     } else { $VisionModel = Read-Value "VISION_MODEL" "Vision/PDF model name" $ModelName }
-    $ModelApiKey = if ($ModelProvider -eq "ollama") { "" } else {
+    $ModelApiKey = if ($ModelProvider -in @("ollama", "codex_cli")) { "" } else {
         Read-ValidatedValue "MODEL_API_KEY" "Dedicated model API key" "" {
             param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and -not ([string]$Value).Contains("`r") -and -not ([string]$Value).Contains("`n")
         } "An API key is required for this provider." -Secret
     }
     $OllamaBaseUrl = if ($ModelProvider -eq "ollama") { Read-Value "OLLAMA_BASE_URL" "Ollama URL" "http://127.0.0.1:11434" } else { "http://127.0.0.1:11434" }
     $TelegramBotToken = Read-Value "TELEGRAM_BOT_TOKEN" "Dedicated Telegram bot token; blank disables Telegram" "" -Secret
+
+    $AgentName = "Barlas"; $AgentStyle = "balanced"; $AgentInstructions = ""
+    $EmbeddingModel = ""; $DefaultVoice = "alloy"; $BrowserEndpoint = "local://chromium"
+    $DiscordBotToken = ""; $SlackBotToken = ""; $SlackAppToken = ""
+    $AgentMaxSteps = "8"; $AgentMaxTokens = "50000"; $DailyChatQuota = "500"; $DailyToolQuota = "1000"; $DailyJobQuota = "100"
+    $MaxWorkspaceFileBytes = "2000000000"; $SessionTtlHours = "168"; $LogLevel = "info"
+    if ($SetupMode -eq "complete") {
+        Write-Host "`nAGENT PERSONALITY" -ForegroundColor White
+        $AgentName = Read-ValidatedValue "AGENT_NAME" "Agent name" "Barlas" {
+            param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and ([string]$Value).Length -le 80
+        } "Enter a name up to 80 characters."
+        $AgentStyle = Read-MenuChoice "AGENT_STYLE" "Conversation style" @("balanced", "concise", "warm", "analytical", "creative") @("Balanced", "Concise", "Warm", "Analytical", "Creative") "balanced"
+        $AgentInstructions = Read-Value "AGENT_INSTRUCTIONS" "Personal instructions; blank uses the standard behavior" ""
+
+        Write-Host "`nMEMORY, TOOLS AND VOICE" -ForegroundColor White
+        $MemoryMode = Read-MenuChoice "BARLAS_MEMORY_MODE" "Memory" @("standard", "semantic") @("Standard - durable notes and conversation history", "Semantic - also search memories by meaning") "standard"
+        if ($MemoryMode -eq "semantic") {
+            if ($ModelProvider -eq "openai" -or $MediaApiKey) { $EmbeddingModel = Read-Value "EMBEDDING_MODEL" "Embedding model" "text-embedding-3-small" }
+            else { Write-Host "Semantic embeddings need an OpenAI API key; standard memory remains enabled." -ForegroundColor Yellow }
+        }
+        $BrowserMode = Read-MenuChoice "BARLAS_BROWSER_MODE" "Managed browser" @("enabled", "disabled") @("Enabled - Barlas may browse with approvals", "Disabled") "enabled"
+        if ($BrowserMode -eq "disabled") { $BrowserEndpoint = "" }
+        $DefaultVoice = Read-MenuChoice "DEFAULT_SPEECH_VOICE" "Default voice" @("alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse") @("Alloy", "Ash", "Ballad", "Coral", "Echo", "Fable", "Nova", "Onyx", "Sage", "Shimmer", "Verse") "alloy"
+
+        Write-Host "`nOPTIONAL CHANNELS" -ForegroundColor White
+        $DiscordChoice = Read-MenuChoice "BARLAS_DISCORD_SETUP" "Discord" @("skip", "configure") @("Skip for now", "Connect a bot through Gateway") "skip"
+        if ($DiscordChoice -eq "configure") { $DiscordBotToken = Read-Value "DISCORD_BOT_TOKEN" "Discord bot token" "" -Secret }
+        $SlackChoice = Read-MenuChoice "BARLAS_SLACK_SETUP" "Slack" @("skip", "configure") @("Skip for now", "Connect through Socket Mode") "skip"
+        if ($SlackChoice -eq "configure") {
+            $SlackBotToken = Read-Value "SLACK_BOT_TOKEN" "Slack bot token (xoxb-...)" "" -Secret
+            $SlackAppToken = Read-Value "SLACK_APP_TOKEN" "Slack app token (xapp-...)" "" -Secret
+        }
+
+        Write-Host "`nAUTOMATION AND SAFETY" -ForegroundColor White
+        $Autonomy = Read-MenuChoice "BARLAS_AUTONOMY" "Autonomy limits" @("safe", "balanced", "extended") @("Safe - 6 steps / 30k tokens", "Balanced - 8 steps / 50k tokens", "Extended - 12 steps / 100k tokens") "balanced"
+        if ($Autonomy -eq "safe") { $AgentMaxSteps = "6"; $AgentMaxTokens = "30000" }
+        elseif ($Autonomy -eq "extended") { $AgentMaxSteps = "12"; $AgentMaxTokens = "100000" }
+        $Quota = Read-MenuChoice "BARLAS_USAGE_PROFILE" "Daily usage" @("personal", "power") @("Personal - 500 chats / 1,000 tools / 100 jobs", "Power - 5,000 chats / 10,000 tools / 1,000 jobs") "personal"
+        if ($Quota -eq "power") { $DailyChatQuota = "5000"; $DailyToolQuota = "10000"; $DailyJobQuota = "1000" }
+        $FileLimit = Read-MenuChoice "BARLAS_FILE_PROFILE" "Maximum file size" @("2gb", "10gb") @("2 GB - recommended", "10 GB - for large local workspaces") "2gb"
+        if ($FileLimit -eq "10gb") { $MaxWorkspaceFileBytes = "10000000000" }
+        $LogLevel = Read-MenuChoice "LOG_LEVEL" "Diagnostic logging" @("warn", "info", "debug") @("Minimal", "Normal", "Detailed") "info"
+    }
 
     $Settings = [ordered]@{
         APP_ENV = "production"; APP_NAME = "Barlas AI Agent"; BARLAS_INSTALL_MODE = "native"
@@ -235,17 +287,25 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
         BARLAS_API_TOKEN = New-RandomHex 32; BARLAS_GATEWAY_TOKEN = New-RandomHex 32
         MODEL_PROVIDER = $ModelProvider; MODEL_NAME = $ModelName; MODEL_API_KEY = $ModelApiKey; OLLAMA_BASE_URL = $OllamaBaseUrl
         MEDIA_API_KEY = $MediaApiKey; VISION_MODEL = $VisionModel; TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
-        SPEECH_MODEL = "gpt-4o-mini-tts"; EMBEDDING_MODEL = ""; DEEP_MODEL_NAME = $DeepModelName
+        SPEECH_MODEL = "gpt-4o-mini-tts"; DEFAULT_SPEECH_VOICE = $DefaultVoice; EMBEDDING_MODEL = $EmbeddingModel; DEEP_MODEL_NAME = $DeepModelName
         CONNECTOR_VAULT_KEY = New-RandomBase64 32; CONNECTOR_VAULT_KEY_VERSION = "1"
         OWNER_EMAIL = $OwnerEmail; OWNER_DISPLAY_NAME = $OwnerDisplayName; OWNER_LANGUAGE = $OwnerLanguage
         WORKSPACE_ROOT = (Join-Path $BarlasHome "data\workspaces"); WEB_ROOT = (Join-Path $RootDir "web")
-        BROWSER_WS_ENDPOINT = "local://chromium"; JOB_WORKER_ENABLED = "true"; AGENT_RUN_WORKER_ENABLED = "true"
+        BROWSER_WS_ENDPOINT = $BrowserEndpoint; JOB_WORKER_ENABLED = "true"; AGENT_RUN_WORKER_ENABLED = "true"
         AGENT_RUN_WORKER_POLL_MS = "1000"; AGENT_RUN_WORKER_BATCH_SIZE = "2"; AGENT_RUN_LEASE_SECONDS = "300"
+        AGENT_NAME = $AgentName; AGENT_STYLE = $AgentStyle; AGENT_INSTRUCTIONS = $AgentInstructions
+        AGENT_MAX_STEPS = $AgentMaxSteps; AGENT_MAX_TOTAL_TOKENS = $AgentMaxTokens; AGENT_MAX_OUTPUT_TOKENS_PER_STEP = "4096"
+        DAILY_CHAT_QUOTA = $DailyChatQuota; DAILY_TOOL_QUOTA = $DailyToolQuota; DAILY_JOB_QUOTA = $DailyJobQuota
+        MAX_WORKSPACE_FILE_BYTES = $MaxWorkspaceFileBytes; SESSION_TTL_HOURS = $SessionTtlHours; LOG_LEVEL = $LogLevel
     }
     if ($TelegramBotToken) {
         $Settings["TELEGRAM_BOT_TOKEN"] = $TelegramBotToken
         $Settings["TELEGRAM_WEBHOOK_SECRET"] = New-RandomHex 32
         $Settings["TELEGRAM_POLLING_ENABLED"] = "true"
+    }
+    if ($DiscordBotToken) { $Settings["DISCORD_BOT_TOKEN"] = $DiscordBotToken; $Settings["DISCORD_GATEWAY_ENABLED"] = "true" }
+    if ($SlackBotToken -and $SlackAppToken) {
+        $Settings["SLACK_BOT_TOKEN"] = $SlackBotToken; $Settings["SLACK_APP_TOKEN"] = $SlackAppToken; $Settings["SLACK_SOCKET_MODE_ENABLED"] = "true"
     }
     foreach ($Pair in $Settings.GetEnumerator()) {
         if (([string]$Pair.Value).Contains("`r") -or ([string]$Pair.Value).Contains("`n")) { throw "$($Pair.Key) must be a single line" }

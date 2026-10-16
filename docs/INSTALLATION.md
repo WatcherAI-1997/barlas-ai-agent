@@ -36,6 +36,7 @@ The complete Barlas setup and configuration surface is available after install:
 
 ```powershell
 barlas onboard
+barlas onboard complete
 barlas onboard private
 barlas onboard developer
 barlas onboard server
@@ -43,6 +44,7 @@ barlas onboard import
 barlas configure identity
 barlas configure models
 barlas configure memory
+barlas configure tools
 barlas configure channels
 barlas configure integrations
 barlas configure automations
@@ -55,6 +57,9 @@ barlas config schema
 barlas config validate
 barlas models status
 barlas models configure
+barlas models login
+barlas models auth-status
+barlas models logout
 barlas channels status
 barlas channels add telegram
 barlas agents
@@ -82,13 +87,23 @@ the embedded database and workspaces live outside the application directory.
 Uninstall preserves those data and a protected configuration backup unless
 `--purge` is explicitly selected and confirmed.
 
-The onboarding profiles are starting points, not separate editions. `quick`
+The onboarding profiles are starting points, not separate editions. `complete`
+walks through all ten sections and is the default; `quick`
 asks only for the essentials; `private` selects local Ollama and disables
 external channels; `developer` raises bounded agent limits and exposes advanced
 sections; `server` applies higher worker quotas while keeping the native Windows
 gateway on loopback; `import` reads only allowlisted keys from an existing
 Barlas `.env` file. Import never evaluates PowerShell, shell syntax, or install
 hooks, and protected runtime tokens are not imported.
+
+The native Windows model menu offers four real access paths: OpenAI account
+browser sign-in, OpenAI API key, Anthropic API key, and local Ollama. Account
+sign-in launches the bundled official CLI OAuth flow and verifies it with the
+CLI status command. Barlas does not read, copy, print, or place the OAuth token
+in `native.env`. The account-backed model bridge disables its own shell, apps,
+plugins, memories, subagents, skills, and web search; only Barlas tools remain
+available through the normal approval and audit boundaries. An optional
+separate API key is still required for media or semantic embeddings.
 
 An existing `deploy\native.env` is reused and never silently overwritten.
 Windows installation is local-only. Native mode does not expose the

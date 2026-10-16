@@ -22,20 +22,20 @@ function global:Read-Host {
 try {
     $NonInteractive = $false
     $script:Answers.Enqueue("999999999999999999999999999")
-    $script:Answers.Enqueue("3")
-    $Selected = Read-MenuChoice "" "Provider" @("openai", "anthropic", "ollama") @("OpenAI", "Anthropic", "Ollama") "openai"
+    $script:Answers.Enqueue("4")
+    $Selected = Read-MenuChoice "" "Provider" @("codex_cli", "openai", "anthropic", "ollama") @("OpenAI account", "OpenAI API", "Anthropic", "Ollama") "codex_cli"
     Assert-Equal "ollama" $Selected "large numeric input retry"
 
     $NonInteractive = $true
     $env:MODEL_PROVIDER = "openai codex"
-    $Aliases = @{ "openai codex" = "openai" }
-    $Selected = Read-MenuChoice "MODEL_PROVIDER" "Provider" @("openai", "anthropic", "ollama") @("OpenAI", "Anthropic", "Ollama") "openai" $Aliases
-    Assert-Equal "openai" $Selected "provider alias"
+    $Aliases = @{ "openai codex" = "codex_cli" }
+    $Selected = Read-MenuChoice "MODEL_PROVIDER" "Provider" @("codex_cli", "openai", "anthropic", "ollama") @("OpenAI account", "OpenAI API", "Anthropic", "Ollama") "codex_cli" $Aliases
+    Assert-Equal "codex_cli" $Selected "provider alias"
 
     $env:MODEL_PROVIDER = "openai-invalid"
     $Rejected = $false
     try {
-        Read-MenuChoice "MODEL_PROVIDER" "Provider" @("openai", "anthropic", "ollama") @("OpenAI", "Anthropic", "Ollama") "openai" $Aliases | Out-Null
+        Read-MenuChoice "MODEL_PROVIDER" "Provider" @("codex_cli", "openai", "anthropic", "ollama") @("OpenAI account", "OpenAI API", "Anthropic", "Ollama") "codex_cli" $Aliases | Out-Null
     } catch { $Rejected = $true }
     if (-not $Rejected) { throw "invalid environment provider was accepted" }
 

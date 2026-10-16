@@ -92,7 +92,7 @@ for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64
 for (const required of ["Windows_NT", "Docker Desktop", "BARLAS_INSTALL_MODE = \"local\"", "RandomNumberGenerator", "Protect-SecretFile", "compose.local.yml", "doctor.ps1", "never prints them"]) {
   if (!windowsInstaller.includes(required)) throw new Error(`Windows installer safety/usability boundary is missing: ${required}`);
 }
-for (const required of ["BARLAS_INSTALL_MODE = \"native\"", "RandomNumberGenerator", "Protect-SecretFile", "BROWSER_WS_ENDPOINT = \"local://chromium\"", "start-native.ps1", "Read-MenuChoice", "Read-ArrowMenu", "Read-ValidatedValue", "[int]::TryParse", "Ollama - local and private, no cloud key"]) {
+for (const required of ["BARLAS_INSTALL_MODE = \"native\"", "RandomNumberGenerator", "Protect-SecretFile", "BROWSER_WS_ENDPOINT = $BrowserEndpoint", "start-native.ps1", "Read-MenuChoice", "Read-ArrowMenu", "Read-ValidatedValue", "[int]::TryParse", "OpenAI account - browser sign-in, no API key", "Ollama - local and private"]) {
   if (!nativeWindowsInstaller.includes(required)) throw new Error(`Native Windows installer boundary is missing: ${required}`);
 }
 for (const required of ["commits/main", "archive/$ReleaseSha.zip", ".barlas-version", "LOCALAPPDATA", "native.env", "barlas.cmd", "ExecutionPolicy Bypass", "nodejs.org", "node_modules\\playwright-core\\cli.js", "no Docker or WSL required"]) {
@@ -111,6 +111,20 @@ const cli = await readFile("src/cli.ts", "utf8");
 for (const required of ["Barlas CLI", "/v1/agent/run", "/v1/approvals/", "BARLAS_GATEWAY_TOKEN", "AbortSignal.timeout"]) {
   if (!cli.includes(required)) throw new Error(`CLI boundary is missing: ${required}`);
 }
+const accountModelBridge = await readFile("src/providers/codex-cli-provider.ts", "utf8");
+for (const required of [
+  "delete environment.OPENAI_API_KEY",
+  "delete environment.CODEX_API_KEY",
+  '"--sandbox", "read-only"',
+  '"--ephemeral"',
+  '"--ignore-user-config"',
+  '"--disable", "shell_tool"',
+  'web_search="disabled"',
+  "skills.include_instructions=false",
+]) {
+  if (!accountModelBridge.includes(required)) throw new Error(`OpenAI account bridge boundary is missing: ${required}`);
+}
+if (accountModelBridge.includes("dangerously-bypass")) throw new Error("OpenAI account bridge must never bypass its sandbox");
 const projects = await readFile("src/projects/service.ts", "utf8");
 const projectMigration = await readFile("migrations/018_projects.sql", "utf8");
 const database = await readFile("src/storage/database.ts", "utf8");

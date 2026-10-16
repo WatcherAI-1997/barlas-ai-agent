@@ -26,6 +26,11 @@ describe("Barlas configuration", () => {
     expect(config.OLLAMA_BASE_URL).toBe("http://127.0.0.1:11434");
   });
 
+  it("accepts a browser-authenticated OpenAI account without an API key", () => {
+    const config = loadConfig({ ...base, MODEL_PROVIDER: "codex_cli", MODEL_API_KEY: "", MODEL_NAME: "gpt-5.6-sol" });
+    expect(config).toMatchObject({ MODEL_PROVIDER: "codex_cli", MODEL_API_KEY: "", MODEL_NAME: "gpt-5.6-sol" });
+  });
+
   it("still requires credentials for hosted model providers", () => {
     expect(() => loadConfig({ ...base, MODEL_PROVIDER: "openai", MODEL_API_KEY: "" })).toThrow(/MODEL_API_KEY/u);
   });
