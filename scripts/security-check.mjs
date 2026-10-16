@@ -213,6 +213,19 @@ const scheduleWorker = await readFile("src/schedules/worker.ts", "utf8");
 for (const required of ["scheduleId: schedule.id", "scheduleOccurrence: occurrence", "governance?.consume", "Telegram account is not linked", "Math.max(occurrence.getTime(), Date.now())"]) {
   if (!scheduleWorker.includes(required)) throw new Error(`Schedule safety boundary is missing: ${required}`);
 }
+const telegramClient = await readFile("src/channels/telegram.ts", "utf8");
+const telegramVoice = await readFile("src/channels/telegram-voice.ts", "utf8");
+for (const required of ["sendVoice", "FormData", "10_000_000", "parseTelegramVoiceCommand"]) {
+  if (!telegramClient.includes(required)) throw new Error(`Telegram voice boundary is missing: ${required}`);
+}
+for (const required of ["MAX_SPEECH_TEXT = 4_096", "workspace.readBuffer", "telegram/voice/"]) {
+  if (!telegramVoice.includes(required)) throw new Error(`Telegram voice workspace boundary is missing: ${required}`);
+}
+for (const prohibited of ["phone.requestCall", "MTProto", "userbot"]) {
+  if (telegramClient.includes(prohibited) || telegramVoice.includes(prohibited)) {
+    throw new Error(`Unsupported Telegram account-call mechanism is present: ${prohibited}`);
+  }
+}
 const mcpConnector = await readFile("src/connectors/mcp.ts", "utf8");
 for (const required of ["assertPublicUrl", "publicNetworkFetch", "redirectPolicy: \"same-origin\"", "MAX_RESULT_BYTES = 1_000_000"]) {
   if (!mcpConnector.includes(required)) throw new Error(`MCP boundary is missing: ${required}`);

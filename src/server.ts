@@ -2,6 +2,7 @@ import { buildApp } from "./app.js";
 import { AuthService } from "./auth/service.js";
 import { TelegramLinkService } from "./auth/telegram-link.js";
 import { TelegramClient } from "./channels/telegram.js";
+import { sendTelegramVoiceReply, telegramVoiceFallbackText } from "./channels/telegram-voice.js";
 import { GitHubConnector } from "./connectors/github.js";
 import { GoogleConnector } from "./connectors/google.js";
 import { McpConnector } from "./connectors/mcp.js";
@@ -195,6 +196,37 @@ const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
           run.result.text,
           run.pendingApprovalId,
         );
+      } else if (run.delivery.voice) {
+        try {
+          const voice = await sendTelegramVoiceReply({
+            client: telegram.client,
+            media: mediaService,
+            workspace,
+            userId: run.userId,
+            chatId: run.delivery.chatId,
+            runId: run.id,
+            text: run.result.text,
+          });
+          await database.appendAudit({
+            userId: run.userId,
+            eventType: "telegram.voice.sent",
+            resourceType: "agent_run",
+            resourceId: run.id,
+            details: voice,
+          });
+        } catch (error) {
+          await database.appendAudit({
+            userId: run.userId,
+            eventType: "telegram.voice.failed",
+            resourceType: "agent_run",
+            resourceId: run.id,
+            details: { error: error instanceof Error ? error.message.slice(0, 500) : "Unknown error" },
+          });
+          await telegram.client.sendMessage(
+            run.delivery.chatId,
+            telegramVoiceFallbackText(run.result.text),
+          );
+        }
       } else {
         await telegram.client.sendMessage(run.delivery.chatId, run.result.text);
       }

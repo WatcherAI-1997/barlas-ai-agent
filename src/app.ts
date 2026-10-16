@@ -18,6 +18,8 @@ import {
 import type { ModelProvider } from "./core/models.js";
 import type { AgentLoop } from "./core/agent-loop.js";
 import type { TelegramLinkService } from "./auth/telegram-link.js";
+import { parseTelegramVoiceCommand } from "./channels/telegram.js";
+import { sendTelegramVoiceReply, telegramVoiceFallbackText } from "./channels/telegram-voice.js";
 import type { GitHubConnector } from "./connectors/github.js";
 import type { GoogleConnector } from "./connectors/google.js";
 import { connectorProviders, type ConnectorService } from "./connectors/vault.js";
@@ -300,7 +302,7 @@ export interface AppDependencies {
   googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
   memory?: Pick<SemanticMemory, "remember" | "recall">;
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
-  media?: Pick<MediaService, "saveUpload">;
+  media?: Pick<MediaService, "saveUpload"> & Partial<Pick<MediaService, "createSpeech">>;
   workspace?: Pick<FileWorkspace, "list" | "readBuffer" | "writeUpload">;
   projects?: Pick<ProjectService, "create" | "list" | "detail" | "context" | "attach" | "snapshot" | "restore" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "recordRunResult">;
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
@@ -310,6 +312,7 @@ export interface AppDependencies {
     webhookSecret: string;
     client: {
       sendMessage(chatId: number, text: string): Promise<void>;
+      sendVoice?(chatId: number, content: Buffer, caption?: string): Promise<void>;
       sendApproval?(chatId: number, text: string, approvalId: string): Promise<void>;
       answerCallbackQuery?(callbackQueryId: string, text: string): Promise<void>;
     };
@@ -1620,6 +1623,15 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (!parsed.data.message) return { ok: true, ignored: true };
 
     const message = parsed.data.message;
+    const voiceCommand = parseTelegramVoiceCommand(message.text);
+    if (voiceCommand.requested && !voiceCommand.prompt) {
+      await dependencies.telegram.client.sendMessage(
+        message.chat.id,
+        "Telegram Bot API не позволяет боту начать нативный звонок. Используйте /voice ваш вопрос или /call ваш вопрос — Barlas ответит голосовым сообщением.",
+      );
+      return { ok: true, voiceHelp: true };
+    }
+    const prompt = voiceCommand.prompt ?? message.text;
     const linkCommand = /^\/link\s+(BARLAS-[A-Z0-9_-]+)$/i.exec(message.text.trim());
     if (linkCommand && dependencies.telegramLinks) {
       const link = await dependencies.telegramLinks.claim(
@@ -1636,7 +1648,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (dependencies.agentRuntime) {
       const telegramUserId = message.from?.id ?? message.chat.id;
       const userId = await dependencies.telegramLinks?.resolve(telegramUserId) ?? `telegram:${telegramUserId}`;
-      const memories = await memory.recall(userId, message.text, 5);
+      const memories = await memory.recall(userId, prompt, 5);
       const memoryContext = memories.length > 0 ? [{
         role: "system" as const,
         content: ["Use these Barlas AI Agent user memories only when relevant:", ...memories.map((item) => `- [${item.category}] ${item.content}`)].join("\n"),
@@ -1645,21 +1657,58 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const run = await dependencies.agentRuntime.enqueue({
         userId,
         conversationId: randomUUID(),
-        messages: [...languageContext, ...memoryContext, { role: "user", content: message.text }],
-        conversationMessages: [{ role: "user", content: message.text }],
-        delivery: { channel: "telegram", chatId: message.chat.id },
+        messages: [...languageContext, ...memoryContext, { role: "user", content: prompt }],
+        conversationMessages: [{ role: "user", content: prompt }],
+        delivery: { channel: "telegram", chatId: message.chat.id, ...(voiceCommand.requested ? { voice: true } : {}) },
         taskClass: "fast",
         maxSteps: 8,
       });
-      await dependencies.telegram.client.sendMessage(message.chat.id, `Задача принята. Запуск ${run.id.slice(0, 8)}.`);
+      await dependencies.telegram.client.sendMessage(
+        message.chat.id,
+        voiceCommand.requested
+          ? `Голосовой ответ готовится. Запуск ${run.id.slice(0, 8)}.`
+          : `Задача принята. Запуск ${run.id.slice(0, 8)}.`,
+      );
       return { ok: true, runId: run.id };
     }
     const { result } = await runChat({
       userId: `telegram:${message.from?.id ?? message.chat.id}`,
-      messages: [{ role: "user", content: message.text }],
+      messages: [{ role: "user", content: prompt }],
       taskClass: "fast",
     });
-    await dependencies.telegram.client.sendMessage(message.chat.id, result.text);
+    if (voiceCommand.requested && dependencies.telegram.client.sendVoice && dependencies.media?.createSpeech && dependencies.workspace) {
+      const userId = `telegram:${message.from?.id ?? message.chat.id}`;
+      const runId = randomUUID();
+      try {
+        const voice = await sendTelegramVoiceReply({
+          client: { sendVoice: dependencies.telegram.client.sendVoice.bind(dependencies.telegram.client) },
+          media: { createSpeech: dependencies.media.createSpeech.bind(dependencies.media) },
+          workspace: dependencies.workspace,
+          userId,
+          chatId: message.chat.id,
+          runId,
+          text: result.text,
+        });
+        await dependencies.database.appendAudit({
+          userId,
+          eventType: "telegram.voice.sent",
+          resourceType: "direct_chat",
+          resourceId: runId,
+          details: voice,
+        });
+      } catch (error) {
+        await dependencies.database.appendAudit({
+          userId,
+          eventType: "telegram.voice.failed",
+          resourceType: "direct_chat",
+          resourceId: runId,
+          details: { error: error instanceof Error ? error.message.slice(0, 500) : "Unknown error" },
+        });
+        await dependencies.telegram.client.sendMessage(message.chat.id, telegramVoiceFallbackText(result.text));
+      }
+    } else {
+      await dependencies.telegram.client.sendMessage(message.chat.id, result.text);
+    }
     return { ok: true };
   });
 

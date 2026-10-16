@@ -402,6 +402,13 @@ When enabled, Telegram messages enqueue the same durable autonomous runtime.
 Results are delivered back to the originating chat. Approval requests use
 inline Allow/Reject buttons whose callback is ownership-checked against the
 Telegram sender before the tool can execute.
+`/voice <prompt>` and `/call <prompt>` explicitly request a bounded speech
+version of that run's final answer. The MP3 is stored in the same user's
+isolated workspace and uploaded with the official Bot API `sendVoice` method;
+generation and delivery metadata are audited without storing answer text in the
+audit event. If speech delivery fails, the text answer is sent instead. Telegram
+bots cannot initiate native incoming voice/video calls, so `/call` is an honest
+voice-reply alias rather than an MTProto user-account call.
 An authenticated web user generates a one-time code and sends `/link CODE` to
 the bot. Only the SHA-256 code hash is stored; codes expire after ten minutes
 and are invalidated after use. Once linked, web and Telegram share the same

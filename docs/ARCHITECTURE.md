@@ -111,6 +111,11 @@ autonomy.
 - Telegram accounts are joined to web accounts through expiring, single-use,
   hashed codes. The resolved account ID is applied before memory lookup, quota
   consumption, tool execution, and approval ownership checks.
+- Telegram `/voice` and `/call` are explicit per-message requests for TTS
+  delivery through official Bot API `sendVoice`. Output stays in the requesting
+  user's workspace, is capped at 10 MB/4,096 text characters, and falls back to
+  text on delivery failure. No userbot, MTProto account automation, or false
+  native-call capability is used.
 
 ## Data boundaries
 

@@ -53,6 +53,7 @@ preserve project state.
 | 🕸️ | **Parallel subagents** | The main agent can delegate bounded analytical work to isolated, non-recursive subagents. |
 | 🖥️ | **Real tools** | Files, documents, web research, JavaScript browser, offline Python/Node/Git/npm sandbox, MCP, and connected services. |
 | 👁️ | **Multimodal understanding** | Images, scanned PDFs, audio transcription, speech generation, and Unicode document workflows. |
+| 🎙️ | **Telegram voice mode** | `/voice` and `/call` return an agent answer as a bounded Telegram voice message through the official Bot API. |
 | 📁 | **Project operating system** | Goals, ordered plans, checkpoints, linked runs, immutable artifact versions, and recoverable results. |
 | 🛡️ | **Human control** | External, write, and destructive operations stop before execution and require approval of the exact stored request. |
 
@@ -137,7 +138,7 @@ See the [security policy](docs/SECURITY.md),
 
 ## Current state
 
-**Private alpha · 125 automated tests · 20 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
+**Private alpha · 135 automated tests · 20 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
 
 The functional agent core, web cabinet, Telegram channel, project system,
 recurring tasks, multimodal tools, sandbox, browser, MCP, encrypted connectors,

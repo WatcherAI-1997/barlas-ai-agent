@@ -515,6 +515,73 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("turns explicit Telegram call commands into voice-delivered agent runs", async () => {
+    const deps = dependencies();
+    const sendMessage = vi.fn(async () => undefined);
+    const queued = {
+      id: "00000000-0000-4000-8000-000000000010",
+      userId: "telegram:7",
+      conversationId: "00000000-0000-4000-8000-000000000001",
+      status: "queued" as const,
+      messages: [{ role: "user" as const, content: "Explain the release" }],
+      conversationMessages: [{ role: "user" as const, content: "Explain the release" }],
+      delivery: { channel: "telegram" as const, chatId: 42, voice: true },
+      taskClass: "fast" as const,
+      maxSteps: 8,
+      scheduledFor: "2026-10-16T00:00:00.000Z",
+      attempts: 0,
+      maxAttempts: 3,
+      createdAt: "2026-10-16T00:00:00.000Z",
+      updatedAt: "2026-10-16T00:00:00.000Z",
+    };
+    const agentRuntime = {
+      start: vi.fn(), enqueue: vi.fn(async () => queued), resume: vi.fn(), resumeByApproval: vi.fn(),
+      get: vi.fn(), list: vi.fn(), events: vi.fn(), cancel: vi.fn(),
+    };
+    const app = await buildApp({
+      apiToken,
+      ...deps,
+      agentRuntime,
+      telegram: { webhookSecret: "t".repeat(32), client: { sendMessage } },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/channels/telegram/webhook",
+      headers: { "x-telegram-bot-api-secret-token": "t".repeat(32) },
+      payload: { update_id: 3, message: { message_id: 4, text: "/call Explain the release", chat: { id: 42 }, from: { id: 7 } } },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(agentRuntime.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      messages: expect.arrayContaining([{ role: "user", content: "Explain the release" }]),
+      conversationMessages: [{ role: "user", content: "Explain the release" }],
+      delivery: { channel: "telegram", chatId: 42, voice: true },
+    }));
+    expect(sendMessage).toHaveBeenCalledWith(42, expect.stringContaining("Голосовой ответ готовится"));
+    await app.close();
+  });
+
+  it("explains the native Telegram call limitation when no voice prompt is supplied", async () => {
+    const deps = dependencies();
+    const sendMessage = vi.fn(async () => undefined);
+    const app = await buildApp({
+      apiToken,
+      ...deps,
+      telegram: { webhookSecret: "t".repeat(32), client: { sendMessage } },
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/channels/telegram/webhook",
+      headers: { "x-telegram-bot-api-secret-token": "t".repeat(32) },
+      payload: { update_id: 4, message: { message_id: 5, text: "/call", chat: { id: 42 }, from: { id: 7 } } },
+    });
+
+    expect(response.json()).toMatchObject({ ok: true, voiceHelp: true });
+    expect(sendMessage).toHaveBeenCalledWith(42, expect.stringContaining("не позволяет боту начать нативный звонок"));
+    await app.close();
+  });
+
   it("creates durable jobs with an audit event", async () => {
     const deps = dependencies();
     const app = await buildApp({ apiToken, ...deps });

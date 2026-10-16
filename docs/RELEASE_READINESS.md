@@ -3,7 +3,7 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 129 automated tests across 38 files pass.
+- 135 automated tests across 39 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -43,6 +43,9 @@
 - Recurring schedule tests cover IANA timezone calculation, invalid zones,
   pause/resume, idempotency-keyed autonomous dispatch, and fail-closed Telegram
   delivery when an account is not linked.
+- Telegram voice tests cover explicit `/voice` and `/call` parsing, bounded MP3
+  generation in the owned workspace, multipart `sendVoice`, honest native-call
+  limitation messaging, and voice-delivery metadata without answer content.
 - An isolated live load smoke completed 1,000 `/health` and `/ready` requests at
   concurrency 50 with zero failures and 37.7 ms p95 latency on the test host.
 - A PostgreSQL custom dump restored into a separate disposable PostgreSQL 17

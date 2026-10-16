@@ -8,7 +8,9 @@
 
 ## Phase 1 — Private alpha
 
-- Telegram webhook, durable replies, and approval buttons. *(implemented; credentials pending)*
+- Telegram webhook, durable text/voice replies, `/voice` and `/call` commands,
+  and approval buttons. *(implemented through the official Bot API; credentials pending;
+  native bot-initiated calls are not supported by Telegram)*
 - One-time Telegram-to-account linking and shared identity. *(implemented)*
 - Persistent conversations and explicit long-term memory. *(implemented with optional semantic embeddings and lexical fallback)*
 - Web research, files, documents, terminal tools, and task execution. *(SearXNG search, SSRF-protected page reader, isolated Playwright interaction, Markdown/TXT/CSV/DOCX creation, PDF/DOCX extraction, isolated files, restricted inspection, and approval-gated offline Python/Node/Git/npm sandbox implemented)*
