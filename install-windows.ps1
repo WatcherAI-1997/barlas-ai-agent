@@ -32,7 +32,15 @@ function Invoke-NativeCommand([string]$FilePath, [string[]]$Arguments, [string]$
         if ($Output) { [IO.File]::AppendAllText($InstallLog, $Output + [Environment]::NewLine, [Text.Encoding]::UTF8) }
     }
     finally { $ErrorActionPreference = $PreviousPreference }
-    if ($Code -ne 0) { throw "$FailureMessage. Details: $InstallLog" }
+    if ($Code -ne 0) {
+        $Tail = if (Test-Path -LiteralPath $InstallLog -PathType Leaf) { @(Get-Content -LiteralPath $InstallLog -Tail 25) } else { @() }
+        if ($Tail.Count) {
+            Write-Host ""
+            Write-Host "Last installer log lines:" -ForegroundColor Yellow
+            $Tail | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
+        }
+        throw "$FailureMessage. Details: $InstallLog"
+    }
 }
 
 function Show-PixelBanner {
@@ -97,7 +105,7 @@ try {
         Write-Step 3 "Building application (this may take a few minutes)"
         Push-Location $AppDir
         try {
-            Invoke-NativeCommand $NpmCmd @("ci", "--no-fund", "--no-audit") "Dependency installation failed"
+            Invoke-NativeCommand $NpmCmd @("ci", "--ignore-scripts", "--no-fund", "--no-audit") "Dependency installation failed"
             Invoke-NativeCommand $NpmCmd @("run", "build") "Barlas build failed"
         } finally { Pop-Location }
         Write-Done "Application ready"
@@ -117,8 +125,13 @@ try {
             if (Test-Path -LiteralPath $AppDir) { Remove-Item -LiteralPath $AppDir -Recurse -Force }
             Move-Item -LiteralPath $PreviousDir -Destination $AppDir
             $RestoredStart = Join-Path $AppDir "scripts\start-native.ps1"
-            if (Test-Path -LiteralPath $RestoredStart -PathType Leaf) {
-                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestoredStart
+            $RestoredEnv = Join-Path $AppDir "deploy\native.env"
+            $RestoredBuild = Join-Path $AppDir "dist\src\native.js"
+            if ((Test-Path -LiteralPath $RestoredStart -PathType Leaf) -and
+                (Test-Path -LiteralPath $RestoredEnv -PathType Leaf) -and
+                (Test-Path -LiteralPath $RestoredBuild -PathType Leaf)) {
+                try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $RestoredStart }
+                catch { [IO.File]::AppendAllText($InstallLog, "Rollback restart failed: $($_.Exception.Message)`r`n", [Text.Encoding]::UTF8) }
             }
         }
         throw
