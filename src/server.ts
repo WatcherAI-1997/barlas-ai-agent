@@ -36,8 +36,10 @@ import { ScheduleWorker } from "./schedules/worker.js";
 import { languageInstruction } from "./i18n/languages.js";
 import { createBuiltinExtensionCatalog } from "./extensions/catalog.js";
 import { DeviceNodeService } from "./nodes/service.js";
+import { createModelProvider } from "./providers/factory.js";
 
 const config = loadConfig();
+const openAIServiceApiKey = config.MEDIA_API_KEY ?? (config.MODEL_PROVIDER === "openai" ? config.MODEL_API_KEY : undefined);
 const database = new Database(config.DATABASE_URL);
 const authService = new AuthService(database, config.SESSION_TTL_HOURS);
 const telegramLinks = new TelegramLinkService(database);
@@ -57,13 +59,15 @@ const gatewayOwner = config.OWNER_EMAIL
     ...(config.OWNER_LANGUAGE ? { languageCode: config.OWNER_LANGUAGE } : {}),
   })
   : undefined;
-const fastProvider = new OpenAIProvider({
+const fastProvider = createModelProvider({
+  provider: config.MODEL_PROVIDER,
   apiKey: config.MODEL_API_KEY,
   model: config.MODEL_NAME,
   inputUsdPerMillion: config.MODEL_INPUT_USD_PER_MILLION,
   outputUsdPerMillion: config.MODEL_OUTPUT_USD_PER_MILLION,
 });
-const deepProvider = new OpenAIProvider({
+const deepProvider = createModelProvider({
+  provider: config.MODEL_PROVIDER,
   apiKey: config.MODEL_API_KEY,
   model: config.DEEP_MODEL_NAME ?? config.MODEL_NAME,
   inputUsdPerMillion: config.DEEP_MODEL_INPUT_USD_PER_MILLION ?? config.MODEL_INPUT_USD_PER_MILLION,
@@ -88,8 +92,8 @@ const modelProvider = new ModelRouter({
 });
 const memory = new SemanticMemory(
   database,
-  config.EMBEDDING_MODEL
-    ? new OpenAIEmbeddingProvider({ apiKey: config.MODEL_API_KEY, model: config.EMBEDDING_MODEL })
+  config.EMBEDDING_MODEL && openAIServiceApiKey
+    ? new OpenAIEmbeddingProvider({ apiKey: openAIServiceApiKey, model: config.EMBEDDING_MODEL })
     : undefined,
 );
 const organizations = new OrganizationService(database);
@@ -108,18 +112,19 @@ const extensionCatalog = createBuiltinExtensionCatalog({
   telegram: Boolean(config.TELEGRAM_BOT_TOKEN),
   privateModel: Boolean(config.PRIVATE_MODEL_BASE_URL && config.PRIVATE_MODEL_NAME && config.PRIVATE_MODEL_API_KEY),
   deviceNodes: true,
+  modelProvider: config.MODEL_PROVIDER,
 });
 const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
 const projects = new ProjectService(database, workspace);
-const mediaService = new MediaService(
+const mediaService = openAIServiceApiKey ? new MediaService(
   workspace,
   new OpenAIMediaModel({
-    apiKey: config.MODEL_API_KEY,
+    apiKey: openAIServiceApiKey,
     visionModel: config.VISION_MODEL ?? config.MODEL_NAME,
     transcriptionModel: config.TRANSCRIPTION_MODEL,
     speechModel: config.SPEECH_MODEL,
   }),
-);
+) : undefined;
 const governance = new RuntimeGovernance(database, {
   chat: config.DAILY_CHAT_QUOTA,
   tool: config.DAILY_TOOL_QUOTA,
@@ -134,7 +139,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   ...(githubConnector ? { githubConnector } : {}),
   ...(googleConnector ? { googleConnector } : {}),
   ...(mcpConnector ? { mcpConnector } : {}),
-  mediaService,
+  ...(mediaService ? { mediaService } : {}),
   projectService: projects,
   deviceNodes,
 }), database, governance);
@@ -216,6 +221,7 @@ const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
         );
       } else if (run.delivery.voice) {
         try {
+          if (!mediaService) throw new Error("Voice replies require MEDIA_API_KEY with the selected model provider");
           const voice = await sendTelegramVoiceReply({
             client: telegram.client,
             media: mediaService,
@@ -279,7 +285,7 @@ const app = await buildApp({
   telegramLinks,
   memory,
   organizations,
-  media: mediaService,
+  ...(mediaService ? { media: mediaService } : {}),
   workspace,
   maxWorkspaceFileBytes: config.MAX_WORKSPACE_FILE_BYTES,
   projects,

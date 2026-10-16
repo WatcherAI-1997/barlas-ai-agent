@@ -11,9 +11,10 @@ const configSchema = z.object({
   DATABASE_URL: z.string().min(1),
   BARLAS_API_TOKEN: z.string().min(32),
   BARLAS_GATEWAY_TOKEN: z.string().min(32),
-  MODEL_PROVIDER: z.enum(["openai"]).default("openai"),
+  MODEL_PROVIDER: z.enum(["openai", "anthropic"]).default("openai"),
   MODEL_NAME: z.string().min(1),
   MODEL_API_KEY: z.string().min(1),
+  MEDIA_API_KEY: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   VISION_MODEL: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().min(1).optional(),
@@ -118,6 +119,12 @@ const configSchema = z.object({
       code: "custom",
       message: "CONNECTOR_VAULT_KEY is required in production",
     });
+  }
+  if (config.MODEL_PROVIDER === "anthropic" && config.MEDIA_API_KEY && !config.VISION_MODEL) {
+    context.addIssue({ code: "custom", message: "VISION_MODEL is required when Anthropic uses an OpenAI media key" });
+  }
+  if (config.EMBEDDING_MODEL && config.MODEL_PROVIDER === "anthropic" && !config.MEDIA_API_KEY) {
+    context.addIssue({ code: "custom", message: "MEDIA_API_KEY is required for OpenAI embeddings with Anthropic" });
   }
 });
 

@@ -205,9 +205,16 @@ else
   prompt OWNER_DISPLAY_NAME "First owner display name" "Barlas Owner"
   prompt OWNER_LANGUAGE "Owner language code; blank means choose on first login" ""
   prompt MODEL_PROVIDER "Model provider" "openai"
+  [[ "$MODEL_PROVIDER" == "openai" || "$MODEL_PROVIDER" == "anthropic" ]] || fail "Model provider must be openai or anthropic"
   prompt MODEL_NAME "Fast/default model name"
   prompt DEEP_MODEL_NAME "Deep model name" "${MODEL_NAME:-}"
-  prompt VISION_MODEL "Vision/PDF model name" "${MODEL_NAME:-}"
+  if [[ "$MODEL_PROVIDER" == "anthropic" ]]; then
+    prompt MEDIA_API_KEY "Optional OpenAI key for vision, PDF, transcription, speech, and embeddings" "" true
+    if [[ -n "${MEDIA_API_KEY:-}" ]]; then prompt VISION_MODEL "OpenAI vision/PDF model name" "gpt-4.1-mini"; else VISION_MODEL=""; fi
+  else
+    MEDIA_API_KEY=""
+    prompt VISION_MODEL "Vision/PDF model name" "${MODEL_NAME:-}"
+  fi
   prompt TRANSCRIPTION_MODEL "Transcription model" "gpt-4o-mini-transcribe"
   prompt SPEECH_MODEL "Speech model" "gpt-4o-mini-tts"
   prompt EMBEDDING_MODEL "Embedding model; blank disables semantic embeddings" ""
@@ -219,7 +226,7 @@ else
     TELEGRAM_WEBHOOK_SECRET=""
   fi
 
-  for variable in BARLAS_DOMAIN BARLAS_HTTP_PORT BARLAS_HTTPS_PORT OWNER_EMAIL OWNER_DISPLAY_NAME OWNER_LANGUAGE MODEL_PROVIDER MODEL_NAME DEEP_MODEL_NAME VISION_MODEL TRANSCRIPTION_MODEL SPEECH_MODEL EMBEDDING_MODEL MODEL_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET; do
+  for variable in BARLAS_DOMAIN BARLAS_HTTP_PORT BARLAS_HTTPS_PORT OWNER_EMAIL OWNER_DISPLAY_NAME OWNER_LANGUAGE MODEL_PROVIDER MODEL_NAME DEEP_MODEL_NAME VISION_MODEL TRANSCRIPTION_MODEL SPEECH_MODEL EMBEDDING_MODEL MODEL_API_KEY MEDIA_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET; do
     require_single_line "$variable"
   done
 
@@ -235,7 +242,6 @@ else
   fi
   require_value MODEL_NAME "Fast/default model name"
   require_value MODEL_API_KEY "Model API key"
-  [[ "$MODEL_PROVIDER" == "openai" ]] || fail "This release supports the openai-compatible provider adapter"
   [[ "$BARLAS_HTTP_PORT" =~ ^[0-9]+$ && "$BARLAS_HTTPS_PORT" =~ ^[0-9]+$ ]] || fail "Ports must be numeric"
   ((BARLAS_HTTP_PORT >= 1 && BARLAS_HTTP_PORT <= 65535)) || fail "HTTP port must be between 1 and 65535"
   if [[ "$LOCAL_MODE" == false ]]; then
@@ -266,6 +272,7 @@ else
   write_setting MODEL_PROVIDER "$MODEL_PROVIDER"
   write_setting MODEL_NAME "$MODEL_NAME"
   write_setting MODEL_API_KEY "$MODEL_API_KEY"
+  write_setting MEDIA_API_KEY "$MEDIA_API_KEY"
   write_setting VISION_MODEL "$VISION_MODEL"
   write_setting TRANSCRIPTION_MODEL "$TRANSCRIPTION_MODEL"
   write_setting SPEECH_MODEL "$SPEECH_MODEL"

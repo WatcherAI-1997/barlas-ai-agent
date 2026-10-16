@@ -54,6 +54,7 @@ export interface BuiltinExtensionAvailability {
   telegram: boolean;
   privateModel: boolean;
   deviceNodes: boolean;
+  modelProvider: "openai" | "anthropic";
 }
 
 export function createBuiltinExtensionCatalog(availability: BuiltinExtensionAvailability): ExtensionCatalog {
@@ -66,7 +67,8 @@ export function createBuiltinExtensionCatalog(availability: BuiltinExtensionAvai
   add({ id: "connector.github", name: "GitHub", description: "Repository profile and repository access through an encrypted connector.", kind: "connector", capabilities: ["profile.read", "repositories.read"], risks: ["read", "external"], configuration: ["CONNECTOR_VAULT_KEY"] }, () => availability.github);
   add({ id: "connector.google", name: "Google", description: "Drive, Gmail and Calendar access through an encrypted connector.", kind: "connector", capabilities: ["calendar.read", "drive.read", "gmail.read"], risks: ["read", "external"], configuration: ["CONNECTOR_VAULT_KEY"] }, () => availability.google);
   add({ id: "connector.mcp", name: "Model Context Protocol", description: "Connect approved MCP servers and expose their tools to Barlas.", kind: "connector", capabilities: ["tools.discover", "tools.execute"], risks: ["external", "write"], configuration: ["CONNECTOR_VAULT_KEY"] }, () => availability.mcp);
-  add({ id: "provider.openai", name: "OpenAI", description: "Primary native model, media and embedding provider.", kind: "provider", capabilities: ["chat", "embeddings", "media", "tools"], risks: ["external"], configuration: ["MODEL_API_KEY", "MODEL_NAME"] }, () => true);
+  add({ id: "provider.anthropic", name: "Anthropic", description: "Native Anthropic Messages API provider with durable tool continuations.", kind: "provider", capabilities: ["chat", "tools"], risks: ["external"], configuration: ["MODEL_API_KEY", "MODEL_NAME"] }, () => availability.modelProvider === "anthropic");
+  add({ id: "provider.openai", name: "OpenAI", description: "Native OpenAI model, media and embedding provider.", kind: "provider", capabilities: ["chat", "embeddings", "media", "tools"], risks: ["external"], configuration: ["MODEL_API_KEY", "MODEL_NAME"] }, () => availability.modelProvider === "openai");
   add({ id: "provider.openai-compatible", name: "OpenAI-compatible private model", description: "Optional self-hosted or compatible private model route.", kind: "provider", capabilities: ["chat", "tools"], risks: ["external"], configuration: ["PRIVATE_MODEL_API_KEY", "PRIVATE_MODEL_BASE_URL", "PRIVATE_MODEL_NAME"] }, () => availability.privateModel);
   add({ id: "runtime.browser", name: "Managed browser", description: "Isolated Playwright browser navigation and extraction.", kind: "runtime", capabilities: ["browser.navigate", "browser.read"], risks: ["external", "read"], configuration: ["BROWSER_WS_ENDPOINT"] }, () => availability.browser);
   add({ id: "runtime.code-sandbox", name: "Code sandbox", description: "Isolated Python, Node.js, Git and npm execution.", kind: "runtime", capabilities: ["code.execute", "git", "npm", "python"], risks: ["write"], configuration: ["SANDBOX_SHARED_TOKEN", "SANDBOX_SOCKET_PATH"] }, () => availability.sandbox);

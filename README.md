@@ -110,6 +110,11 @@ The extension catalog declares each built-in channel, connector, provider,
 runtime, skill source, and device bridge together with its capabilities, risk
 classes, and required setting names. It never returns secret values.
 
+Text and autonomous tool execution can use either native OpenAI Responses or
+native Anthropic Messages APIs (`MODEL_PROVIDER=openai|anthropic`). With
+Anthropic, OpenAI-only media and embeddings remain optional through a separate
+`MEDIA_API_KEY`, so model credentials are not silently reused across providers.
+
 Device nodes use a separate one-time pairing code and receive an independently
 revocable bearer token. The initial protocol supports heartbeat, capability
 advertising, command acknowledgement, and approval-gated notifications only;

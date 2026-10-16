@@ -71,14 +71,20 @@ Automation may provide configuration through its secret manager and then run:
 ./install.sh --non-interactive
 ```
 
-Local mode requires only `MODEL_NAME` and `MODEL_API_KEY`; owner email defaults
+Local mode requires only `MODEL_NAME` and `MODEL_API_KEY`; set
+`MODEL_PROVIDER` to `openai` or `anthropic` (default `openai`). Owner email defaults
 to `owner@barlas.local`. Public mode additionally requires `BARLAS_DOMAIN` and
 `OWNER_EMAIL`. Optional variables include
-`DEEP_MODEL_NAME`, `VISION_MODEL`, `TRANSCRIPTION_MODEL`, `SPEECH_MODEL`,
+`DEEP_MODEL_NAME`, `MEDIA_API_KEY`, `VISION_MODEL`, `TRANSCRIPTION_MODEL`, `SPEECH_MODEL`,
 `EMBEDDING_MODEL`, `OWNER_DISPLAY_NAME`, `OWNER_LANGUAGE`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
 `TELEGRAM_BOT_API_BASE_URL`, `TELEGRAM_MAX_UPLOAD_BYTES`,
 `MAX_WORKSPACE_FILE_BYTES`, `BARLAS_HTTP_PORT`, and `BARLAS_HTTPS_PORT`.
+
+When `MODEL_PROVIDER=anthropic`, chat and agent tools use the Anthropic
+Messages API. Vision, PDF analysis, transcription, speech, and embeddings are
+disabled unless a separate OpenAI `MEDIA_API_KEY` is supplied; in that case
+`VISION_MODEL` is also required. Barlas never sends an Anthropic key to OpenAI.
 
 Pass secrets through the deployment platform's protected environment or secret
 store, not as literal command-line arguments. `--verbose` streams build output;

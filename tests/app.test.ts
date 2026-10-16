@@ -124,7 +124,7 @@ describe("Barlas AI Agent API", () => {
     const deps = dependencies();
     const extensionCatalog = createBuiltinExtensionCatalog({
       browser: false, github: false, google: false, mcp: false, sandbox: true,
-      telegram: true, privateModel: false, deviceNodes: true,
+      telegram: true, privateModel: false, deviceNodes: true, modelProvider: "openai",
     });
     const app = await buildApp({ apiToken, ...deps, extensionCatalog });
     const response = await app.inject({
