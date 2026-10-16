@@ -158,6 +158,11 @@ describe("production installer", () => {
     expect(bootstrap).not.toContain("gh auth");
     expect(bootstrap).toContain('$ErrorActionPreference = "Continue"');
     expect(bootstrap).toContain("$Code");
+    expect(bootstrap).toContain('(@($BinDir) + $PathParts)');
+    expect(bootstrap).toContain('(@($BinDir) + $ProcessPathParts)');
+    expect(bootstrap).toContain('Get-Command barlas -CommandType Application');
+    expect(bootstrap).toContain('The global Barlas command is shadowed by another installation');
+    expect(bootstrap).not.toContain('(@($PathParts) + $BinDir)');
   });
 
   it("prepares a protected config without printing supplied secrets", async () => {

@@ -186,10 +186,22 @@ try {
     $Launcher = Join-Path $BinDir "barlas.cmd"
     $LauncherText = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$AppDir\barlas.ps1`" %*`r`n"
     [IO.File]::WriteAllText($Launcher, $LauncherText, [Text.Encoding]::ASCII)
+
+    # Put Barlas first, not last. A previous Python package or another program
+    # may already provide barlas.exe earlier on PATH. Appending our bin folder
+    # makes Windows keep launching that stale command even though installation
+    # completed successfully.
     $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    $PathParts = @($UserPath -split ';' | Where-Object { $_ })
-    if ($PathParts -notcontains $BinDir) { [Environment]::SetEnvironmentVariable("Path", ((@($PathParts) + $BinDir) -join ';'), "User") }
-    if (($env:Path -split ';') -notcontains $BinDir) { $env:Path = "$env:Path;$BinDir" }
+    $PathParts = @($UserPath -split ';' | Where-Object { $_ -and -not $_.TrimEnd('\').Equals($BinDir.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) })
+    [Environment]::SetEnvironmentVariable("Path", ((@($BinDir) + $PathParts) -join ';'), "User")
+    $ProcessPathParts = @($env:Path -split ';' | Where-Object { $_ -and -not $_.TrimEnd('\').Equals($BinDir.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) })
+    $env:Path = ((@($BinDir) + $ProcessPathParts) -join ';')
+
+    $ResolvedBarlas = Get-Command barlas -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $ResolvedBarlas -or -not $ResolvedBarlas.Path.Equals($Launcher, [StringComparison]::OrdinalIgnoreCase)) {
+        $ResolvedPath = if ($ResolvedBarlas) { $ResolvedBarlas.Path } else { "not found" }
+        throw "The global Barlas command is shadowed by another installation: $ResolvedPath"
+    }
     Write-Done "Global 'barlas' command installed"
     [IO.File]::WriteAllText((Join-Path $AppDir ".barlas-version"), $ReleaseSha + "`r`n", [Text.Encoding]::ASCII)
 
