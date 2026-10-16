@@ -9,7 +9,7 @@ const root = resolve(import.meta.dirname, "..");
 
 describe("production installer", () => {
   it("has valid Bash syntax and documents both entry points", () => {
-    expect(spawnSync("bash", ["-n", "install.sh", "scripts/doctor.sh"], { cwd: root }).status).toBe(0);
+    expect(spawnSync("bash", ["-n", "install.sh", "scripts/doctor.sh", "scripts/dashboard-url.sh"], { cwd: root }).status).toBe(0);
     expect(spawnSync("bash", ["install.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--prepare-only");
     expect(spawnSync("bash", ["scripts/doctor.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--require-running");
   });
@@ -31,7 +31,6 @@ describe("production installer", () => {
         PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
         BARLAS_DOMAIN: "agent.barlas.test",
         OWNER_EMAIL: "owner@barlas.test",
-        OWNER_PASSWORD: "installer-$ecret-#-password",
         OWNER_LANGUAGE: "mn",
         MODEL_NAME: "fast-test-model",
         DEEP_MODEL_NAME: "deep-test-model",
@@ -44,8 +43,12 @@ describe("production installer", () => {
     const environment = await readFile(envFile, "utf8");
     expect(environment).toContain("BARLAS_DOMAIN='agent.barlas.test'");
     expect(environment).toContain("OWNER_LANGUAGE='mn'");
-    expect(environment).toContain("OWNER_PASSWORD='installer-$ecret-#-password'");
+    expect(environment).toMatch(/BARLAS_GATEWAY_TOKEN='[a-f0-9]{64}'/u);
+    expect(environment).not.toContain("OWNER_PASSWORD");
     expect(environment).not.toContain("replace-with-");
+    const dashboard = spawnSync("bash", ["scripts/dashboard-url.sh", "--env-file", envFile], { cwd: root, encoding: "utf8" });
+    expect(dashboard.status, dashboard.stderr).toBe(0);
+    expect(dashboard.stdout).toMatch(/^https:\/\/agent\.barlas\.test:18443\/#token=[a-f0-9]{64}\n$/u);
     await rm(temporary, { recursive: true, force: true });
   });
 });

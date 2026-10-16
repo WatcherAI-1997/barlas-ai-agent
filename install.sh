@@ -25,7 +25,7 @@ Options:
   -h, --help            Show this help
 
 Non-interactive required variables:
-  BARLAS_DOMAIN, OWNER_EMAIL, OWNER_PASSWORD, MODEL_NAME, MODEL_API_KEY
+  BARLAS_DOMAIN, OWNER_EMAIL, MODEL_NAME, MODEL_API_KEY
 
 Optional variables include DEEP_MODEL_NAME, VISION_MODEL, EMBEDDING_MODEL,
 OWNER_DISPLAY_NAME, OWNER_LANGUAGE, TELEGRAM_BOT_TOKEN, and port/model settings.
@@ -155,7 +155,6 @@ else
   prompt SPEECH_MODEL "Speech model" "gpt-4o-mini-tts"
   prompt EMBEDDING_MODEL "Embedding model; blank disables semantic embeddings" ""
   prompt MODEL_API_KEY "Dedicated model API key" "" true
-  prompt OWNER_PASSWORD "First owner password (12+ characters)" "" true
   prompt TELEGRAM_BOT_TOKEN "Dedicated Telegram bot token; blank disables Telegram" "" true
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
     prompt TELEGRAM_WEBHOOK_SECRET "Telegram webhook secret; blank generates one" "" true
@@ -163,7 +162,7 @@ else
     TELEGRAM_WEBHOOK_SECRET=""
   fi
 
-  for variable in BARLAS_DOMAIN BARLAS_HTTP_PORT BARLAS_HTTPS_PORT OWNER_EMAIL OWNER_DISPLAY_NAME OWNER_LANGUAGE MODEL_PROVIDER MODEL_NAME DEEP_MODEL_NAME VISION_MODEL TRANSCRIPTION_MODEL SPEECH_MODEL EMBEDDING_MODEL MODEL_API_KEY OWNER_PASSWORD TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET; do
+  for variable in BARLAS_DOMAIN BARLAS_HTTP_PORT BARLAS_HTTPS_PORT OWNER_EMAIL OWNER_DISPLAY_NAME OWNER_LANGUAGE MODEL_PROVIDER MODEL_NAME DEEP_MODEL_NAME VISION_MODEL TRANSCRIPTION_MODEL SPEECH_MODEL EMBEDDING_MODEL MODEL_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET; do
     require_single_line "$variable"
   done
 
@@ -177,8 +176,6 @@ else
   fi
   require_value MODEL_NAME "Fast/default model name"
   require_value MODEL_API_KEY "Model API key"
-  require_value OWNER_PASSWORD "Owner password"
-  [[ ${#OWNER_PASSWORD} -ge 12 ]] || fail "Owner password must contain at least 12 characters"
   [[ "$MODEL_PROVIDER" == "openai" ]] || fail "This release supports the openai-compatible provider adapter"
   [[ "$BARLAS_HTTP_PORT" =~ ^[0-9]+$ && "$BARLAS_HTTPS_PORT" =~ ^[0-9]+$ ]] || fail "Ports must be numeric"
   ((BARLAS_HTTP_PORT >= 1 && BARLAS_HTTP_PORT <= 65535 && BARLAS_HTTPS_PORT >= 1 && BARLAS_HTTPS_PORT <= 65535)) || fail "Ports must be between 1 and 65535"
@@ -186,6 +183,7 @@ else
 
   POSTGRES_PASSWORD="$(openssl rand -hex 32)"
   BARLAS_API_TOKEN="$(openssl rand -hex 32)"
+  BARLAS_GATEWAY_TOKEN="$(openssl rand -hex 32)"
   CONNECTOR_VAULT_KEY="$(openssl rand -base64 32 | tr -d '\n')"
   SANDBOX_SHARED_TOKEN="$(openssl rand -hex 32)"
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -z "${TELEGRAM_WEBHOOK_SECRET:-}" ]]; then
@@ -201,6 +199,7 @@ else
   write_setting BARLAS_HTTPS_PORT "$BARLAS_HTTPS_PORT"
   write_setting POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
   write_setting BARLAS_API_TOKEN "$BARLAS_API_TOKEN"
+  write_setting BARLAS_GATEWAY_TOKEN "$BARLAS_GATEWAY_TOKEN"
   write_setting MODEL_PROVIDER "$MODEL_PROVIDER"
   write_setting MODEL_NAME "$MODEL_NAME"
   write_setting MODEL_API_KEY "$MODEL_API_KEY"
@@ -212,7 +211,6 @@ else
   write_setting CONNECTOR_VAULT_KEY "$CONNECTOR_VAULT_KEY"
   write_setting CONNECTOR_VAULT_KEY_VERSION "1"
   write_setting OWNER_EMAIL "$OWNER_EMAIL"
-  write_setting OWNER_PASSWORD "$OWNER_PASSWORD"
   write_setting OWNER_DISPLAY_NAME "$OWNER_DISPLAY_NAME"
   write_setting OWNER_LANGUAGE "$OWNER_LANGUAGE"
   write_setting BROWSER_WS_ENDPOINT "ws://browser:3000/"
@@ -262,6 +260,7 @@ public_url="https://${domain}"
 
 printf '\n%s%sInstallation complete.%s\n' "$C_GREEN" "$C_BOLD" "$C_RESET"
 printf 'Web address: %s\n' "$public_url"
+printf 'Dashboard access link: ./scripts/dashboard-url.sh --env-file %q\n' "$ENV_FILE"
 printf 'Diagnostics: ./scripts/doctor.sh --env-file %q --require-running\n' "$ENV_FILE"
 printf 'Logs: docker compose -f compose.production.yml --env-file %q logs -f api\n' "$ENV_FILE"
 if [[ "$https_port" != "443" ]]; then

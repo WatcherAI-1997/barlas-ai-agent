@@ -1,4 +1,9 @@
-const state = { token: sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [] };
+const fragmentToken = new URLSearchParams(location.hash.slice(1)).get("token");
+if (fragmentToken) {
+  sessionStorage.setItem("barlasToken", fragmentToken);
+  history.replaceState(null, "", `${location.pathname}${location.search}`);
+}
+const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [] };
 const $ = (selector) => document.querySelector(selector);
 
 async function api(path, options = {}) {
@@ -108,9 +113,14 @@ async function restore() {
 $("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault(); $("#login-error").textContent = "";
   try {
-    const data = await api("/auth/login", { method: "POST", body: JSON.stringify({ email: $("#email").value, password: $("#password").value }) });
-    state.token = data.token; sessionStorage.setItem("barlasToken", data.token); await showApp(data.account);
-  } catch (error) { $("#login-error").textContent = error.message; }
+    state.token = $("#gateway-token").value.trim();
+    sessionStorage.setItem("barlasToken", state.token);
+    const data = await api("/v1/me");
+    await showApp(data.principal);
+  } catch (error) {
+    sessionStorage.removeItem("barlasToken"); state.token = null;
+    $("#login-error").textContent = error.message;
+  }
 });
 
 $("#language-setup-form").addEventListener("submit", async (event) => {
@@ -122,17 +132,6 @@ $("#language-setup-form").addEventListener("submit", async (event) => {
     });
     await showApp(data.account);
   } catch (error) { $("#language-setup-error").textContent = error.message; }
-});
-
-$("#password-reset-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); $("#password-reset-error").textContent = "";
-  try {
-    await api("/auth/password-reset", { method: "POST", body: JSON.stringify({
-      code: $("#password-reset-code").value.trim(),
-      password: $("#password-reset-password").value,
-    }) });
-    event.target.reset(); $("#password-reset-error").textContent = "Пароль изменён. Теперь войдите.";
-  } catch (error) { $("#password-reset-error").textContent = error.message; }
 });
 
 $("#logout").addEventListener("click", async () => {
@@ -559,10 +558,10 @@ async function loadUsers() {
   const users = (await api("/v1/admin/users")).users;
   renderList("#users", users, (user) => {
     const node = card(user.displayName, `${user.email} · ${user.role}`, user.active ? "Активен" : "Отключён");
-    const reset = document.createElement("button"); reset.textContent = "Код сброса"; reset.className = "secondary";
+    const reset = document.createElement("button"); reset.textContent = "Новый токен"; reset.className = "secondary";
     reset.addEventListener("click", async () => {
-      const data = await api(`/v1/admin/users/${user.id}/password-reset`, { method: "POST" });
-      alert(`Одноразовый код (15 минут):\n${data.code}`);
+      const data = await api(`/v1/admin/users/${user.id}/access-token`, { method: "POST" });
+      alert(`Новый токен показан один раз. Предыдущие токены отозваны:\n${data.token}\n\nДействует до: ${new Date(data.expiresAt).toLocaleString()}`);
     });
     node.append(reset); return node;
   });
@@ -639,13 +638,13 @@ $("#user-form").addEventListener("submit", async (event) => {
   event.preventDefault(); $("#user-error").textContent = "";
   try {
     const languageCode = $("#new-language").value;
-    await api("/v1/admin/users", { method: "POST", body: JSON.stringify({
+    const data = await api("/v1/admin/users", { method: "POST", body: JSON.stringify({
       displayName: $("#new-name").value,
       email: $("#new-email").value,
-      password: $("#new-password").value,
       role: $("#new-role").value,
       ...(languageCode ? { languageCode } : {}),
     }) });
+    alert(`Токен пользователя показан один раз:\n${data.access.token}\n\nДействует до: ${new Date(data.access.expiresAt).toLocaleString()}`);
     event.target.reset(); await loadUsers();
   } catch (error) { $("#user-error").textContent = error.message; }
 });

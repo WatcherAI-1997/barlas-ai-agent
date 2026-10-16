@@ -6,7 +6,7 @@ cycle now archives the dedicated user-workspace volume with its own SHA-256
 sidecar. Default frequency is daily and default retention is fourteen days.
 
 A backup is not trusted until it has been restored into a disposable database
-and checked with `/ready`, an owner login, conversation reads, and an autonomous
+and checked with `/ready`, owner gateway-token access, conversation reads, and an autonomous
 test run. Perform that drill before launch and after every schema change.
 
 Copy both artifacts to encrypted off-host storage using an operator-selected

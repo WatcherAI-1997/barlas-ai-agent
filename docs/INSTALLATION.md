@@ -24,7 +24,7 @@ the safer and more honest installation path.
 The interactive wizard asks for:
 
 - the dedicated domain and non-conflicting host ports;
-- the first owner's email, display name, password, and optional language code;
+- the first owner's email, display name, and optional language code;
 - fast, deep, vision, transcription, speech, and optional embedding models;
 - one dedicated model API key;
 - an optional dedicated Telegram bot token.
@@ -64,7 +64,7 @@ Automation may provide configuration through its secret manager and then run:
 ```
 
 Required environment variables are `BARLAS_DOMAIN`, `OWNER_EMAIL`,
-`OWNER_PASSWORD`, `MODEL_NAME`, and `MODEL_API_KEY`. Optional variables include
+`MODEL_NAME`, and `MODEL_API_KEY`. Optional variables include
 `DEEP_MODEL_NAME`, `VISION_MODEL`, `TRANSCRIPTION_MODEL`, `SPEECH_MODEL`,
 `EMBEDDING_MODEL`, `OWNER_DISPLAY_NAME`, `OWNER_LANGUAGE`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `BARLAS_HTTP_PORT`, and
@@ -74,6 +74,23 @@ Pass secrets through the deployment platform's protected environment or secret
 store, not as literal command-line arguments. `--verbose` streams build output;
 without it, interactive installs write detailed command output to
 `logs/install.log` and show one status per stage.
+
+## Open the dashboard with its gateway token
+
+The installer generates `BARLAS_GATEWAY_TOKEN` independently from the service
+automation token. No Barlas email/password login exists. On the server, request
+an explicit dashboard bootstrap URL:
+
+```bash
+./scripts/dashboard-url.sh
+```
+
+The token is placed after `#token=`. URL fragments are not sent in HTTP requests
+or reverse-proxy logs. The web cabinet imports it into `sessionStorage` for the
+current browser tab and immediately removes it from the address bar, matching
+the OpenClaw Control UI bootstrap pattern. Closing the tab or pressing **Выйти**
+clears the browser copy. Keep the generated link private; anyone holding it has
+owner access.
 
 ## Prerequisites and layout
 
@@ -149,7 +166,9 @@ intact. Database rollback and restore remain separate explicit operations; see
 ## After installation
 
 Open the printed web address, sign in as the first owner, verify the selected
-language, and run one bounded read-only agent task. Then test one write action
+language, and run one bounded read-only agent task. The installer prints the
+command for producing the tokenized dashboard link, never the token itself.
+Then test one write action
 and confirm that it stops in `waiting_approval` before execution. Register the
 Telegram webhook only after its dedicated bot and public HTTPS endpoint are
 ready. Complete every gate in [Release readiness](RELEASE_READINESS.md) before

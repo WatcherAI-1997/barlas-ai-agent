@@ -11,20 +11,20 @@ directly to public interfaces.
 
 ## Authenticated endpoints
 
-Send `Authorization: Bearer <access token>`. Automation may use the dedicated
-`BARLAS_API_TOKEN`. Human users authenticate through `POST /auth/login` and
-receive an opaque expiring session token whose SHA-256 hash is stored server-side.
+Send `Authorization: Bearer <access token>`. Automation uses the dedicated
+`BARLAS_API_TOKEN`. The owner Control UI uses the separately generated
+`BARLAS_GATEWAY_TOKEN`, following OpenClaw's shared gateway-token pattern.
+Additional users receive opaque expiring tokens whose SHA-256 hashes are stored
+server-side; each plaintext token is shown only once.
 
-- `POST /auth/login` — exchange email/password for an expiring session.
-- `POST /auth/password-reset` — consume an owner-issued one-time code and set a new password.
 - `GET /v1/me` — return the current account and authentication type.
-- `POST /v1/auth/logout` — revoke the current user session.
+- `POST /v1/auth/logout` — revoke a personal user token; gateway-token logout is browser-local.
 - `GET /v1/me/telegram` — return the current account's Telegram link.
 - `POST /v1/me/telegram/code` — issue a ten-minute one-time linking code.
 - `DELETE /v1/me/telegram` — remove the account's Telegram link.
 - `GET /v1/admin/users` — list accounts; owner only.
-- `POST /v1/admin/users` — create an owner or user account; owner only.
-- `POST /v1/admin/users/:id/password-reset` — issue a 15-minute recovery code; owner only.
+- `POST /v1/admin/users` — create an owner or user and return its first access token once; owner only.
+- `POST /v1/admin/users/:id/access-token` — revoke that account's previous personal tokens and return one replacement once; owner only.
 - `GET /v1/organizations` — list organizations for the current signed-in account.
 - `POST /v1/organizations` — create an organization and its first owner membership.
 - `GET /v1/organizations/:id/members` — list members for an organization member.
@@ -215,17 +215,18 @@ tool inputs, prompts, file contents, and secrets are not copied into traces.
 
 ## Account isolation
 
-Passwords use scrypt with a unique random salt. Raw session tokens are returned
-once and never persisted. A normal `user` session may submit only its own account
+Barlas stores no human passwords. Raw personal access tokens are returned once
+and never persisted. A normal `user` token may submit only its own account
 ID to chat, memory, tools, approvals, jobs, and trace endpoints. Attempts to
 substitute another ID return HTTP 403. Owners and the service API token retain
-administrative scope. Login attempts are bounded per source address.
+administrative scope. The gateway token is an owner secret and is deliberately
+separate from the automation token.
 
-The optional initial owner is created from `OWNER_EMAIL`, `OWNER_PASSWORD`,
-`OWNER_DISPLAY_NAME`, and optional `OWNER_LANGUAGE`; both email and password
-must be supplied together. If `OWNER_LANGUAGE` is omitted, the owner must choose
-a language at first login. The
-bootstrap is idempotent and never writes credentials to source control.
+The initial owner is created from `OWNER_EMAIL`, `OWNER_DISPLAY_NAME`, and
+optional `OWNER_LANGUAGE`. If the language is omitted, the owner chooses it on
+first access. `BARLAS_GATEWAY_TOKEN` is generated independently during
+installation, remains in the protected server environment, and can be loaded
+into a browser through a URL fragment that is stripped immediately.
 
 ## Language preferences
 

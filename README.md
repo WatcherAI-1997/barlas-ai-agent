@@ -93,6 +93,11 @@ The guided installer checks prerequisites, asks for deployment-specific values,
 generates independent cryptographic secrets, protects them with mode `0600`,
 validates the entire production stack, starts it, and runs diagnostics.
 
+Like OpenClaw, the owner dashboard uses a generated gateway token instead of a
+login and password. Run `./scripts/dashboard-url.sh` on the server to produce a
+bootstrap `#token=...` link; the fragment is stripped after the browser stores it
+for the current tab.
+
 ```bash
 # Prepare and validate without starting anything
 ./install.sh --prepare-only
@@ -132,7 +137,7 @@ See the [security policy](docs/SECURITY.md),
 
 ## Current state
 
-**Private alpha · 125 automated tests · 19 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
+**Private alpha · 125 automated tests · 20 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
 
 The functional agent core, web cabinet, Telegram channel, project system,
 recurring tasks, multimodal tools, sandbox, browser, MCP, encrypted connectors,

@@ -72,9 +72,10 @@ autonomy.
   directory or the root-owned runner token.
 - Per-user UTC-day counters and execution traces live in the isolated PostgreSQL
   database. Quota consumption is atomic under concurrent requests.
-- Human authentication uses scrypt password hashes and opaque, expiring,
-  revocable server-side sessions. Roles are enforced in the API before user IDs
-  reach storage, tools, quotas, or model calls.
+- Human authentication follows OpenClaw's gateway-token model: a separately
+  generated owner token authenticates the Control UI, while additional users
+  receive opaque, expiring, revocable tokens stored only as SHA-256 hashes.
+  Roles are enforced before user IDs reach storage, tools, quotas, or models.
 - The branded web cabinet is served from immutable container assets with a
   restrictive Content Security Policy, no third-party browser scripts, and no
   access to the service automation token.

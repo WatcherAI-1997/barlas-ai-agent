@@ -49,8 +49,10 @@ for (const required of [
   "migrations/016_skills.sql",
   "migrations/018_projects.sql",
   "migrations/019_project_execution.sql",
+  "migrations/020_gateway_tokens.sql",
   "install.sh",
   "scripts/doctor.sh",
+  "scripts/dashboard-url.sh",
   "docs/INSTALLATION.md",
   "assets/brand/barlas-ai-agent-logo-original.png",
   "assets/brand/barlas-ai-agent-github-hero.png",
@@ -65,7 +67,7 @@ const readme = await readFile("README.md", "utf8");
 for (const required of ["barlas-ai-agent-github-hero.png", "Quick install", "Security by design", "All 38", "THINK AHEAD. ACT BEYOND."]) {
   if (!readme.includes(required)) throw new Error(`GitHub product presentation is missing: ${required}`);
 }
-for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "--prepare-only", "scripts/doctor.sh", "never prints them"]) {
+for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "BARLAS_GATEWAY_TOKEN", "openssl rand -hex 32", "--prepare-only", "scripts/doctor.sh", "scripts/dashboard-url.sh", "never prints them"]) {
   if (!installer.includes(required)) throw new Error(`Installer safety/usability boundary is missing: ${required}`);
 }
 for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {
@@ -85,6 +87,11 @@ for (const required of ["recordRunResult", 'run.status === "waiting_approval"', 
   if (!projects.includes(required)) throw new Error(`Automatic checkpoint boundary is missing: ${required}`);
 }
 if (!database.includes("pg_advisory_xact_lock")) throw new Error("Project artifact version allocation is not serialized");
+const gatewayTokenMigration = await readFile("migrations/020_gateway_tokens.sql", "utf8");
+for (const required of ["delete from user_sessions", "drop column password_hash", "drop column password_salt", "drop table if exists password_reset_codes"]) {
+  if (!gatewayTokenMigration.toLowerCase().includes(required)) throw new Error(`Gateway-token migration boundary is missing: ${required}`);
+}
+if (installer.includes("OWNER_PASSWORD")) throw new Error("Installer must not request or persist an owner password");
 for (const required of ["unique (project_id, path, version)", "foreign key (project_id, user_id)", "size_bytes integer"]) {
   if (!projectMigration.includes(required)) throw new Error(`Project artifact database boundary is missing: ${required}`);
 }
@@ -167,11 +174,18 @@ for (const required of ["MAX_MEDIA_BYTES = 10_000_000", "detectMedia", "File ext
 }
 const fileWorkspace = await readFile("src/tools/file-workspace.ts", "utf8");
 const appSource = await readFile("src/app.ts", "utf8");
+const webApp = await readFile("web/app.js", "utf8");
 for (const required of ["writeUpload", "constants.O_EXCL", "MAX_DOCUMENT_BYTES"]) {
   if (!fileWorkspace.includes(required)) throw new Error(`Workspace upload boundary is missing: ${required}`);
 }
 for (const required of ["application/octet-stream", "Content-Disposition", "explicit overwrite is required"]) {
   if (!appSource.includes(required)) throw new Error(`Workspace download/upload boundary is missing: ${required}`);
+}
+for (const prohibited of ["/auth/login", "password-reset"]) {
+  if (appSource.includes(prohibited)) throw new Error(`Legacy password authentication route remains: ${prohibited}`);
+}
+for (const required of ["location.hash.slice(1)", "sessionStorage.setItem(\"barlasToken\"", "history.replaceState", "headers.authorization = `Bearer ${state.token}`"]) {
+  if (!webApp.includes(required)) throw new Error(`Gateway-token browser bootstrap is missing: ${required}`);
 }
 const evaluationRunner = await readFile("scripts/run-agent-evals.mjs", "utf8");
 if (evaluationRunner.includes("approved: true")) throw new Error("Agent evaluation must never auto-approve an action");

@@ -224,10 +224,6 @@ const organizationPlanSchema = z.object({
   plan: z.enum(["private_alpha", "team", "business"]),
 }).strict();
 const accountParamsSchema = z.object({ id: z.string().uuid() });
-const passwordResetSchema = z.object({
-  code: z.string().min(20).max(256),
-  password: z.string().min(12).max(256),
-}).strict();
 const skillParamsSchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9.-]{2,63}$/u),
   version: z.string().regex(/^\d+\.\d+\.\d+$/u),
@@ -258,15 +254,9 @@ const scheduleCreateSchema = z.object({
   deliveryChannel: z.enum(["web", "telegram"]).default("web"),
 }).strict();
 
-const loginSchema = z.object({
-  email: z.string().email().max(254),
-  password: z.string().min(1).max(256),
-}).strict();
-
 const createUserSchema = z.object({
   email: z.string().min(3).max(254),
   displayName: z.string().min(2).max(100),
-  password: z.string().min(12).max(256),
   role: z.enum(["owner", "user"]).default("user"),
   languageCode: z.string()
     .refine(isSupportedLanguage, "Unsupported language")
@@ -283,13 +273,15 @@ const languagePreferenceSchema = z.object({
 interface Principal {
   userId: string;
   role: AccountRole;
-  authType: "service" | "session";
+  authType: "service" | "gateway" | "session";
   account?: UserAccount;
   token?: string;
 }
 
 export interface AppDependencies {
   apiToken: string;
+  gatewayToken?: string;
+  gatewayOwner?: UserAccount;
   database: AgentStore;
   modelProvider: ModelProvider;
   agentLoop?: Pick<AgentLoop, "run">;
@@ -299,8 +291,8 @@ export interface AppDependencies {
   skillManager?: Pick<SkillManager, "install" | "evaluate" | "activate">;
   governance?: RuntimeGovernance;
   authService?: Pick<AuthService,
-    "authenticate" | "login" | "logout" | "listAccounts" | "createAccount" | "issuePasswordReset" | "resetPassword" | "getAccount" | "setLanguage"
-  >;
+    "authenticate" | "logout" | "listAccounts" | "createAccount" | "getAccount" | "setLanguage"
+  > & Partial<Pick<AuthService, "issueAccessToken">>;
   telegramLinks?: Pick<TelegramLinkService, "createCode" | "claim" | "get" | "resolve" | "unlink">;
   connectors?: Pick<ConnectorService, "save" | "list" | "delete">;
   githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
@@ -356,7 +348,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("X-Frame-Options", "DENY");
     reply.header("Referrer-Policy", "no-referrer");
-    if (request.url.startsWith("/v1/") || request.url === "/auth/login") {
+    if (request.url.startsWith("/v1/")) {
       reply.header("Cache-Control", "no-store");
     }
     reply.header(
@@ -391,7 +383,6 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   const principals = new WeakMap<FastifyRequest, Principal>();
-  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
   app.get("/health", async () => ({
     name: "Barlas AI Agent",
@@ -415,6 +406,16 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const suppliedToken = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
     if (tokenMatches(dependencies.apiToken, suppliedToken)) {
       principals.set(request, { userId: "service", role: "owner", authType: "service" });
+      return;
+    }
+    if (dependencies.gatewayToken && dependencies.gatewayOwner && tokenMatches(dependencies.gatewayToken, suppliedToken)) {
+      principals.set(request, {
+        userId: dependencies.gatewayOwner.id,
+        role: "owner",
+        authType: "gateway",
+        account: dependencies.gatewayOwner,
+        token: suppliedToken,
+      });
       return;
     }
     const account = dependencies.authService && suppliedToken
@@ -456,48 +457,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     return principal;
   };
 
-  app.post("/auth/login", async (request, reply) => {
-    if (!dependencies.authService) return reply.notFound();
-    const parsed = loginSchema.safeParse(request.body);
-    if (!parsed.success) return reply.badRequest("Invalid login request");
-    const now = Date.now();
-    for (const [key, value] of loginAttempts) {
-      if (value.resetAt <= now) loginAttempts.delete(key);
-    }
-    if (loginAttempts.size >= 10_000 && !loginAttempts.has(request.ip)) {
-      const oldest = loginAttempts.keys().next().value as string | undefined;
-      if (oldest) loginAttempts.delete(oldest);
-    }
-    const attempts = loginAttempts.get(request.ip);
-    if (attempts && attempts.resetAt > now && attempts.count >= 5) {
-      return reply.code(429).send({ error: "Too many login attempts. Try again later." });
-    }
-    try {
-      const session = await dependencies.authService.login(parsed.data.email, parsed.data.password);
-      loginAttempts.delete(request.ip);
-      return session;
-    } catch (error) {
-      const current = attempts && attempts.resetAt > now ? attempts : { count: 0, resetAt: now + 15 * 60_000 };
-      loginAttempts.set(request.ip, { ...current, count: current.count + 1 });
-      throw error;
-    }
-  });
-
-  app.post("/auth/password-reset", async (request, reply) => {
-    if (!dependencies.authService) return reply.notFound();
-    const parsed = passwordResetSchema.safeParse(request.body);
-    if (!parsed.success) return reply.badRequest("Invalid password reset request");
-    await dependencies.authService.resetPassword(parsed.data.code, parsed.data.password);
-    return { reset: true };
-  });
-
   app.get("/v1/me", async (request) => {
     const principal = principalFor(request);
     return {
       principal: principal.account ?? {
         id: principal.userId,
         email: null,
-        displayName: "Service API",
+        displayName: principal.authType === "gateway" ? "Barlas Owner" : "Service API",
         role: principal.role,
         active: true,
         languageCode: null,
@@ -735,10 +701,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
 
   app.post("/v1/auth/logout", async (request, reply) => {
     const principal = principalFor(request);
-    if (principal.authType !== "session" || !principal.token || !dependencies.authService) {
-      return reply.badRequest("Session logout requires a user access token");
+    if (principal.authType === "session" && principal.token && dependencies.authService) {
+      await dependencies.authService.logout(principal.token);
     }
-    await dependencies.authService.logout(principal.token);
     return { ok: true };
   });
 
@@ -768,13 +733,12 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
 
   app.post("/v1/admin/users", async (request, reply) => {
     const principal = principalFor(request);
-    if (principal.role !== "owner" || !dependencies.authService) return reply.forbidden();
+    if (principal.role !== "owner" || !dependencies.authService?.issueAccessToken) return reply.forbidden();
     const parsed = createUserSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid user request");
     const user = await dependencies.authService.createAccount({
       email: parsed.data.email,
       displayName: parsed.data.displayName,
-      password: parsed.data.password,
       role: parsed.data.role,
       ...(parsed.data.languageCode ? { languageCode: parsed.data.languageCode } : {}),
     });
@@ -785,23 +749,24 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       resourceId: user.id,
       details: { email: user.email, role: user.role },
     });
-    return reply.code(201).send({ user });
+    const access = await dependencies.authService.issueAccessToken(user.id);
+    return reply.code(201).send({ user, access });
   });
 
-  app.post("/v1/admin/users/:id/password-reset", async (request, reply) => {
+  app.post("/v1/admin/users/:id/access-token", async (request, reply) => {
     const principal = principalFor(request);
-    if (principal.role !== "owner" || !dependencies.authService) return reply.forbidden();
+    if (principal.role !== "owner" || !dependencies.authService?.issueAccessToken) return reply.forbidden();
     const params = accountParamsSchema.safeParse(request.params);
     if (!params.success) return reply.badRequest("Invalid account request");
-    const reset = await dependencies.authService.issuePasswordReset(params.data.id);
+    const access = await dependencies.authService.issueAccessToken(params.data.id, true);
     await dependencies.database.appendAudit({
       userId: principal.userId,
-      eventType: "account.password_reset.issued",
+      eventType: "account.access_token.rotated",
       resourceType: "account",
       resourceId: params.data.id,
-      details: { expiresAt: reset.expiresAt },
+      details: { expiresAt: access.expiresAt },
     });
-    return reset;
+    return access;
   });
 
   app.get("/v1/organizations", async (request, reply) => {

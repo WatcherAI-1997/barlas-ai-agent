@@ -96,6 +96,19 @@ function dependencies() {
 }
 
 describe("Barlas AI Agent API", () => {
+  it("authenticates the owner with an OpenClaw-style gateway token", async () => {
+    const deps = dependencies();
+    const gatewayToken = "g".repeat(64);
+    const gatewayOwner = { id: "00000000-0000-4000-8000-000000000099", email: "owner@example.com", displayName: "Owner", role: "owner" as const, active: true, languageCode: "uz" as const, languageConfigured: true, createdAt: "2026-10-16T00:00:00.000Z" };
+    const app = await buildApp({ apiToken, gatewayToken, gatewayOwner, ...deps });
+    const accepted = await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: `Bearer ${gatewayToken}` } });
+    const rejected = await app.inject({ method: "GET", url: "/v1/me", headers: { authorization: `Bearer ${"x".repeat(64)}` } });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toMatchObject({ authType: "gateway", principal: { id: gatewayOwner.id, role: "owner" } });
+    expect(rejected.statusCode).toBe(401);
+    await app.close();
+  });
+
   it("returns branded health information", async () => {
     const deps = dependencies();
     const app = await buildApp({ apiToken, ...deps });

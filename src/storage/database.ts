@@ -1397,17 +1397,17 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async findAccountByEmail(email: string): Promise<StoredAccount | null> {
     const result = await this.pool.query<AccountRow>(
-      `select id, email, display_name, role, password_hash, password_salt, active, language_code, created_at
+      `select id, email, display_name, role, active, language_code, created_at
        from user_accounts where email = $1`,
       [email],
     );
     const row = result.rows[0];
-    return row ? this.mapStoredAccount(row) : null;
+    return row ? this.mapAccount(row) : null;
   }
 
   async findAccountById(id: string): Promise<UserAccount | null> {
     const result = await this.pool.query<AccountRow>(
-      `select id, email, display_name, role, password_hash, password_salt, active, language_code, created_at
+      `select id, email, display_name, role, active, language_code, created_at
        from user_accounts where id = $1 and active = true`,
       [id],
     );
@@ -1419,15 +1419,13 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     email: string;
     displayName: string;
     role: AccountRole;
-    passwordHash: string;
-    passwordSalt: string;
     languageCode?: SupportedLanguageCode;
   }): Promise<UserAccount> {
     const result = await this.pool.query<AccountRow>(
-      `insert into user_accounts (email, display_name, role, password_hash, password_salt, language_code)
-       values ($1, $2, $3, $4, $5, $6)
-       returning id, email, display_name, role, password_hash, password_salt, active, language_code, created_at`,
-      [input.email, input.displayName, input.role, input.passwordHash, input.passwordSalt, input.languageCode ?? null],
+      `insert into user_accounts (email, display_name, role, language_code)
+       values ($1, $2, $3, $4)
+       returning id, email, display_name, role, active, language_code, created_at`,
+      [input.email, input.displayName, input.role, input.languageCode ?? null],
     );
     const row = result.rows[0];
     if (!row) throw new Error("Account insert returned no row");
@@ -1436,7 +1434,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async listAccounts(): Promise<UserAccount[]> {
     const result = await this.pool.query<AccountRow>(
-      `select id, email, display_name, role, password_hash, password_salt, active, language_code, created_at
+      `select id, email, display_name, role, active, language_code, created_at
        from user_accounts order by created_at`,
     );
     return result.rows.map((row) => this.mapAccount(row));
@@ -1446,60 +1444,11 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     const result = await this.pool.query<AccountRow>(
       `update user_accounts set language_code = $2, updated_at = now()
        where id = $1 and active = true
-       returning id, email, display_name, role, password_hash, password_salt, active, language_code, created_at`,
+       returning id, email, display_name, role, active, language_code, created_at`,
       [accountId, languageCode],
     );
     const row = result.rows[0];
     return row ? this.mapAccount(row) : null;
-  }
-
-  async createPasswordReset(input: { accountId: string; codeHash: string; expiresAt: Date }): Promise<boolean> {
-    const result = await this.pool.query(
-      `with invalidated as (
-         update password_reset_codes set used_at = now()
-         where account_id = $1 and used_at is null
-       )
-       insert into password_reset_codes (account_id, code_hash, expires_at)
-       select id, $2, $3 from user_accounts where id = $1`,
-      [input.accountId, input.codeHash, input.expiresAt],
-    );
-    return result.rowCount === 1;
-  }
-
-  async consumePasswordReset(input: {
-    codeHash: string;
-    passwordHash: string;
-    passwordSalt: string;
-  }): Promise<boolean> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("begin");
-      const reset = await client.query<{ id: string; account_id: string }>(
-        `select id, account_id from password_reset_codes
-         where code_hash = $1 and used_at is null and expires_at > now()
-         for update`,
-        [input.codeHash],
-      );
-      const row = reset.rows[0];
-      if (!row) {
-        await client.query("rollback");
-        return false;
-      }
-      await client.query(
-        `update user_accounts set password_hash = $2, password_salt = $3, updated_at = now()
-         where id = $1`,
-        [row.account_id, input.passwordHash, input.passwordSalt],
-      );
-      await client.query(`update password_reset_codes set used_at = now() where id = $1`, [row.id]);
-      await client.query(`delete from user_sessions where account_id = $1`, [row.account_id]);
-      await client.query("commit");
-      return true;
-    } catch (error) {
-      await client.query("rollback");
-      throw error;
-    } finally {
-      client.release();
-    }
   }
 
   async createSession(input: { accountId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
@@ -1517,7 +1466,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
          returning account_id
        )
        select account.id, account.email, account.display_name, account.role,
-              account.password_hash, account.password_salt, account.active,
+              account.active,
               account.language_code, account.created_at
        from touched
        join user_accounts account on account.id = touched.account_id
@@ -1530,6 +1479,10 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async deleteSession(tokenHash: string): Promise<void> {
     await this.pool.query(`delete from user_sessions where token_hash = $1`, [tokenHash]);
+  }
+
+  async deleteAccountSessions(accountId: string): Promise<void> {
+    await this.pool.query(`delete from user_sessions where account_id = $1`, [accountId]);
   }
 
   async createTelegramLinkCode(input: {
@@ -1711,14 +1664,6 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       languageCode: row.language_code,
       languageConfigured: row.language_code !== null,
       createdAt: row.created_at.toISOString(),
-    };
-  }
-
-  private mapStoredAccount(row: AccountRow): StoredAccount {
-    return {
-      ...this.mapAccount(row),
-      passwordHash: row.password_hash,
-      passwordSalt: row.password_salt,
     };
   }
 
@@ -1905,8 +1850,6 @@ interface AccountRow {
   email: string;
   display_name: string;
   role: AccountRole;
-  password_hash: string;
-  password_salt: string;
   active: boolean;
   language_code: SupportedLanguageCode | null;
   created_at: Date;

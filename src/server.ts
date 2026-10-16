@@ -46,14 +46,13 @@ const connectors = config.CONNECTOR_VAULT_KEY
 const githubConnector = connectors ? new GitHubConnector(connectors) : undefined;
 const googleConnector = connectors ? new GoogleConnector(connectors) : undefined;
 const mcpConnector = connectors ? new McpConnector(connectors) : undefined;
-if (config.OWNER_EMAIL && config.OWNER_PASSWORD) {
-  await authService.bootstrapOwner({
+const gatewayOwner = config.OWNER_EMAIL
+  ? await authService.bootstrapOwner({
     email: config.OWNER_EMAIL,
-    password: config.OWNER_PASSWORD,
     displayName: config.OWNER_DISPLAY_NAME,
     ...(config.OWNER_LANGUAGE ? { languageCode: config.OWNER_LANGUAGE } : {}),
-  });
-}
+  })
+  : undefined;
 const fastProvider = new OpenAIProvider({
   apiKey: config.MODEL_API_KEY,
   model: config.MODEL_NAME,
@@ -214,6 +213,8 @@ jobWorker.register("agent.run", createAgentJobHandler(modelProvider));
 jobWorker.register("agent.workflow", createWorkflowJobHandler(modelProvider, skillRegistry));
 const app = await buildApp({
   apiToken: config.BARLAS_API_TOKEN,
+  gatewayToken: config.BARLAS_GATEWAY_TOKEN,
+  ...(gatewayOwner ? { gatewayOwner } : {}),
   database,
   modelProvider,
   agentLoop,

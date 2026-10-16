@@ -1,153 +1,57 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  AccountConflictError,
-  AuthenticationError,
-  AuthService,
-  type AuthStore,
-  type StoredAccount,
-  type UserAccount,
-} from "../src/auth/service.js";
-import type { SupportedLanguageCode } from "../src/i18n/languages.js";
+import { AccountConflictError, AuthService, type AuthStore, type StoredAccount, type UserAccount } from "../src/auth/service.js";
 
 class MemoryAuthStore implements AuthStore {
-  accounts: StoredAccount[] = [];
+  accounts = new Map<string, StoredAccount>();
   sessions = new Map<string, string>();
-  resetCodes = new Map<string, string>();
-
-  async findAccountByEmail(email: string) { return this.accounts.find((item) => item.email === email) ?? null; }
-  async findAccountById(id: string) {
-    const account = this.accounts.find((item) => item.id === id);
-    if (!account) return null;
-    const { passwordHash: _hash, passwordSalt: _salt, ...publicAccount } = account;
-    return publicAccount;
+  async findAccountByEmail(email: string) { return [...this.accounts.values()].find((account) => account.email === email) ?? null; }
+  async findAccountById(id: string) { return this.accounts.get(id) ?? null; }
+  async createAccount(input: { email: string; displayName: string; role: "owner" | "user"; languageCode?: UserAccount["languageCode"] }) {
+    const account: StoredAccount = { id: `id-${this.accounts.size + 1}`, email: input.email, displayName: input.displayName, role: input.role, active: true, languageCode: input.languageCode ?? null, languageConfigured: Boolean(input.languageCode), createdAt: new Date().toISOString() };
+    this.accounts.set(account.id, account); return account;
   }
-  async createAccount(input: {
-    email: string;
-    displayName: string;
-    role: "owner" | "user";
-    passwordHash: string;
-    passwordSalt: string;
-    languageCode?: SupportedLanguageCode;
-  }): Promise<UserAccount> {
-    const account: StoredAccount = {
-      ...input,
-      id: `account-${this.accounts.length + 1}`,
-      active: true,
-      languageCode: input.languageCode ?? null,
-      languageConfigured: Boolean(input.languageCode),
-      createdAt: "2026-10-16T00:00:00.000Z",
-    };
-    this.accounts.push(account);
-    const { passwordHash: _hash, passwordSalt: _salt, ...publicAccount } = account;
-    return publicAccount;
-  }
-  async listAccounts(): Promise<UserAccount[]> { return this.accounts; }
-  async updateAccountLanguage(accountId: string, languageCode: SupportedLanguageCode) {
-    const account = this.accounts.find((item) => item.id === accountId);
-    if (!account) return null;
-    account.languageCode = languageCode;
-    account.languageConfigured = true;
-    const { passwordHash: _hash, passwordSalt: _salt, ...publicAccount } = account;
-    return publicAccount;
-  }
-  async createPasswordReset(input: { accountId: string; codeHash: string }) {
-    if (!this.accounts.some((account) => account.id === input.accountId)) return false;
-    this.resetCodes.set(input.codeHash, input.accountId); return true;
-  }
-  async consumePasswordReset(input: { codeHash: string; passwordHash: string; passwordSalt: string }) {
-    const accountId = this.resetCodes.get(input.codeHash);
-    const account = this.accounts.find((item) => item.id === accountId);
-    if (!account) return false;
-    account.passwordHash = input.passwordHash; account.passwordSalt = input.passwordSalt;
-    this.resetCodes.delete(input.codeHash);
-    for (const [token, id] of this.sessions) if (id === accountId) this.sessions.delete(token);
-    return true;
-  }
+  async listAccounts() { return [...this.accounts.values()]; }
+  async updateAccountLanguage(id: string, languageCode: NonNullable<UserAccount["languageCode"]>) { const account = this.accounts.get(id); if (!account) return null; account.languageCode = languageCode; account.languageConfigured = true; return account; }
   async createSession(input: { accountId: string; tokenHash: string }) { this.sessions.set(input.tokenHash, input.accountId); }
-  async findSession(tokenHash: string) {
-    const id = this.sessions.get(tokenHash);
-    const account = this.accounts.find((item) => item.id === id);
-    if (!account) return null;
-    const { passwordHash: _hash, passwordSalt: _salt, ...publicAccount } = account;
-    return publicAccount;
-  }
+  async findSession(tokenHash: string) { const id = this.sessions.get(tokenHash); return id ? this.accounts.get(id) ?? null : null; }
   async deleteSession(tokenHash: string) { this.sessions.delete(tokenHash); }
+  async deleteAccountSessions(accountId: string) { for (const [hash, id] of this.sessions) if (id === accountId) this.sessions.delete(hash); }
 }
 
-describe("Barlas AI Agent authentication", () => {
-  it("bootstraps an owner and authenticates an opaque server-side session", async () => {
-    const store = new MemoryAuthStore();
-    const auth = new AuthService(store, 1);
-    const owner = await auth.bootstrapOwner({
-      email: "OWNER@Example.com",
-      displayName: "Owner",
-      password: "very-secure-password",
-    });
-    expect(owner).toMatchObject({ email: "owner@example.com", role: "owner" });
-
-    const session = await auth.login("owner@example.com", "very-secure-password");
-    expect(session.token).toMatch(/^[A-Za-z0-9_-]{40,}$/u);
-    await expect(auth.authenticate(session.token)).resolves.toMatchObject({ id: owner.id, role: "owner" });
-    await auth.logout(session.token);
-    await expect(auth.authenticate(session.token)).resolves.toBeNull();
+describe("Barlas AI Agent token authentication", () => {
+  it("bootstraps the configured owner without a human password", async () => {
+    const store = new MemoryAuthStore(); const auth = new AuthService(store);
+    const first = await auth.bootstrapOwner({ email: "Owner@Example.com", displayName: "Owner", languageCode: "uz" });
+    const second = await auth.bootstrapOwner({ email: "owner@example.com", displayName: "Ignored", languageCode: "uz" });
+    expect(first).toMatchObject({ email: "owner@example.com", role: "owner", languageCode: "uz" });
+    expect(second.id).toBe(first.id); expect(store.accounts).toHaveLength(1);
   });
 
-  it("rejects invalid credentials without exposing account state", async () => {
-    const store = new MemoryAuthStore();
-    const auth = new AuthService(store);
-    await expect(auth.login("missing@example.com", "wrong-password")).rejects.toBeInstanceOf(AuthenticationError);
+  it("issues an opaque user token, stores only its hash, and authenticates it", async () => {
+    const store = new MemoryAuthStore(); const auth = new AuthService(store, 1);
+    const account = await auth.createAccount({ email: "user@example.com", displayName: "User", role: "user" });
+    const access = await auth.issueAccessToken(account.id);
+    expect(access.token).toMatch(/^barlas_[A-Za-z0-9_-]{40,}$/u);
+    expect([...store.sessions.keys()]).not.toContain(access.token);
+    await expect(auth.authenticate(access.token)).resolves.toMatchObject({ id: account.id });
   });
 
-  it("rejects duplicate email accounts", async () => {
-    const store = new MemoryAuthStore();
-    const auth = new AuthService(store);
-    await auth.createAccount({
-      email: "user@example.com",
-      displayName: "User",
-      password: "very-secure-password",
-      role: "user",
-    });
-    await expect(auth.createAccount({
-      email: "USER@example.com",
-      displayName: "Other",
-      password: "another-secure-password",
-      role: "user",
-    })).rejects.toBeInstanceOf(AccountConflictError);
+  it("rotates all existing tokens for an account", async () => {
+    const store = new MemoryAuthStore(); const auth = new AuthService(store);
+    const account = await auth.createAccount({ email: "user@example.com", displayName: "User", role: "user" });
+    const first = await auth.issueAccessToken(account.id);
+    const second = await auth.issueAccessToken(account.id, true);
+    await expect(auth.authenticate(first.token)).resolves.toBeNull();
+    await expect(auth.authenticate(second.token)).resolves.toMatchObject({ id: account.id });
   });
 
-  it("requires a language choice for an unconfigured account and persists it", async () => {
-    const store = new MemoryAuthStore();
-    const auth = new AuthService(store);
-    const account = await auth.createAccount({
-      email: "language@example.com",
-      displayName: "Language User",
-      password: "very-secure-password",
-      role: "user",
-    });
-    expect(account).toMatchObject({ languageCode: null, languageConfigured: false });
-    await expect(auth.setLanguage(account.id, "kk")).resolves.toMatchObject({
-      languageCode: "kk",
-      languageConfigured: true,
-    });
-    await expect(auth.setLanguage(account.id, "de")).rejects.toThrow("Unsupported language");
-  });
-
-  it("uses a password reset code once and revokes existing sessions", async () => {
-    const store = new MemoryAuthStore();
-    const auth = new AuthService(store);
-    const account = await auth.createAccount({
-      email: "user@example.com",
-      displayName: "User",
-      password: "old-secure-password",
-      role: "user",
-    });
-    const oldSession = await auth.login("user@example.com", "old-secure-password");
-    const reset = await auth.issuePasswordReset(account.id);
-    await auth.resetPassword(reset.code, "new-secure-password");
-
-    await expect(auth.authenticate(oldSession.token)).resolves.toBeNull();
-    await expect(auth.login("user@example.com", "new-secure-password")).resolves.toHaveProperty("token");
-    await expect(auth.resetPassword(reset.code, "another-password")).rejects.toBeInstanceOf(AuthenticationError);
+  it("keeps account uniqueness, language selection, and logout", async () => {
+    const store = new MemoryAuthStore(); const auth = new AuthService(store);
+    const account = await auth.createAccount({ email: "user@example.com", displayName: "User", role: "user" });
+    await expect(auth.createAccount({ email: "user@example.com", displayName: "Again", role: "user" })).rejects.toBeInstanceOf(AccountConflictError);
+    await expect(auth.setLanguage(account.id, "kk")).resolves.toMatchObject({ languageCode: "kk", languageConfigured: true });
+    const access = await auth.issueAccessToken(account.id); await auth.logout(access.token);
+    await expect(auth.authenticate(access.token)).resolves.toBeNull();
   });
 });

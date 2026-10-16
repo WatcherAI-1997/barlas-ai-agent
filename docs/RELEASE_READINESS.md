@@ -7,7 +7,7 @@
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
-- All nineteen SQL migrations apply twice to a clean PostgreSQL 17 database.
+- All twenty SQL migrations apply twice to a clean PostgreSQL 17 database.
 - The production Docker image builds and runs read-only with dropped capabilities.
 - The pinned Playwright sidecar builds separately, runs read-only as an
   unprivileged user with all capabilities dropped, and completed a live public
@@ -57,7 +57,7 @@ pass but was not installed during this run.
 1. Configure dedicated production secrets, model key, owner, domain, and bot.
 2. Store the connector vault key and backup encryption material off-host.
 3. Deploy to the dedicated Barlas AI Agent Compose project only.
-4. Run migrations, smoke test, owner login, Telegram link, and one approval flow.
+4. Run migrations, smoke test, owner gateway-token access, Telegram link, and one approval flow.
 5. Create database and workspace backups, restore both into disposable targets,
    and verify `/ready`, login, conversation history, and a bounded autonomous run.
 6. Admit only named private-alpha users; monitor errors, queue leases, token cost,
