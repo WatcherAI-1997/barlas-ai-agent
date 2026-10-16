@@ -122,7 +122,7 @@ env_value() {
 write_setting() { printf '%s=%s\n' "$1" "$(env_value "$2")" >>"$TEMP_FILE"; }
 
 render_inline_logo() {
-  local logo="$ROOT_DIR/assets/brand/barlas-ai-agent-logo-original.png" payload chunk more first=true
+  local logo="$ROOT_DIR/assets/brand/barlas-ai-agent-installer.png" payload chunk more first=true
   [[ -t 1 && -r "$logo" ]] || return 1
 
   if [[ "${TERM:-}" == *kitty* ]] && command_exists base64; then
@@ -153,13 +153,10 @@ render_inline_logo() {
 print_banner() {
   printf '\n'
   render_inline_logo || {
-    printf '  %s●       ●%s\n' "$C_BRAND" "$C_RESET"
-    printf '  %s    ●%s\n' "$C_BRAND" "$C_RESET"
+    printf '  %s●   ●%s   %s%sBarlas%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_BRAND" "$C_RESET"
+    printf '  %s  ●%s     %sAI AGENT%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_RESET"
   }
-  printf '\n  %s%sB A R L A S   A I   A G E N T%s\n' "$C_BOLD" "$C_BRAND" "$C_RESET"
-  printf '  %sTHINK AHEAD. ACT BEYOND.%s\n' "$C_BRAND" "$C_RESET"
-  printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C_BRAND" "$C_RESET"
-  printf '  %sSecure Production Installer%s\n\n' "$C_BOLD" "$C_RESET"
+  printf '\n'
 }
 
 print_banner

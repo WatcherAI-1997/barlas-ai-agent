@@ -55,6 +55,7 @@ for (const required of [
   "scripts/dashboard-url.sh",
   "docs/INSTALLATION.md",
   "assets/brand/barlas-ai-agent-logo-original.png",
+  "assets/brand/barlas-ai-agent-installer.png",
   "assets/brand/barlas-ai-agent-github-hero.png",
   "src/skills/manager.ts",
   "tests/skill-manager.test.ts",
@@ -67,7 +68,7 @@ const readme = await readFile("README.md", "utf8");
 for (const required of ["barlas-ai-agent-github-hero.png", "Quick install", "Security by design", "All 38", "THINK AHEAD. ACT BEYOND."]) {
   if (!readme.includes(required)) throw new Error(`GitHub product presentation is missing: ${required}`);
 }
-for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "BARLAS_GATEWAY_TOKEN", "openssl rand -hex 32", "--prepare-only", "scripts/doctor.sh", "scripts/dashboard-url.sh", "barlas-ai-agent-logo-original.png", "TERM_PROGRAM", "●       ●", "B A R L A S   A I   A G E N T", "THINK AHEAD. ACT BEYOND.", "never prints them"]) {
+for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "BARLAS_GATEWAY_TOKEN", "openssl rand -hex 32", "--prepare-only", "scripts/doctor.sh", "scripts/dashboard-url.sh", "barlas-ai-agent-installer.png", "TERM_PROGRAM", "●   ●", "Barlas", "AI AGENT", "never prints them"]) {
   if (!installer.includes(required)) throw new Error(`Installer safety/usability boundary is missing: ${required}`);
 }
 for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {
