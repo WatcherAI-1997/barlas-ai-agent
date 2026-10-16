@@ -163,8 +163,8 @@ render_inline_logo() {
 print_banner() {
   printf '\n'
   render_inline_logo || {
-    printf '  %s●   ●%s   %s%sBarlas%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_BRAND" "$C_RESET"
-    printf '  %s  ●%s     %sAI AGENT%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_RESET"
+    printf '  %s⬤ ⬤%s   %s%sBarlas%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_BRAND" "$C_RESET"
+    printf '  %s ⬤%s    %sAI AGENT%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_RESET"
   }
   printf '\n'
 }
