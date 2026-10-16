@@ -14,6 +14,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/src/server.js",
+    "start:native": "node dist/src/native.js",
     "test": "vitest run --exclude 'dist/**' tests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:isolation": "node scripts/check-isolation.mjs",
@@ -22,6 +23,8 @@
     "eval:agent": "npm run build && node scripts/run-agent-evals.mjs"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.10",
+    "@electric-sql/pglite-socket": "^0.2.13",
     "@fastify/multipart": "^10.1.4",
     "@fastify/sensible": "^6.0.3",
     "@fastify/static": "^10.1.6",

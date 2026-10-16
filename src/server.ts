@@ -37,6 +37,7 @@ import { languageInstruction } from "./i18n/languages.js";
 import { createBuiltinExtensionCatalog } from "./extensions/catalog.js";
 import { DeviceNodeService } from "./nodes/service.js";
 import { createModelProvider } from "./providers/factory.js";
+import { runRuntimeShutdownHook } from "./runtime-lifecycle.js";
 
 const config = loadConfig();
 const openAIServiceApiKey = config.MEDIA_API_KEY ?? (config.MODEL_PROVIDER === "openai" ? config.MODEL_API_KEY : undefined);
@@ -321,7 +322,8 @@ const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   await agentRunWorker.stop();
   await scheduleWorker.stop();
   await app.close();
-  process.exit(0);
+  await runRuntimeShutdownHook();
+  process.exitCode = 0;
 };
 
 process.once("SIGINT", () => void shutdown("SIGINT"));

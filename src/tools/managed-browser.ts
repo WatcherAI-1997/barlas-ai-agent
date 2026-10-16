@@ -26,7 +26,9 @@ export interface BrowserRunResult {
 export class ManagedBrowser {
   constructor(
     private readonly wsEndpoint: string,
-    private readonly connect: (endpoint: string) => Promise<Browser> = (endpoint) => chromium.connect(endpoint),
+    private readonly connect: (endpoint: string) => Promise<Browser> = (endpoint) => endpoint === "local://chromium"
+      ? chromium.launch({ headless: true })
+      : chromium.connect(endpoint),
   ) {}
 
   async run(input: { url: string; actions?: BrowserAction[] }): Promise<BrowserRunResult> {

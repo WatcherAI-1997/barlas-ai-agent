@@ -25,7 +25,7 @@ for (const required of ["read_only: true", "no-new-privileges:true", "cap_drop:"
 const terminal = await readFile("src/tools/terminal.ts", "utf8");
 if (/\bshell\s*:\s*true\b/u.test(terminal)) throw new Error("Restricted terminal must not enable a shell");
 const gitignore = await readFile(".gitignore", "utf8");
-for (const required of [".env", "deploy/production.env", "deploy/local.env", "deploy/update-state", "*.key", "secrets/"]) {
+for (const required of [".env", "deploy/production.env", "deploy/local.env", "deploy/native.env", "deploy/update-state", "*.key", "secrets/"]) {
   if (!gitignore.includes(required)) throw new Error(`.gitignore must cover ${required}`);
 }
 
@@ -53,10 +53,14 @@ for (const required of [
   "migrations/021_device_nodes.sql",
   "install.sh",
   "install.ps1",
+  "install-native.ps1",
   "install-windows.ps1",
   "barlas.ps1",
   "scripts/doctor.sh",
   "scripts/doctor.ps1",
+  "scripts/doctor-native.ps1",
+  "scripts/start-native.ps1",
+  "scripts/stop-native.ps1",
   "scripts/dashboard-url.sh",
   "scripts/dashboard-url.ps1",
   "docs/INSTALLATION.md",
@@ -71,6 +75,7 @@ for (const required of [
 }
 const installer = await readFile("install.sh", "utf8");
 const windowsInstaller = await readFile("install.ps1", "utf8");
+const nativeWindowsInstaller = await readFile("install-native.ps1", "utf8");
 const windowsBootstrap = await readFile("install-windows.ps1", "utf8");
 const doctor = await readFile("scripts/doctor.sh", "utf8");
 const updater = await readFile("scripts/update.sh", "utf8");
@@ -84,8 +89,14 @@ for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64
 for (const required of ["Windows_NT", "Docker Desktop", "BARLAS_INSTALL_MODE = \"local\"", "RandomNumberGenerator", "Protect-SecretFile", "compose.local.yml", "doctor.ps1", "never prints them"]) {
   if (!windowsInstaller.includes(required)) throw new Error(`Windows installer safety/usability boundary is missing: ${required}`);
 }
-for (const required of ["main.zip", "LOCALAPPDATA", "local.env", "barlas.cmd", "ExecutionPolicy Bypass"]) {
+for (const required of ["BARLAS_INSTALL_MODE = \"native\"", "RandomNumberGenerator", "Protect-SecretFile", "BROWSER_WS_ENDPOINT = \"local://chromium\"", "start-native.ps1"]) {
+  if (!nativeWindowsInstaller.includes(required)) throw new Error(`Native Windows installer boundary is missing: ${required}`);
+}
+for (const required of ["main.zip", "LOCALAPPDATA", "native.env", "barlas.cmd", "ExecutionPolicy Bypass", "nodejs.org", "playwright-core.cmd", "no Docker or WSL required"]) {
   if (!windowsBootstrap.includes(required)) throw new Error(`Windows bootstrap boundary is missing: ${required}`);
+}
+for (const forbidden of ["docker info", "Docker.DockerDesktop", "compose.local.yml"]) {
+  if (windowsBootstrap.includes(forbidden)) throw new Error(`Native Windows bootstrap must not require ${forbidden}`);
 }
 for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {
   if (!doctor.includes(required)) throw new Error(`Doctor safety/usability boundary is missing: ${required}`);

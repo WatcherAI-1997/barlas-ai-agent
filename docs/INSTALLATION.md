@@ -1,27 +1,25 @@
 # Installation
 
-Barlas AI Agent is installed as an isolated Docker Compose stack on Windows
-10/11 with Docker Desktop or on a Linux server. The installer does not reuse,
-migrate, stop, or reconfigure any existing
-agent. It creates Barlas-specific containers, networks, volumes, ports, database,
-workspace, backup storage, encryption keys, and owner account.
+Barlas AI Agent has a native personal mode for Windows 10/11 and an isolated
+Docker Compose mode for Linux servers. The installers do not reuse, migrate,
+stop, or reconfigure another agent.
 
 ## Windows laptop
 
-Install Docker Desktop with the WSL 2 engine and Linux containers, start it,
-then open PowerShell and run:
+Open PowerShell and run:
 
 ```powershell
 irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-windows.ps1 | iex
 ```
 
-No GitHub account, Git, domain, DNS, Caddy, Bash shell, or public port is
-required. The bootstrap downloads source into `%LOCALAPPDATA%\Barlas\app`,
-preserves existing local configuration during updates, installs a global
-`barlas` launcher for the current user, and runs the guided installer. The
-installer stores configuration in `deploy\local.env`, restricts its ACL to the
-current Windows account and `SYSTEM`, and exposes the cabinet only on loopback.
-Docker Desktop must be running and configured for Linux containers.
+No GitHub account, Git, Node.js, Docker Desktop, WSL, domain, DNS, Caddy, Bash
+shell, or public port is required. The bootstrap downloads source into
+`%LOCALAPPDATA%\Barlas\app`, installs its own portable Node.js and Chromium,
+and uses an embedded PGlite database stored under `%LOCALAPPDATA%\Barlas\data`.
+It preserves data and configuration during updates, installs a global `barlas`
+launcher for the current user, and adds a current-user startup entry. The
+configuration is stored in `deploy\native.env`, restricted to the current
+Windows account and `SYSTEM`, and the cabinet is exposed only on loopback.
 
 Useful commands after installation:
 
@@ -29,18 +27,15 @@ Useful commands after installation:
 barlas
 barlas status
 & "$env:LOCALAPPDATA\Barlas\app\scripts\dashboard-url.ps1"
-& "$env:LOCALAPPDATA\Barlas\app\scripts\doctor.ps1" -RequireRunning
+& "$env:LOCALAPPDATA\Barlas\app\scripts\doctor-native.ps1"
+& "$env:LOCALAPPDATA\Barlas\app\scripts\stop-native.ps1"
+& "$env:LOCALAPPDATA\Barlas\app\scripts\start-native.ps1" -WaitReady
 ```
 
-To prepare and validate configuration without starting containers:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -PrepareOnly
-```
-
-An existing `deploy\local.env` is reused and never silently overwritten.
-Windows installation is local-only; public HTTPS deployment remains the Linux
-server path.
+An existing `deploy\native.env` is reused and never silently overwritten.
+Windows installation is local-only. Native mode does not expose the
+container-isolated code sandbox; public HTTPS and hardened sandbox deployment
+remain the Linux server path.
 
 ## Linux quick install
 
@@ -144,11 +139,10 @@ link private; anyone holding it has owner access.
 ## Prerequisites and layout
 
 The supported public production path requires Linux, Git, curl, OpenSSL, Docker
-Engine, and Docker Compose v2. The Windows local path requires Windows 10/11,
-PowerShell 5.1 or newer, Docker Desktop with the WSL 2 engine, and Docker
-Compose v2. Git and GitHub authentication are not required on Windows. Neither
-installer requires Node.js on the host or silently installs or upgrades system
-packages.
+Engine, and Docker Compose v2. The native local path requires Windows 10/11 and
+PowerShell 5.1 or newer. Git, GitHub authentication, Node.js, Docker Desktop,
+and WSL are not required on Windows; the bootstrap installs private application
+runtimes without changing system-wide packages.
 
 On Kitty, iTerm2, and WezTerm, the installer renders a tightly cropped installer
 variant containing only the original Barlas mark and wordmark. The canonical
@@ -158,7 +152,7 @@ with three true circular glyphs so the brand mark is never distorted.
 | Item | Location or name |
 |---|---|
 | Source checkout | directory selected during `gh repo clone` |
-| Protected configuration | `deploy/local.env` (local) or `deploy/production.env` (public) |
+| Protected configuration | `deploy/native.env` (Windows), `deploy/local.env` (Linux local), or `deploy/production.env` (public) |
 | Installer log | `logs/install.log` |
 | Compose project | `barlas-ai-agent-production` |
 | Database volume | `barlas-ai-agent-production-db` |

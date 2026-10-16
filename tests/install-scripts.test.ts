@@ -18,46 +18,39 @@ describe("production installer", () => {
 
   it("ships a native Windows local installer and companion commands", async () => {
     const bootstrap = await readFile(join(root, "install-windows.ps1"), "utf8");
-    const installer = await readFile(join(root, "install.ps1"), "utf8");
-    const doctor = await readFile(join(root, "scripts", "doctor.ps1"), "utf8");
+    const installer = await readFile(join(root, "install-native.ps1"), "utf8");
+    const doctor = await readFile(join(root, "scripts", "doctor-native.ps1"), "utf8");
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
     const cli = await readFile(join(root, "barlas.ps1"), "utf8");
 
     for (const required of [
-      'if ($env:OS -ne "Windows_NT")',
-      '$Mark = @("  ▄████▄    ▄████▄  "',
-      '"BARLAS".ToCharArray()',
-      'Write-Host "A I   A G E N T"',
-      'BARLAS_INSTALL_MODE = "local"',
-      'http://127.0.0.1:$Port',
+      'BARLAS_INSTALL_MODE = "native"',
       "Protect-SecretFile",
       "RandomNumberGenerator",
-      '"--profile", "backup", "up", "-d", "--build"',
-      "scripts\\doctor.ps1",
+      'BROWSER_WS_ENDPOINT = "local://chromium"',
+      "scripts\\start-native.ps1",
     ]) expect(installer).toContain(required);
-    expect(installer).not.toContain("BARLAS_DOMAIN = Read-Value");
-    expect(doctor).toContain("$RequireRunning");
-    expect(doctor).toContain("Docker Desktop engine is unavailable");
+    expect(installer).not.toContain("Docker");
+    expect(doctor).toContain("Docker and WSL are not used");
     expect(dashboard).toContain("#token=$Token");
     expect(cli).toContain("dist/src/cli.js");
     for (const required of [
       "archive/refs/heads/main.zip",
       'Join-Path $env:LOCALAPPDATA "Barlas"',
-      "local.env",
+      "native.env",
       "barlas.cmd",
       'Start-Process ([string]$DashboardUrl).Trim()',
-      'cmd.exe /d /c "docker info >nul 2>nul"',
-      '"Docker\\Docker\\Docker Desktop.exe"',
-      "Docker Desktop did not become ready within three minutes",
       "Show-PixelBanner",
-      'BARLAS_BOOTSTRAP_ACTIVE = "1"',
-      "Find-DockerDesktop",
-      "Get-StartApps",
-      'Start-Process "docker-desktop:"',
+      "nodejs.org/dist",
+      "playwright-core.cmd",
+      "install-native.ps1",
+      "no Docker or WSL required",
     ]) expect(bootstrap).toContain(required);
+    expect(bootstrap).not.toContain("docker info");
+    expect(bootstrap).not.toContain("Docker.DockerDesktop");
     expect(bootstrap).not.toContain("gh auth");
-    expect(installer).toContain('$ErrorActionPreference = "Continue"');
-    expect(installer).toContain("$CommandExitCode");
+    expect(bootstrap).toContain('$ErrorActionPreference = "Continue"');
+    expect(bootstrap).toContain("$Code");
   });
 
   it("prepares a protected config without printing supplied secrets", async () => {

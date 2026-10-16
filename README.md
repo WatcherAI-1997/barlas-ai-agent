@@ -82,19 +82,23 @@ erase the task or silently convert an unfinished action into success.
 
 ### Windows 10/11
 
-Install and start Docker Desktop once, make sure it uses the WSL 2 engine and
-Linux containers, then run one PowerShell command:
+Open PowerShell and run one command:
 
 ```powershell
 irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-windows.ps1 | iex
 ```
 
-No GitHub login, Git, manual clone, domain, or Bash shell is required. The
-bootstrap downloads the public source to `%LOCALAPPDATA%\Barlas\app`, checks
-Docker Desktop and Compose, starts the guided installer, creates a local
-configuration protected by a Windows ACL, adds the `barlas` command to the user
-PATH, runs diagnostics, and opens the cabinet. The service binds only to
-`http://127.0.0.1:17840`; Telegram uses long polling.
+No GitHub login, Git, Node.js, Docker, WSL, domain, or Bash shell is required.
+The bootstrap installs a private portable Node.js runtime, an embedded
+PostgreSQL-compatible PGlite database, and a private Chromium runtime under
+`%LOCALAPPDATA%\Barlas`. It creates a configuration protected by a Windows ACL,
+adds the `barlas` command to the user PATH, enables current-user autostart, and
+opens the cabinet. The service binds only to `http://127.0.0.1:17840`; Telegram
+uses long polling.
+
+Native laptop mode intentionally does not provide the container-isolated code
+sandbox. Use the Linux/Docker server deployment when untrusted code execution
+needs the strongest isolation.
 
 After installation, open a new PowerShell window:
 

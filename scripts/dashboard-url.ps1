@@ -3,7 +3,10 @@ param([string]$EnvFile)
 
 $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-if ([string]::IsNullOrWhiteSpace($EnvFile)) { $EnvFile = Join-Path $RootDir "deploy\local.env" }
+if ([string]::IsNullOrWhiteSpace($EnvFile)) {
+    $NativeEnv = Join-Path $RootDir "deploy\native.env"
+    $EnvFile = if (Test-Path -LiteralPath $NativeEnv -PathType Leaf) { $NativeEnv } else { Join-Path $RootDir "deploy\local.env" }
+}
 elseif (-not [IO.Path]::IsPathRooted($EnvFile)) { $EnvFile = Join-Path $RootDir $EnvFile }
 $EnvFile = [IO.Path]::GetFullPath($EnvFile)
 if (-not (Test-Path -LiteralPath $EnvFile -PathType Leaf)) { throw "Protected environment file not found" }
@@ -23,5 +26,5 @@ function Read-Setting([string]$Name) {
 $Mode = Read-Setting "BARLAS_INSTALL_MODE"
 $Port = Read-Setting "BARLAS_HTTP_PORT"
 $Token = Read-Setting "BARLAS_GATEWAY_TOKEN"
-if ($Mode -ne "local" -or -not $Port -or $Token.Length -lt 32) { throw "Local gateway access configuration is incomplete" }
+if ($Mode -notin @("local", "native") -or -not $Port -or $Token.Length -lt 32) { throw "Local gateway access configuration is incomplete" }
 Write-Output "http://127.0.0.1:$Port/#token=$Token"
