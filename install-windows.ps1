@@ -126,6 +126,14 @@ try {
     if (Test-Path -LiteralPath $AppDir) { Move-Item -LiteralPath $AppDir -Destination $PreviousDir }
     Move-Item -LiteralPath $SourceDir.FullName -Destination $AppDir
 
+    # Windows PowerShell 5 reads UTF-8 files without a BOM through the legacy
+    # system code page. Normalize installed scripts before executing them.
+    $Utf8WithBom = New-Object Text.UTF8Encoding($true)
+    Get-ChildItem -LiteralPath $AppDir -Filter "*.ps1" -File -Recurse | ForEach-Object {
+        $ScriptText = [IO.File]::ReadAllText($_.FullName, [Text.Encoding]::UTF8)
+        [IO.File]::WriteAllText($_.FullName, $ScriptText, $Utf8WithBom)
+    }
+
     try {
         Write-Step 3 "Building application (this may take a few minutes)"
         Push-Location $AppDir

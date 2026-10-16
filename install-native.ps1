@@ -95,7 +95,7 @@ function Read-ArrowMenu([string[]]$Values, [string[]]$Labels, [string]$Default) 
             $FilterLabel = if ($Filter) { "  Filter: $Filter  [$($Filtered.Count)/$($Values.Count)]" } else { "  Type to filter  [$($Filtered.Count) options]" }
             if ($FilterLabel.Length -gt $Width) { $FilterLabel = $FilterLabel.Substring(0, $Width) }
             Write-Host $FilterLabel.PadRight($Width) -ForegroundColor DarkGray
-            $Help = "  ↑/↓ move · PgUp/PgDn · Home/End · Enter select · Esc default"
+            $Help = "  Up/Down move | PgUp/PgDn | Home/End | Enter select | Esc default"
             if ($Help.Length -gt $Width) { $Help = $Help.Substring(0, $Width) }
             Write-Host $Help.PadRight($Width) -ForegroundColor DarkGray
             $Key = [Console]::ReadKey($true)
@@ -178,7 +178,7 @@ function Read-OwnerLanguage {
         Write-Host "Ignoring unsupported OWNER_LANGUAGE value and asking again." -ForegroundColor Yellow
     }
     if ($NonInteractive) { return "" }
-    $Choice = Read-MenuChoice "" "Interface language" @("ru", "en", "later", "other") @("Русский", "English", "Choose later in the web cabinet", "Another language code") "ru"
+    $Choice = Read-MenuChoice "" "Interface language" @("ru", "en", "later", "other") @("Russian", "English", "Choose later in the web cabinet", "Another language code") "ru"
     if ($Choice -eq "later") { return "" }
     if ($Choice -ne "other") { return $Choice }
     while ($true) {
@@ -241,9 +241,9 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     Write-Host "[OK] Using existing protected native configuration" -ForegroundColor Green
 } else {
     Write-Host ""
-    Write-Host "  ●  ●  " -ForegroundColor Red -NoNewline
+    Write-Host "  O  O  " -ForegroundColor Red -NoNewline
     Write-Host "BARLAS" -ForegroundColor White
-    Write-Host "    ●    " -ForegroundColor Red -NoNewline
+    Write-Host "    O    " -ForegroundColor Red -NoNewline
     Write-Host "AI AGENT" -ForegroundColor DarkGray
     Write-Host "  THINK AHEAD. " -ForegroundColor Red -NoNewline
     Write-Host "ACT BEYOND." -ForegroundColor White

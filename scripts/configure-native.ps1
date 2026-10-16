@@ -101,7 +101,7 @@ function Read-ArrowChoice([string[]]$Values, [string[]]$Labels, [string]$Default
             $FilterLabel = if ($Filter) { "  Filter: $Filter  [$($Filtered.Count)/$($Values.Count)]" } else { "  Type to filter  [$($Filtered.Count) options]" }
             if ($FilterLabel.Length -gt $Width) { $FilterLabel = $FilterLabel.Substring(0, $Width) }
             Write-Host $FilterLabel.PadRight($Width) -ForegroundColor DarkGray
-            $Help = "  ↑/↓ move · PgUp/PgDn · Home/End · Enter select · Esc default"
+            $Help = "  Up/Down move | PgUp/PgDn | Home/End | Enter select | Esc default"
             if ($Help.Length -gt $Width) { $Help = $Help.Substring(0, $Width) }
             Write-Host $Help.PadRight($Width) -ForegroundColor DarkGray
             $Key = [Console]::ReadKey($true)
@@ -511,14 +511,14 @@ if ($Action -eq "security-audit") {
     return
 }
 
-Write-Host "`n  ●  ●  " -ForegroundColor Red -NoNewline
+Write-Host "`n  O  O  " -ForegroundColor Red -NoNewline
 Write-Host "BARLAS" -ForegroundColor White
-Write-Host "    ●    " -ForegroundColor Red -NoNewline
+Write-Host "    O    " -ForegroundColor Red -NoNewline
 Write-Host "AI AGENT" -ForegroundColor DarkGray
 Write-Host "  THINK AHEAD. " -ForegroundColor Red -NoNewline
 Write-Host "ACT BEYOND." -ForegroundColor White
 Write-Host "  Personal AI setup" -ForegroundColor DarkGray
-Write-Host "  Arrows move · type filters · Enter selects · secrets stay hidden." -ForegroundColor DarkGray
+Write-Host "  Arrows move | type filters | Enter selects | secrets stay hidden." -ForegroundColor DarkGray
 
 if ($Section -eq "all") {
     if (-not $Profile) {

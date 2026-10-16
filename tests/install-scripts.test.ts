@@ -139,6 +139,8 @@ describe("production installer", () => {
       "nodejs.org/dist",
       "node_modules\\playwright-core\\cli.js",
       "install-native.ps1",
+      "UTF8Encoding($true)",
+      'Get-ChildItem -LiteralPath $AppDir -Filter "*.ps1" -File -Recurse',
     ]) expect(bootstrap).toContain(required);
     expect(bootstrap).not.toContain("docker info");
     expect(bootstrap).not.toContain("Docker.DockerDesktop");
