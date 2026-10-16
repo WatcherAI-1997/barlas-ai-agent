@@ -18,9 +18,26 @@ function Write-Ok([string]$Message) { Write-Host "[OK] $Message" -ForegroundColo
 function Stop-Install([string]$Message) { throw $Message }
 
 function Show-Banner {
+    $Font = @{
+        B = @("11110", "10001", "11110", "10001", "11110")
+        A = @("01110", "10001", "11111", "10001", "10001")
+        R = @("11110", "10001", "11110", "10100", "10010")
+        L = @("10000", "10000", "10000", "10000", "11111")
+        S = @("01111", "10000", "01110", "00001", "11110")
+    }
+    $Mark = @(" ████    ████ ", "██████  ██████", " ████    ████ ", "    ████      ", "   ██████     ", "    ████      ")
     Write-Host ""
-    Write-Host "  ⬤  ⬤   Barlas" -ForegroundColor Red
-    Write-Host "    ⬤     AI AGENT" -ForegroundColor Red
+    for ($Row = 0; $Row -lt 6; $Row++) {
+        Write-Host ($Mark[$Row] + "   ") -ForegroundColor Red -NoNewline
+        if ($Row -lt 5) {
+            $Letters = foreach ($Letter in "BARLAS".ToCharArray()) {
+                -join ($Font[[string]$Letter][$Row].ToCharArray() | ForEach-Object { if ($_ -eq '1') { "██" } else { "  " } })
+            }
+            Write-Host ($Letters -join "  ") -ForegroundColor White
+        } else {
+            Write-Host "A I   A G E N T" -ForegroundColor DarkGray
+        }
+    }
     Write-Host ""
     Write-Host "Windows local installer - no domain required" -ForegroundColor DarkGray
     Write-Host ""
@@ -115,7 +132,7 @@ function Invoke-Logged([string]$Label, [string[]]$Arguments) {
     Write-Ok $Label
 }
 
-Show-Banner
+if ($env:BARLAS_BOOTSTRAP_ACTIVE -ne "1") { Show-Banner }
 if ($env:OS -ne "Windows_NT") { Stop-Install "This installer is for Windows 10/11. Use ./install.sh --local on Linux." }
 if (-not (Test-Command "docker")) { Stop-Install "Docker Desktop is missing. Install Docker Desktop with WSL 2, start it, then run this installer again." }
 & cmd.exe /d /c "docker compose version >nul 2>nul"

@@ -25,8 +25,9 @@ describe("production installer", () => {
 
     for (const required of [
       'if ($env:OS -ne "Windows_NT")',
-      '"  ⬤  ⬤   Barlas"',
-      '"    ⬤     AI AGENT"',
+      '$Mark = @(" ████    ████ "',
+      '"BARLAS".ToCharArray()',
+      'Write-Host "A I   A G E N T"',
       'BARLAS_INSTALL_MODE = "local"',
       'http://127.0.0.1:$Port',
       "Protect-SecretFile",
@@ -48,6 +49,8 @@ describe("production installer", () => {
       'cmd.exe /d /c "docker info >nul 2>nul"',
       '"Docker\\Docker\\Docker Desktop.exe"',
       "Docker Desktop did not become ready within three minutes",
+      "Show-PixelBanner",
+      'BARLAS_BOOTSTRAP_ACTIVE = "1"',
     ]) expect(bootstrap).toContain(required);
     expect(bootstrap).not.toContain("gh auth");
     expect(installer).toContain('$ErrorActionPreference = "Continue"');
