@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import {
   getLanguage,
@@ -25,5 +26,13 @@ describe("Barlas AI Agent languages", () => {
     expect(languageInstruction("unknown")).toBeNull();
     expect(isSupportedLanguage("uz")).toBe(true);
     expect(isSupportedLanguage("de")).toBe(false);
+  });
+
+  it("publishes a GitHub product description for every selectable language", () => {
+    const overview = readFileSync(new URL("../docs/PRODUCT_OVERVIEW_MULTILINGUAL.md", import.meta.url), "utf8");
+    for (const language of supportedLanguages) {
+      expect(overview).toContain(`<a id="${language.code}"></a>`);
+    }
+    expect(overview.match(/<a id="[^"]+"><\/a>/gu)).toHaveLength(supportedLanguages.length);
   });
 });

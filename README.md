@@ -4,6 +4,22 @@
 
 ![Barlas AI Agent](assets/brand/barlas-ai-agent-logo-original.png)
 
+## Language / Язык
+
+[Türkçe](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#tr) ·
+[Azərbaycanca](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#az) ·
+[Türkmençe](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#tk) ·
+[O‘zbekcha](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#uz) ·
+[Қазақша](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#kk) ·
+[Кыргызча](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ky) ·
+[ئۇيغۇرچە](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ug) ·
+[Татарча](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#tt) ·
+[Башҡортса](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ba) ·
+[Монгол хэл](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#mn) ·
+[Русский](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ru) ·
+[English](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#en) ·
+[All 38 languages](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md)
+
 Barlas AI Agent is an independent, brand-owned AI agent platform inspired by
 the strongest product ideas in OpenClaw and Nous Research Hermes Agent.
 
@@ -58,3 +74,4 @@ and replace every placeholder secret before starting the containers.
 - [Production deployment](docs/DEPLOYMENT.md)
 - [Backup and recovery](docs/BACKUP_RECOVERY.md)
 - [Release readiness](docs/RELEASE_READINESS.md)
+- [Product overview in 38 languages](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md)
