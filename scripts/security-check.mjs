@@ -67,7 +67,7 @@ const readme = await readFile("README.md", "utf8");
 for (const required of ["barlas-ai-agent-github-hero.png", "Quick install", "Security by design", "All 38", "THINK AHEAD. ACT BEYOND."]) {
   if (!readme.includes(required)) throw new Error(`GitHub product presentation is missing: ${required}`);
 }
-for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "BARLAS_GATEWAY_TOKEN", "openssl rand -hex 32", "--prepare-only", "scripts/doctor.sh", "scripts/dashboard-url.sh", "●       ●", "THINK AHEAD. ACT BEYOND.", "never prints them"]) {
+for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "BARLAS_GATEWAY_TOKEN", "openssl rand -hex 32", "--prepare-only", "scripts/doctor.sh", "scripts/dashboard-url.sh", "████████    ████████", "B A R L A S   A I   A G E N T", "THINK AHEAD. ACT BEYOND.", "never prints them"]) {
   if (!installer.includes(required)) throw new Error(`Installer safety/usability boundary is missing: ${required}`);
 }
 for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {

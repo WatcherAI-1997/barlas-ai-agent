@@ -48,9 +48,9 @@ done
 if [[ "$ENV_FILE" != /* ]]; then ENV_FILE="$ROOT_DIR/$ENV_FILE"; fi
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
-  C_CYAN=$'\033[0;36m'; C_GREEN=$'\033[0;32m'; C_YELLOW=$'\033[0;33m'; C_RED=$'\033[0;31m'; C_BOLD=$'\033[1m'; C_RESET=$'\033[0m'
+  C_CYAN=$'\033[0;36m'; C_GREEN=$'\033[0;32m'; C_YELLOW=$'\033[0;33m'; C_RED=$'\033[0;31m'; C_BRAND=$'\033[38;2;225;6;0m'; C_BOLD=$'\033[1m'; C_RESET=$'\033[0m'
 else
-  C_CYAN=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_BOLD=""; C_RESET=""
+  C_CYAN=""; C_GREEN=""; C_YELLOW=""; C_RED=""; C_BRAND=""; C_BOLD=""; C_RESET=""
 fi
 
 info() { printf '%s→%s %s\n' "$C_CYAN" "$C_RESET" "$1"; }
@@ -123,11 +123,20 @@ write_setting() { printf '%s=%s\n' "$1" "$(env_value "$2")" >>"$TEMP_FILE"; }
 
 print_banner() {
   printf '\n'
-  printf '  %s●       ●%s     %s%sBARLAS%s\n' "$C_RED" "$C_RESET" "$C_BOLD" "$C_CYAN" "$C_RESET"
-  printf '  %s    ●%s         %sAI AGENT%s\n' "$C_RED" "$C_RESET" "$C_BOLD" "$C_RESET"
-  printf '                %sTHINK AHEAD. ACT BEYOND.%s\n' "$C_CYAN" "$C_RESET"
-  printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C_RED" "$C_RESET"
-  printf '  %s%sSecure Production Installer%s\n\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
+  printf '%s' "$C_BRAND"
+  printf '      ████████    ████████\n'
+  printf '    ████████████  ████████████\n'
+  printf '    ████████████  ████████████\n'
+  printf '      ████████    ████████\n'
+  printf '           ████████\n'
+  printf '         ████████████\n'
+  printf '         ████████████\n'
+  printf '           ████████\n'
+  printf '%s' "$C_RESET"
+  printf '\n  %s%sB A R L A S   A I   A G E N T%s\n' "$C_BOLD" "$C_BRAND" "$C_RESET"
+  printf '  %sTHINK AHEAD. ACT BEYOND.%s\n' "$C_BRAND" "$C_RESET"
+  printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C_BRAND" "$C_RESET"
+  printf '  %sSecure Production Installer%s\n\n' "$C_BOLD" "$C_RESET"
 }
 
 print_banner
