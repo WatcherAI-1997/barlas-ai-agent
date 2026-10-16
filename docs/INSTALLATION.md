@@ -32,6 +32,31 @@ barlas status
 & "$env:LOCALAPPDATA\Barlas\app\scripts\start-native.ps1" -WaitReady
 ```
 
+The OpenClaw-style setup and configuration surface is available after install:
+
+```powershell
+barlas onboard
+barlas configure models
+barlas configure channels
+barlas config list
+barlas config get MODEL_NAME
+barlas config set MODEL_NAME gpt-5
+barlas config file
+barlas config schema
+barlas config validate
+barlas models status
+barlas models configure
+barlas channels status
+barlas channels add telegram
+barlas security audit
+barlas gateway restart
+```
+
+Secret values are redacted by `config list/get`. Setting a secret on the command
+line is refused so it cannot leak into PowerShell history; the secure wizard
+prompts for it instead. Configuration changes are written atomically, the
+Windows ACL is reapplied, and the local Gateway is restarted when required.
+
 An existing `deploy\native.env` is reused and never silently overwritten.
 Windows installation is local-only. Native mode does not expose the
 container-isolated code sandbox; public HTTPS and hardened sandbox deployment

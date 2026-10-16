@@ -135,6 +135,10 @@ try {
     Write-Host "Barlas is ready - Docker is not used." -ForegroundColor Green
     Write-Host ""
     Write-Host "AI AGENT COMMANDS" -ForegroundColor White
+    Write-Host "  barlas onboard" -ForegroundColor Cyan -NoNewline
+    Write-Host "                 full setup wizard"
+    Write-Host "  barlas configure" -ForegroundColor Cyan -NoNewline
+    Write-Host "               change settings"
     Write-Host "  barlas" -ForegroundColor Cyan -NoNewline
     Write-Host "                         open interactive AI chat"
     Write-Host '  barlas ask "your task"' -ForegroundColor Cyan -NoNewline

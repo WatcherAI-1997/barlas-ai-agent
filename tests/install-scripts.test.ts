@@ -20,6 +20,7 @@ describe("production installer", () => {
     const bootstrap = await readFile(join(root, "install-windows.ps1"), "utf8");
     const installer = await readFile(join(root, "install-native.ps1"), "utf8");
     const doctor = await readFile(join(root, "scripts", "doctor-native.ps1"), "utf8");
+    const configure = await readFile(join(root, "scripts", "configure-native.ps1"), "utf8");
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
     const cli = await readFile(join(root, "barlas.ps1"), "utf8");
 
@@ -32,6 +33,9 @@ describe("production installer", () => {
     ]) expect(installer).toContain(required);
     expect(installer).not.toContain("Docker");
     expect(doctor).toContain("Docker and WSL are not used");
+    expect(configure).toContain('"file", "schema", "validate"');
+    expect(configure).toContain("Do not put secrets in command history");
+    expect(configure).toContain("Protect-File");
     expect(dashboard).toContain("#token=$Token");
     expect(cli).toContain("dist/src/cli.js");
     for (const required of [
@@ -51,6 +55,8 @@ describe("production installer", () => {
       "barlas approve ID",
       "barlas gateway status",
       "barlas gateway restart",
+      "barlas onboard",
+      "barlas configure",
       "nodejs.org/dist",
       "playwright-core.cmd",
       "install-native.ps1",

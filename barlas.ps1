@@ -24,6 +24,49 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
     $Port = Read-Setting $NativeEnvFile "PORT"
     $Token = Read-Setting $NativeEnvFile "BARLAS_GATEWAY_TOKEN"
     $LocalCommand = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    $ConfigureScript = Join-Path $RootDir "scripts\configure-native.ps1"
+    if ($LocalCommand -in @("onboard", "configure")) {
+        $Section = if ($LocalCommand -eq "onboard" -or $Arguments.Count -lt 2) { "all" } else { $Arguments[1] }
+        & $ConfigureScript -Action wizard -Section $Section
+        if (-not $?) { exit 1 }
+        & (Join-Path $RootDir "scripts\stop-native.ps1")
+        & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady
+        exit 0
+    }
+    if ($LocalCommand -eq "config") {
+        $ConfigAction = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "list" }
+        $ConfigKey = if ($Arguments.Count -gt 2) { $Arguments[2] } else { "" }
+        $ConfigValue = if ($Arguments.Count -gt 3) { ($Arguments[3..($Arguments.Count - 1)] -join " ") } else { "" }
+        & $ConfigureScript -Action $ConfigAction -Key $ConfigKey -Value $ConfigValue
+        if (-not $?) { exit 1 }
+        if ($ConfigAction -in @("set", "unset")) {
+            & (Join-Path $RootDir "scripts\stop-native.ps1")
+            & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady
+        }
+        exit 0
+    }
+    if ($LocalCommand -eq "models" -and $Arguments.Count -gt 1 -and $Arguments[1] -in @("status", "configure")) {
+        if ($Arguments[1] -eq "status") { & $ConfigureScript -Action models-status }
+        else {
+            & $ConfigureScript -Action wizard -Section models
+            if ($?) { & (Join-Path $RootDir "scripts\stop-native.ps1"); & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady }
+        }
+        if ($?) { exit 0 }
+        exit 1
+    }
+    if ($LocalCommand -eq "channels" -and $Arguments.Count -gt 1 -and $Arguments[1] -in @("status", "add", "configure")) {
+        if ($Arguments[1] -eq "status") { & $ConfigureScript -Action channels-status }
+        else {
+            & $ConfigureScript -Action wizard -Section channels
+            if ($?) { & (Join-Path $RootDir "scripts\stop-native.ps1"); & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady }
+        }
+        if ($?) { exit 0 }
+        exit 1
+    }
+    if ($LocalCommand -eq "security" -and $Arguments.Count -gt 1 -and $Arguments[1] -eq "audit") {
+        & $ConfigureScript -Action security-audit
+        exit $LASTEXITCODE
+    }
     if ($LocalCommand -in @("gateway", "daemon")) {
         $GatewayCommand = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "status" }
         if ($GatewayCommand -in @("start", "run", "stop", "restart")) {

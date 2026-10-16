@@ -59,6 +59,7 @@ for (const required of [
   "scripts/doctor.sh",
   "scripts/doctor.ps1",
   "scripts/doctor-native.ps1",
+  "scripts/configure-native.ps1",
   "scripts/start-native.ps1",
   "scripts/stop-native.ps1",
   "scripts/dashboard-url.sh",

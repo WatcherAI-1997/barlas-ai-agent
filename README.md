@@ -107,6 +107,11 @@ barlas
 barlas ask "Проверь проект и составь план"
 ```
 
+Run `barlas onboard` for the full setup wizard, `barlas configure models` or
+`barlas configure channels` for a single section, and `barlas gateway restart`
+to manage the local service. `barlas help` lists the complete OpenClaw-style
+command surface.
+
 ### Linux
 
 For a local installation without a domain, DNS, Caddy, or public web exposure,
