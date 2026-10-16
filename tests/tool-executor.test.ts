@@ -24,17 +24,23 @@ function store(): AgentStore {
       throw new Error("not used");
     }),
     recall: vi.fn(async () => []),
+    listConversations: vi.fn(async () => []),
+    getConversation: vi.fn(async () => null),
     createApproval: vi.fn(async () => approval),
     decideApproval: vi.fn(async ({ approved }): Promise<ApprovalRequest | null> => ({
       ...approval,
       status: approved ? "approved" : "rejected",
     })),
     markApprovalExecuted: vi.fn(async () => undefined),
+    listApprovals: vi.fn(async () => []),
     appendAudit: vi.fn(async () => undefined),
     createJob: vi.fn(async () => {
       throw new Error("not used");
     }),
     listJobs: vi.fn(async () => []),
+    cancelJob: vi.fn(async () => null),
+    retryJob: vi.fn(async () => null),
+    getDashboardStats: vi.fn(async () => ({ conversations: 0, messages: 0, queuedJobs: 0, failedJobs: 0, pendingApprovals: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCostUsd: 0 })),
     claimJobs: vi.fn(async () => []),
     completeJob: vi.fn(async () => true),
     failJob: vi.fn(async () => "failed" as const),

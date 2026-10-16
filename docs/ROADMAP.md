@@ -21,11 +21,12 @@
 - Versioned skills with evaluation and rollback. *(versioned registry implemented; evaluation/rollback pending)*
 - Approval queue and audit trail. *(foundation implemented)*
 - Execution traces and per-user quotas. *(implemented foundation)*
-- Admin controls, observability, and cost reporting.
+- Admin controls, observability, and cost reporting. *(operations dashboard implemented)*
 
 ## Phase 3 — Product
 
 - Branded web application. *(authenticated cabinet foundation implemented)*
+- Conversation history, approval inbox, and job controls. *(implemented)*
 - Multi-user organizations, roles, and billing foundations. *(accounts and owner/user roles implemented; organizations/billing pending)*
 - Connector catalog and deployment automation.
 - Security review, backups, recovery drills, and staged release.

@@ -99,6 +99,14 @@ const listTracesSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+const userListSchema = z.object({
+  userId: z.string().min(1).max(128),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
+const conversationParamsSchema = z.object({ id: z.string().uuid() });
+const jobParamsSchema = z.object({ id: z.string().uuid() });
+const dashboardQuerySchema = z.object({ userId: z.string().min(1).max(128).optional() });
+
 const loginSchema = z.object({
   email: z.string().email().max(254),
   password: z.string().min(1).max(256),
@@ -128,6 +136,7 @@ export interface AppDependencies {
   governance?: RuntimeGovernance;
   authService?: Pick<AuthService, "authenticate" | "login" | "logout" | "listAccounts" | "createAccount">;
   webRoot?: string;
+  runtimeInfo?: { workerEnabled: boolean };
   telegram?: {
     webhookSecret: string;
     client: { sendMessage(chatId: number, text: string): Promise<void> };
@@ -232,6 +241,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const principal = principalFor(request);
     if (principal.authType === "service" || principal.role === "owner") return requestedUserId;
     if (principal.userId !== requestedUserId) throw new AuthorizationError();
+    return principal.userId;
+  };
+
+  const dashboardUser = (request: FastifyRequest, requestedUserId?: string): string | undefined => {
+    const principal = principalFor(request);
+    if (principal.authType === "service" || principal.role === "owner") return requestedUserId;
+    if (requestedUserId && requestedUserId !== principal.userId) throw new AuthorizationError();
     return principal.userId;
   };
 
@@ -416,6 +432,29 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     return { memories };
   });
 
+  app.get("/v1/conversations", async (request, reply) => {
+    const parsed = userListSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid conversations query");
+    return {
+      conversations: await dependencies.database.listConversations(
+        authorizeUser(request, parsed.data.userId),
+        parsed.data.limit,
+      ),
+    };
+  });
+
+  app.get("/v1/conversations/:id", async (request, reply) => {
+    const params = conversationParamsSchema.safeParse(request.params);
+    const query = z.object({ userId: z.string().min(1).max(128) }).safeParse(request.query);
+    if (!params.success || !query.success) return reply.badRequest("Invalid conversation request");
+    const conversation = await dependencies.database.getConversation(
+      authorizeUser(request, query.data.userId),
+      params.data.id,
+    );
+    if (!conversation) return reply.notFound("Conversation not found");
+    return { conversation };
+  });
+
   app.get("/v1/tools", async (_request, reply) => {
     if (!dependencies.toolExecutor) return reply.notFound();
     return { tools: dependencies.toolExecutor.listTools() };
@@ -467,6 +506,17 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     }
   });
 
+  app.get("/v1/approvals", async (request, reply) => {
+    const parsed = userListSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid approvals query");
+    return {
+      approvals: await dependencies.database.listApprovals(
+        authorizeUser(request, parsed.data.userId),
+        parsed.data.limit,
+      ),
+    };
+  });
+
   app.post("/v1/jobs", async (request, reply) => {
     const parsed = createJobSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid job request");
@@ -506,6 +556,52 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       parsed.data.limit,
     );
     return { jobs };
+  });
+
+  app.post("/v1/jobs/:id/cancel", async (request, reply) => {
+    const params = jobParamsSchema.safeParse(request.params);
+    const body = z.object({ userId: z.string().min(1).max(128) }).strict().safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid job cancellation");
+    const userId = authorizeUser(request, body.data.userId);
+    const job = await dependencies.database.cancelJob(userId, params.data.id);
+    if (!job) return reply.conflict("Only queued or waiting jobs can be cancelled");
+    await dependencies.database.appendAudit({
+      userId,
+      eventType: "job.cancelled",
+      resourceType: "job",
+      resourceId: job.id,
+    });
+    return { job };
+  });
+
+  app.post("/v1/jobs/:id/retry", async (request, reply) => {
+    const params = jobParamsSchema.safeParse(request.params);
+    const body = z.object({ userId: z.string().min(1).max(128) }).strict().safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid job retry");
+    const userId = authorizeUser(request, body.data.userId);
+    const job = await dependencies.database.retryJob(userId, params.data.id);
+    if (!job) return reply.conflict("Only failed or cancelled jobs can be retried");
+    await dependencies.database.appendAudit({
+      userId,
+      eventType: "job.retried",
+      resourceType: "job",
+      resourceId: job.id,
+    });
+    return { job };
+  });
+
+  app.get("/v1/dashboard", async (request, reply) => {
+    const parsed = dashboardQuerySchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid dashboard query");
+    const stats = await dependencies.database.getDashboardStats(
+      dashboardUser(request, parsed.data.userId),
+    );
+    return {
+      status: "ok",
+      uptimeSeconds: Math.floor(process.uptime()),
+      workerEnabled: dependencies.runtimeInfo?.workerEnabled ?? false,
+      stats,
+    };
   });
 
   app.post("/channels/telegram/webhook", async (request, reply) => {

@@ -22,6 +22,8 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `POST /v1/admin/users` — create an owner or user account; owner only.
 
 - `POST /v1/chat` — generate an answer using `fast`, `deep`, or `private` routing.
+- `GET /v1/conversations` — list a user's stored conversations.
+- `GET /v1/conversations/:id` — load ordered messages from one conversation.
 - `POST /v1/memory` — save an explicit long-term memory.
 - `GET /v1/memory/search` — retrieve relevant memories for one user.
 - `GET /v1/tools` — list registered tools and their risk levels.
@@ -29,8 +31,12 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `GET /v1/traces` — list recent execution trace events for one user.
 - `POST /v1/tools/execute` — execute a read-only tool or create an approval.
 - `POST /v1/approvals/:id/decision` — approve or reject a pending action.
+- `GET /v1/approvals` — list pending and historical approval requests.
 - `POST /v1/jobs` — persist a durable task for immediate or scheduled work.
 - `GET /v1/jobs` — list a user's durable tasks.
+- `POST /v1/jobs/:id/cancel` — cancel a queued or waiting task.
+- `POST /v1/jobs/:id/retry` — requeue a failed or cancelled task.
+- `GET /v1/dashboard` — return health, queue, token, and estimated-cost totals.
 
 An isolated background run uses `jobType: "agent.run"` and accepts an `input`
 with `objective`, optional bounded `context`, and `taskClass` (`fast`, `deep`,
@@ -83,6 +89,19 @@ bootstrap is idempotent and never writes credentials to source control.
 
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.
+
+Conversation IDs are ownership-checked inside the database transaction. A
+client cannot attach messages to another user's conversation even if it learns
+or guesses its UUID.
+
+## Usage and estimated cost
+
+Provider token usage is stored with the assistant message. Estimated cost is
+calculated from operator-supplied per-million input/output rates for the fast,
+deep, and private routes. Rates default to zero, so the dashboard never claims
+a cost estimate until deployment pricing has been configured. Owners may omit
+`userId` on the dashboard endpoint for a deployment-wide view; users are always
+scoped to their own account.
 
 ## Telegram webhook
 

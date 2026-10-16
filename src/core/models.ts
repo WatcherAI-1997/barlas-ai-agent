@@ -17,10 +17,15 @@ export interface GenerateResult {
   provider: string;
   model: string;
   responseId?: string;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    costUsd?: number;
+  };
 }
 
 export interface ModelProvider {
   readonly name: string;
   generate(request: GenerateRequest): Promise<GenerateResult>;
 }
-

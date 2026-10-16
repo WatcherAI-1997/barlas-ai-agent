@@ -31,6 +31,12 @@ const configSchema = z.object({
   OWNER_PASSWORD: z.string().min(12).max(256).optional(),
   OWNER_DISPLAY_NAME: z.string().min(2).max(100).default("Barlas Owner"),
   WEB_ROOT: z.string().min(1).default("/app/web"),
+  MODEL_INPUT_USD_PER_MILLION: z.coerce.number().min(0).default(0),
+  MODEL_OUTPUT_USD_PER_MILLION: z.coerce.number().min(0).default(0),
+  DEEP_MODEL_INPUT_USD_PER_MILLION: z.coerce.number().min(0).optional(),
+  DEEP_MODEL_OUTPUT_USD_PER_MILLION: z.coerce.number().min(0).optional(),
+  PRIVATE_MODEL_INPUT_USD_PER_MILLION: z.coerce.number().min(0).default(0),
+  PRIVATE_MODEL_OUTPUT_USD_PER_MILLION: z.coerce.number().min(0).default(0),
 }).superRefine((config, context) => {
   const telegramFields = [config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_WEBHOOK_SECRET];
   if (telegramFields.some(Boolean) && !telegramFields.every(Boolean)) {

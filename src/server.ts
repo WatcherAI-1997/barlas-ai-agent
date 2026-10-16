@@ -26,10 +26,14 @@ if (config.OWNER_EMAIL && config.OWNER_PASSWORD) {
 const fastProvider = new OpenAIProvider({
   apiKey: config.MODEL_API_KEY,
   model: config.MODEL_NAME,
+  inputUsdPerMillion: config.MODEL_INPUT_USD_PER_MILLION,
+  outputUsdPerMillion: config.MODEL_OUTPUT_USD_PER_MILLION,
 });
 const deepProvider = new OpenAIProvider({
   apiKey: config.MODEL_API_KEY,
   model: config.DEEP_MODEL_NAME ?? config.MODEL_NAME,
+  inputUsdPerMillion: config.DEEP_MODEL_INPUT_USD_PER_MILLION ?? config.MODEL_INPUT_USD_PER_MILLION,
+  outputUsdPerMillion: config.DEEP_MODEL_OUTPUT_USD_PER_MILLION ?? config.MODEL_OUTPUT_USD_PER_MILLION,
 });
 const privateProvider = config.PRIVATE_MODEL_BASE_URL &&
   config.PRIVATE_MODEL_NAME &&
@@ -39,6 +43,8 @@ const privateProvider = config.PRIVATE_MODEL_BASE_URL &&
       model: config.PRIVATE_MODEL_NAME,
       baseURL: config.PRIVATE_MODEL_BASE_URL,
       providerName: "private-openai-compatible",
+      inputUsdPerMillion: config.PRIVATE_MODEL_INPUT_USD_PER_MILLION,
+      outputUsdPerMillion: config.PRIVATE_MODEL_OUTPUT_USD_PER_MILLION,
     })
   : fastProvider;
 const modelProvider = new ModelRouter({
@@ -80,6 +86,7 @@ const app = await buildApp({
   governance,
   authService,
   webRoot: config.WEB_ROOT,
+  runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
   ...(telegram ? { telegram } : {}),
   logger: true,
 });

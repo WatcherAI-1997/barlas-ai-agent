@@ -40,6 +40,12 @@ autonomy.
 - The branded web cabinet is served from immutable container assets with a
   restrictive Content Security Policy, no third-party browser scripts, and no
   access to the service automation token.
+- Conversation history, approval decisions, task cancellation/retry, and the
+  operational dashboard all reuse the same account ownership checks. Job state
+  transitions are conditional SQL updates, preventing cancellation of an
+  already running task or retry of a task that has not failed.
+- Token counts are captured from provider responses. Cost is an estimate based
+  only on explicitly configured model rates and is stored as integer micro-USD.
 
 ## Data boundaries
 

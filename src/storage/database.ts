@@ -3,7 +3,15 @@ import { Pool } from "pg";
 import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth/service.js";
 import type { AgentMessage, GenerateResult } from "../core/models.js";
 import type { GovernanceStore, QuotaCategory, TraceEvent, TraceStatus } from "../governance/runtime.js";
-import type { AgentStore, ApprovalRequest, DurableJob, MemoryEntry } from "./types.js";
+import type {
+  AgentStore,
+  ApprovalRequest,
+  ConversationDetail,
+  ConversationSummary,
+  DashboardStats,
+  DurableJob,
+  MemoryEntry,
+} from "./types.js";
 
 export class Database implements AgentStore, GovernanceStore, AuthStore {
   private readonly pool: Pool;
@@ -30,11 +38,22 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
     try {
       await client.query("begin");
       await client.query(
-        `insert into conversations (id, user_id)
-         values ($1, $2)
-         on conflict (id) do nothing`,
+        `insert into conversations (id, user_id, title)
+         values ($1, $2, $3)
+         on conflict (id) do update set updated_at = now()
+           where conversations.user_id = excluded.user_id
+         returning id`,
+        [
+          input.conversationId,
+          input.userId,
+          input.messages.find((message) => message.role === "user")?.content.slice(0, 120) ?? "New conversation",
+        ],
+      );
+      const ownership = await client.query(
+        `select 1 from conversations where id = $1 and user_id = $2`,
         [input.conversationId, input.userId],
       );
+      if (ownership.rowCount !== 1) throw new Error("Conversation belongs to another user");
 
       for (const message of input.messages) {
         await client.query(
@@ -46,14 +65,21 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
 
       await client.query(
         `insert into messages
-          (conversation_id, role, content, provider, model, provider_response_id)
-         values ($1, 'assistant', $2, $3, $4, $5)`,
+          (conversation_id, role, content, provider, model, provider_response_id,
+           input_tokens, output_tokens, total_tokens, cost_microusd)
+         values ($1, 'assistant', $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           input.conversationId,
           input.result.text,
           input.result.provider,
           input.result.model,
           input.result.responseId ?? null,
+          input.result.usage?.inputTokens ?? null,
+          input.result.usage?.outputTokens ?? null,
+          input.result.usage?.totalTokens ?? null,
+          input.result.usage?.costUsd === undefined
+            ? null
+            : Math.round(input.result.usage.costUsd * 1_000_000),
         ],
       );
       await client.query("commit");
@@ -132,6 +158,64 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
     }));
   }
 
+  async listConversations(userId: string, limit: number): Promise<ConversationSummary[]> {
+    const result = await this.pool.query<ConversationRow>(
+      `select conversation.id,
+              coalesce(conversation.title, 'New conversation') as title,
+              conversation.created_at, conversation.updated_at,
+              count(message.id)::integer as message_count,
+              coalesce((array_agg(message.content order by message.created_at desc, message.id desc))[1], '') as last_message
+       from conversations conversation
+       left join messages message on message.conversation_id = conversation.id
+       where conversation.user_id = $1
+       group by conversation.id
+       order by conversation.updated_at desc
+       limit $2`,
+      [userId, limit],
+    );
+    return result.rows.map((row) => this.mapConversation(row));
+  }
+
+  async getConversation(userId: string, conversationId: string): Promise<ConversationDetail | null> {
+    const summary = await this.pool.query<ConversationRow>(
+      `select conversation.id,
+              coalesce(conversation.title, 'New conversation') as title,
+              conversation.created_at, conversation.updated_at,
+              count(message.id)::integer as message_count,
+              coalesce((array_agg(message.content order by message.created_at desc, message.id desc))[1], '') as last_message
+       from conversations conversation
+       left join messages message on message.conversation_id = conversation.id
+       where conversation.user_id = $1 and conversation.id = $2
+       group by conversation.id`,
+      [userId, conversationId],
+    );
+    const row = summary.rows[0];
+    if (!row) return null;
+    const messages = await this.pool.query<{
+      id: string;
+      role: "system" | "user" | "assistant";
+      content: string;
+      provider: string | null;
+      model: string | null;
+      created_at: Date;
+    }>(
+      `select id::text, role, content, provider, model, created_at
+       from messages where conversation_id = $1 order by created_at, id`,
+      [conversationId],
+    );
+    return {
+      ...this.mapConversation(row),
+      messages: messages.rows.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        ...(message.provider ? { provider: message.provider } : {}),
+        ...(message.model ? { model: message.model } : {}),
+        createdAt: message.created_at.toISOString(),
+      })),
+    };
+  }
+
   async createApproval(input: {
     userId: string;
     toolName: string;
@@ -191,6 +275,16 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
        where id = $1 and status = 'approved'`,
       [id, succeeded ? "executed" : "failed"],
     );
+  }
+
+  async listApprovals(userId: string, limit: number): Promise<ApprovalRequest[]> {
+    const result = await this.pool.query<ApprovalRow>(
+      `select id, user_id, tool_name, risk, summary, input, status, created_at
+       from approval_requests where user_id = $1
+       order by (status = 'pending') desc, created_at desc limit $2`,
+      [userId, limit],
+    );
+    return result.rows.map((row) => this.mapApproval(row));
   }
 
   async appendAudit(input: {
@@ -265,6 +359,74 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
       [userId, limit],
     );
     return result.rows.map((row) => this.mapJob(row));
+  }
+
+  async cancelJob(userId: string, id: string): Promise<DurableJob | null> {
+    const result = await this.pool.query<JobRow>(
+      `update jobs set status = 'cancelled', updated_at = now()
+       where id = $1 and user_id = $2 and status in ('queued', 'waiting')
+       returning id, user_id, job_type, input, status, scheduled_for, attempts,
+                 max_attempts, result, error, created_at`,
+      [id, userId],
+    );
+    return result.rows[0] ? this.mapJob(result.rows[0]) : null;
+  }
+
+  async retryJob(userId: string, id: string): Promise<DurableJob | null> {
+    const result = await this.pool.query<JobRow>(
+      `update jobs
+       set status = 'queued', scheduled_for = now(), attempts = 0,
+           result = null, error = null, worker_id = null, locked_at = null, updated_at = now()
+       where id = $1 and user_id = $2 and status in ('failed', 'cancelled')
+       returning id, user_id, job_type, input, status, scheduled_for, attempts,
+                 max_attempts, result, error, created_at`,
+      [id, userId],
+    );
+    return result.rows[0] ? this.mapJob(result.rows[0]) : null;
+  }
+
+  async getDashboardStats(userId?: string): Promise<DashboardStats> {
+    const result = await this.pool.query<{
+      conversations: string;
+      messages: string;
+      queued_jobs: string;
+      failed_jobs: string;
+      pending_approvals: string;
+      input_tokens: string;
+      output_tokens: string;
+      total_tokens: string;
+      cost_microusd: string;
+    }>(
+      `select
+         (select count(*) from conversations where ($1::text is null or user_id = $1)) as conversations,
+         (select count(*) from messages message join conversations conversation on conversation.id = message.conversation_id
+           where ($1::text is null or conversation.user_id = $1)) as messages,
+         (select count(*) from jobs where status in ('queued', 'running', 'waiting') and ($1::text is null or user_id = $1)) as queued_jobs,
+         (select count(*) from jobs where status = 'failed' and ($1::text is null or user_id = $1)) as failed_jobs,
+         (select count(*) from approval_requests where status = 'pending' and ($1::text is null or user_id = $1)) as pending_approvals,
+         (select coalesce(sum(message.input_tokens), 0) from messages message join conversations conversation on conversation.id = message.conversation_id
+           where ($1::text is null or conversation.user_id = $1)) as input_tokens,
+         (select coalesce(sum(message.output_tokens), 0) from messages message join conversations conversation on conversation.id = message.conversation_id
+           where ($1::text is null or conversation.user_id = $1)) as output_tokens,
+         (select coalesce(sum(message.total_tokens), 0) from messages message join conversations conversation on conversation.id = message.conversation_id
+           where ($1::text is null or conversation.user_id = $1)) as total_tokens,
+         (select coalesce(sum(message.cost_microusd), 0) from messages message join conversations conversation on conversation.id = message.conversation_id
+           where ($1::text is null or conversation.user_id = $1)) as cost_microusd`,
+      [userId ?? null],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Dashboard query returned no row");
+    return {
+      conversations: Number(row.conversations),
+      messages: Number(row.messages),
+      queuedJobs: Number(row.queued_jobs),
+      failedJobs: Number(row.failed_jobs),
+      pendingApprovals: Number(row.pending_approvals),
+      inputTokens: Number(row.input_tokens),
+      outputTokens: Number(row.output_tokens),
+      totalTokens: Number(row.total_tokens),
+      estimatedCostUsd: Number(row.cost_microusd) / 1_000_000,
+    };
   }
 
   async claimJobs(input: {
@@ -524,6 +686,37 @@ export class Database implements AgentStore, GovernanceStore, AuthStore {
       passwordSalt: row.password_salt,
     };
   }
+
+  private mapConversation(row: ConversationRow): ConversationSummary {
+    return {
+      id: row.id,
+      title: row.title,
+      messageCount: row.message_count,
+      lastMessage: row.last_message,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+    };
+  }
+}
+
+interface ApprovalRow {
+  id: string;
+  user_id: string;
+  tool_name: string;
+  risk: ApprovalRequest["risk"];
+  summary: string;
+  input: unknown;
+  status: ApprovalRequest["status"];
+  created_at: Date;
+}
+
+interface ConversationRow {
+  id: string;
+  title: string;
+  message_count: number;
+  last_message: string;
+  created_at: Date;
+  updated_at: Date;
 }
 
 interface JobRow {

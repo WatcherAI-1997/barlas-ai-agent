@@ -34,6 +34,38 @@ export interface DurableJob {
   createdAt: string;
 }
 
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  messageCount: number;
+  lastMessage: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationDetail extends ConversationSummary {
+  messages: Array<{
+    id: string;
+    role: "system" | "user" | "assistant";
+    content: string;
+    provider?: string;
+    model?: string;
+    createdAt: string;
+  }>;
+}
+
+export interface DashboardStats {
+  conversations: number;
+  messages: number;
+  queuedJobs: number;
+  failedJobs: number;
+  pendingApprovals: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+
 export interface AgentStore {
   ping(): Promise<void>;
   saveTurn(input: {
@@ -49,6 +81,8 @@ export interface AgentStore {
     importance: number;
   }): Promise<MemoryEntry>;
   recall(userId: string, query: string, limit: number): Promise<MemoryEntry[]>;
+  listConversations(userId: string, limit: number): Promise<ConversationSummary[]>;
+  getConversation(userId: string, conversationId: string): Promise<ConversationDetail | null>;
   createApproval(input: {
     userId: string;
     toolName: string;
@@ -62,6 +96,7 @@ export interface AgentStore {
     approved: boolean;
   }): Promise<ApprovalRequest | null>;
   markApprovalExecuted(id: string, succeeded: boolean): Promise<void>;
+  listApprovals(userId: string, limit: number): Promise<ApprovalRequest[]>;
   appendAudit(input: {
     userId: string;
     eventType: string;
@@ -76,6 +111,9 @@ export interface AgentStore {
     scheduledFor: Date;
   }): Promise<DurableJob>;
   listJobs(userId: string, limit: number): Promise<DurableJob[]>;
+  cancelJob(userId: string, id: string): Promise<DurableJob | null>;
+  retryJob(userId: string, id: string): Promise<DurableJob | null>;
+  getDashboardStats(userId?: string): Promise<DashboardStats>;
   claimJobs(input: {
     workerId: string;
     limit: number;

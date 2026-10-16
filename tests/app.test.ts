@@ -32,6 +32,8 @@ function dependencies() {
       createdAt: "2026-10-16T00:00:00.000Z",
     })),
     recall: vi.fn(async () => []),
+    listConversations: vi.fn(async () => []),
+    getConversation: vi.fn(async () => null),
     createApproval: vi.fn(async (input: {
       userId: string;
       toolName: string;
@@ -50,6 +52,7 @@ function dependencies() {
     })),
     decideApproval: vi.fn(async () => null),
     markApprovalExecuted: vi.fn(async () => undefined),
+    listApprovals: vi.fn(async () => []),
     appendAudit: vi.fn(async () => undefined),
     createJob: vi.fn(async (input: {
       userId: string;
@@ -68,6 +71,19 @@ function dependencies() {
       createdAt: "2026-10-16T00:00:00.000Z",
     })),
     listJobs: vi.fn(async () => []),
+    cancelJob: vi.fn(async () => null),
+    retryJob: vi.fn(async () => null),
+    getDashboardStats: vi.fn(async () => ({
+      conversations: 0,
+      messages: 0,
+      queuedJobs: 0,
+      failedJobs: 0,
+      pendingApprovals: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      estimatedCostUsd: 0,
+    })),
     claimJobs: vi.fn(async () => []),
     completeJob: vi.fn(async () => true),
     failJob: vi.fn(async () => "failed" as const),
@@ -254,6 +270,40 @@ describe("Barlas AI Agent API", () => {
 
     expect(response.statusCode).toBe(403);
     expect(deps.modelProvider.generate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns the operations dashboard for an authenticated user", async () => {
+    const deps = dependencies();
+    const app = await buildApp({ apiToken, ...deps, runtimeInfo: { workerEnabled: true } });
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/dashboard?userId=user-1",
+      headers: { authorization: `Bearer ${apiToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: "ok",
+      workerEnabled: true,
+      stats: { conversations: 0, totalTokens: 0, estimatedCostUsd: 0 },
+    });
+    expect(deps.database.getDashboardStats).toHaveBeenCalledWith("user-1");
+    await app.close();
+  });
+
+  it("lists the authenticated user's approval queue", async () => {
+    const deps = dependencies();
+    const app = await buildApp({ apiToken, ...deps });
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/approvals?userId=user-1",
+      headers: { authorization: `Bearer ${apiToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ approvals: [] });
+    expect(deps.database.listApprovals).toHaveBeenCalledWith("user-1", 30);
     await app.close();
   });
 });
