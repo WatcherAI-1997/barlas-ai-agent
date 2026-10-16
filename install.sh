@@ -132,7 +132,7 @@ render_inline_logo() {
       payload="${payload:4096}"
       more=0; [[ -n "$payload" ]] && more=1
       if [[ "$first" == true ]]; then
-        printf '\033_Ga=T,f=100,t=d,c=48,r=16,m=%s;%s\033\\' "$more" "$chunk"
+        printf '\033_Ga=T,f=100,t=d,c=48,m=%s;%s\033\\' "$more" "$chunk"
         first=false
       else
         printf '\033_Gm=%s;%s\033\\' "$more" "$chunk"
