@@ -23,35 +23,135 @@ function Read-Value([string]$Name, [string]$Label, [string]$Default = "", [switc
     return $Value
 }
 
-function Read-MenuChoice([string]$EnvironmentName, [string]$Title, [string[]]$Values, [string[]]$Labels, [string]$Default) {
-    if ($Values.Count -ne $Labels.Count) { throw "Invalid setup menu" }
-    $EnvironmentValue = if ($EnvironmentName) { [Environment]::GetEnvironmentVariable($EnvironmentName) } else { "" }
-    if (-not [string]::IsNullOrWhiteSpace($EnvironmentValue)) { return $EnvironmentValue.ToLowerInvariant() }
-    if ($NonInteractive) { return $Default }
-    Write-Host ""
-    Write-Host $Title -ForegroundColor Cyan
+function Resolve-MenuValue([string]$InputValue, [string[]]$Values, [hashtable]$Aliases) {
+    if ([string]::IsNullOrWhiteSpace($InputValue)) { return "" }
+    $Normalized = $InputValue.Trim().ToLowerInvariant()
+    $Exact = [Array]::IndexOf($Values, $Normalized)
+    if ($Exact -ge 0) { return $Values[$Exact] }
+    if ($Aliases -and $Aliases.ContainsKey($Normalized)) {
+        $AliasValue = ([string]$Aliases[$Normalized]).ToLowerInvariant()
+        if ($AliasValue -in $Values) { return $AliasValue }
+    }
+    return ""
+}
+
+function Read-NumberedMenu([string[]]$Values, [string[]]$Labels, [string]$Default, [hashtable]$Aliases) {
     for ($Index = 0; $Index -lt $Values.Count; $Index++) {
         $DefaultMarker = if ($Values[$Index] -eq $Default) { " (default)" } else { "" }
         Write-Host "  [$($Index + 1)] $($Labels[$Index])$DefaultMarker"
     }
     while ($true) {
         $DefaultNumber = 1 + [Array]::IndexOf($Values, $Default)
-        $Answer = (Read-Host "Choose 1-$($Values.Count) [$DefaultNumber]").Trim().ToLowerInvariant()
+        $Answer = (Read-Host "Choose 1-$($Values.Count) [$DefaultNumber]").Trim()
         if (-not $Answer) { return $Default }
-        if ($Answer -match '^\d+$') {
-            $Selected = [int]$Answer - 1
+        $Number = 0
+        if ([int]::TryParse($Answer, [ref]$Number)) {
+            $Selected = $Number - 1
             if ($Selected -ge 0 -and $Selected -lt $Values.Count) { return $Values[$Selected] }
         }
-        $Exact = [Array]::IndexOf($Values, $Answer)
-        if ($Exact -ge 0) { return $Values[$Exact] }
-        foreach ($Candidate in $Values) { if ($Answer.StartsWith($Candidate)) { return $Candidate } }
-        Write-Host "Choose a menu number or one of: $($Values -join ', ')" -ForegroundColor Yellow
+        $Resolved = Resolve-MenuValue $Answer $Values $Aliases
+        if ($Resolved) { return $Resolved }
+        Write-Host "That option is not available. Choose a number from 1 to $($Values.Count)." -ForegroundColor Yellow
+    }
+}
+
+function Read-ArrowMenu([string[]]$Values, [string[]]$Labels, [string]$Default) {
+    $CursorCaptured = $false
+    try {
+        if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { return $null }
+        $Width = [Console]::WindowWidth - 1
+        if ($Width -lt 20) { return $null }
+        $Selected = [Array]::IndexOf($Values, $Default)
+        if ($Selected -lt 0) { $Selected = 0 }
+        $ReservedLines = $Values.Count + 1
+        for ($Line = 0; $Line -lt $ReservedLines; $Line++) { Write-Host "" }
+        $Top = [Console]::CursorTop - $ReservedLines
+        $PreviousCursor = [Console]::CursorVisible
+        $CursorCaptured = $true
+        [Console]::CursorVisible = $false
+        while ($true) {
+            [Console]::SetCursorPosition(0, $Top)
+            $Width = [Console]::WindowWidth - 1
+            if ($Width -lt 20) { return $null }
+            for ($Index = 0; $Index -lt $Values.Count; $Index++) {
+                $Prefix = if ($Index -eq $Selected) { "  > " } else { "    " }
+                $DefaultMarker = if ($Values[$Index] -eq $Default) { "  default" } else { "" }
+                $Text = "$Prefix$($Labels[$Index])$DefaultMarker"
+                if ($Text.Length -gt $Width) { $Text = $Text.Substring(0, $Width) }
+                if ($Index -eq $Selected) { Write-Host $Text.PadRight($Width) -ForegroundColor Cyan }
+                else { Write-Host $Text.PadRight($Width) }
+            }
+            $Help = "  Up/Down or number; Enter selects; Esc keeps default"
+            if ($Help.Length -gt $Width) { $Help = $Help.Substring(0, $Width) }
+            Write-Host $Help.PadRight($Width) -ForegroundColor DarkGray
+            $Key = [Console]::ReadKey($true)
+            if ($Key.Key -eq [ConsoleKey]::UpArrow) { $Selected = ($Selected - 1 + $Values.Count) % $Values.Count; continue }
+            if ($Key.Key -eq [ConsoleKey]::DownArrow) { $Selected = ($Selected + 1) % $Values.Count; continue }
+            if ($Key.Key -eq [ConsoleKey]::Enter) { return $Values[$Selected] }
+            if ($Key.Key -eq [ConsoleKey]::Escape) { return $Default }
+            $Number = 0
+            if ([int]::TryParse([string]$Key.KeyChar, [ref]$Number) -and $Number -ge 1 -and $Number -le $Values.Count) { return $Values[$Number - 1] }
+        }
+    }
+    catch { return $null }
+    finally {
+        if ($CursorCaptured) { try { [Console]::CursorVisible = $PreviousCursor } catch { } }
+    }
+}
+
+function Read-MenuChoice([string]$EnvironmentName, [string]$Title, [string[]]$Values, [string[]]$Labels, [string]$Default, [hashtable]$Aliases = @{}) {
+    if ($Values.Count -ne $Labels.Count) { throw "Invalid setup menu" }
+    if ($Default -notin $Values) { $Default = $Values[0] }
+    $EnvironmentValue = if ($EnvironmentName) { [Environment]::GetEnvironmentVariable($EnvironmentName) } else { "" }
+    if (-not [string]::IsNullOrWhiteSpace($EnvironmentValue)) {
+        $ResolvedEnvironment = Resolve-MenuValue $EnvironmentValue $Values $Aliases
+        if ($ResolvedEnvironment) { return $ResolvedEnvironment }
+        if ($NonInteractive) { throw "$EnvironmentName has an unsupported value" }
+        Write-Host "Ignoring unsupported $EnvironmentName value and asking again." -ForegroundColor Yellow
+    }
+    if ($NonInteractive) { return $Default }
+    Write-Host ""
+    Write-Host $Title -ForegroundColor Cyan
+    $ArrowChoice = Read-ArrowMenu $Values $Labels $Default
+    if ($ArrowChoice) { return $ArrowChoice }
+    return Read-NumberedMenu $Values $Labels $Default $Aliases
+}
+
+function Read-ValidatedValue([string]$Name, [string]$Label, [string]$Default, [scriptblock]$Validate, [string]$ErrorMessage, [switch]$Secret) {
+    $EnvironmentValue = [Environment]::GetEnvironmentVariable($Name)
+    if (-not [string]::IsNullOrWhiteSpace($EnvironmentValue)) {
+        if (& $Validate $EnvironmentValue) { return $EnvironmentValue }
+        if ($NonInteractive) { throw "$Name is invalid: $ErrorMessage" }
+        Write-Host "Ignoring invalid $Name value and asking again." -ForegroundColor Yellow
+    }
+    if ($NonInteractive) {
+        if (& $Validate $Default) { return $Default }
+        throw "$Name is invalid: $ErrorMessage"
+    }
+    while ($true) {
+        $Prompt = if ($Secret) { $Label } elseif ($Default) { "$Label [$Default]" } else { $Label }
+        if ($Secret) {
+            $Secure = Read-Host $Prompt -AsSecureString
+            $Pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
+            try { $Value = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($Pointer) }
+            finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($Pointer) }
+        } else {
+            $Value = Read-Host $Prompt
+        }
+        if ([string]::IsNullOrWhiteSpace($Value)) { $Value = $Default }
+        if (& $Validate $Value) { return $Value }
+        Write-Host $ErrorMessage -ForegroundColor Yellow
     }
 }
 
 function Read-OwnerLanguage {
     $EnvironmentValue = [Environment]::GetEnvironmentVariable("OWNER_LANGUAGE")
-    if (-not [string]::IsNullOrWhiteSpace($EnvironmentValue)) { return $EnvironmentValue.ToLowerInvariant() }
+    if (-not [string]::IsNullOrWhiteSpace($EnvironmentValue)) {
+        $NormalizedLanguage = $EnvironmentValue.Trim().ToLowerInvariant()
+        if ($NormalizedLanguage -in $SupportedLanguageCodes) { return $NormalizedLanguage }
+        if ($NonInteractive) { throw "OWNER_LANGUAGE is unsupported" }
+        Write-Host "Ignoring unsupported OWNER_LANGUAGE value and asking again." -ForegroundColor Yellow
+    }
     if ($NonInteractive) { return "" }
     $Choice = Read-MenuChoice "" "Interface language" @("ru", "en", "later", "other") @("Русский", "English", "Choose later in the web cabinet", "Another language code") "ru"
     if ($Choice -eq "later") { return "" }
@@ -92,29 +192,40 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
 } else {
     Write-Host ""
     Write-Host "BARLAS PERSONAL SETUP" -ForegroundColor White
-    Write-Host "Choose menu numbers. Press Enter to accept a default." -ForegroundColor DarkGray
-    $Port = Read-Value "BARLAS_HTTP_PORT" "Local web port" "17840"
-    $OwnerEmail = Read-Value "OWNER_EMAIL" "First owner email (local identity only)" "owner@barlas.local"
-    $OwnerDisplayName = Read-Value "OWNER_DISPLAY_NAME" "First owner display name" "Barlas Owner"
+    Write-Host "Use Up/Down and Enter. Number keys also work." -ForegroundColor DarkGray
+    $Port = Read-ValidatedValue "BARLAS_HTTP_PORT" "Local web port" "17840" {
+        param($Value)
+        $Parsed = 0
+        [int]::TryParse([string]$Value, [ref]$Parsed) -and $Parsed -ge 1024 -and $Parsed -le 65535
+    } "Enter a port between 1024 and 65535."
+    $OwnerEmail = Read-ValidatedValue "OWNER_EMAIL" "First owner email (local identity only)" "owner@barlas.local" {
+        param($Value) [string]$Value -match '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    } "Enter a valid email address, for example owner@barlas.local."
+    $OwnerDisplayName = Read-ValidatedValue "OWNER_DISPLAY_NAME" "First owner display name" "Barlas Owner" {
+        param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and ([string]$Value).Length -le 80
+    } "Enter a display name up to 80 characters."
     $OwnerLanguage = Read-OwnerLanguage
-    $ModelProvider = Read-MenuChoice "MODEL_PROVIDER" "Model provider" @("openai", "anthropic", "ollama") @("OpenAI API (cloud key required)", "Anthropic API (cloud key required)", "Ollama local and private (no cloud key)") "openai"
+    $ProviderAliases = @{ "openai api" = "openai"; "openai codex" = "openai"; "anthropic api" = "anthropic"; "local ollama" = "ollama" }
+    $ModelProvider = Read-MenuChoice "MODEL_PROVIDER" "Model provider" @("openai", "anthropic", "ollama") @("OpenAI API - cloud key required", "Anthropic API - cloud key required", "Ollama - local and private, no cloud key") "openai" $ProviderAliases
     $DefaultModel = if ($ModelProvider -eq "ollama") { "qwen3:8b" } elseif ($ModelProvider -eq "anthropic") { "claude-sonnet-4-5" } else { "gpt-5" }
-    $ModelName = Read-Value "MODEL_NAME" "Fast/default model name" $DefaultModel
-    $DeepModelName = Read-Value "DEEP_MODEL_NAME" "Deep model name" $ModelName
+    $ModelName = Read-ValidatedValue "MODEL_NAME" "Fast/default model name" $DefaultModel {
+        param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and -not ([string]$Value).Contains("`r") -and -not ([string]$Value).Contains("`n")
+    } "Model name cannot be blank."
+    $DeepModelName = Read-ValidatedValue "DEEP_MODEL_NAME" "Deep model name" $ModelName {
+        param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and -not ([string]$Value).Contains("`r") -and -not ([string]$Value).Contains("`n")
+    } "Deep model name cannot be blank."
     $MediaApiKey = ""
     if ($ModelProvider -ne "openai") {
         $MediaApiKey = Read-Value "MEDIA_API_KEY" "Optional OpenAI key for media features" "" -Secret
         $VisionModel = if ($MediaApiKey) { Read-Value "VISION_MODEL" "OpenAI vision/PDF model name" "gpt-4.1-mini" } else { "" }
     } else { $VisionModel = Read-Value "VISION_MODEL" "Vision/PDF model name" $ModelName }
-    $ModelApiKey = if ($ModelProvider -eq "ollama") { "" } else { Read-Value "MODEL_API_KEY" "Dedicated model API key" "" -Secret }
+    $ModelApiKey = if ($ModelProvider -eq "ollama") { "" } else {
+        Read-ValidatedValue "MODEL_API_KEY" "Dedicated model API key" "" {
+            param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and -not ([string]$Value).Contains("`r") -and -not ([string]$Value).Contains("`n")
+        } "An API key is required for this provider." -Secret
+    }
     $OllamaBaseUrl = if ($ModelProvider -eq "ollama") { Read-Value "OLLAMA_BASE_URL" "Ollama URL" "http://127.0.0.1:11434" } else { "http://127.0.0.1:11434" }
     $TelegramBotToken = Read-Value "TELEGRAM_BOT_TOKEN" "Dedicated Telegram bot token; blank disables Telegram" "" -Secret
-
-    if ($Port -notmatch '^\d+$' -or [int]$Port -lt 1024 -or [int]$Port -gt 65535) { throw "Local web port must be between 1024 and 65535" }
-    if ($OwnerEmail -notmatch '^.+@.+\..+$') { throw "Owner email is invalid" }
-    if ($OwnerLanguage -and $OwnerLanguage -notin $SupportedLanguageCodes) { throw "Owner language is unsupported" }
-    if (-not $ModelName) { throw "Model name is required" }
-    if ($ModelProvider -ne "ollama" -and -not $ModelApiKey) { throw "Model API key is required" }
 
     $Settings = [ordered]@{
         APP_ENV = "production"; APP_NAME = "Barlas AI Agent"; BARLAS_INSTALL_MODE = "native"

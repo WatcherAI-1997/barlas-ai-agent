@@ -92,7 +92,7 @@ for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64
 for (const required of ["Windows_NT", "Docker Desktop", "BARLAS_INSTALL_MODE = \"local\"", "RandomNumberGenerator", "Protect-SecretFile", "compose.local.yml", "doctor.ps1", "never prints them"]) {
   if (!windowsInstaller.includes(required)) throw new Error(`Windows installer safety/usability boundary is missing: ${required}`);
 }
-for (const required of ["BARLAS_INSTALL_MODE = \"native\"", "RandomNumberGenerator", "Protect-SecretFile", "BROWSER_WS_ENDPOINT = \"local://chromium\"", "start-native.ps1", "Read-MenuChoice", "Ollama local and private (no cloud key)"]) {
+for (const required of ["BARLAS_INSTALL_MODE = \"native\"", "RandomNumberGenerator", "Protect-SecretFile", "BROWSER_WS_ENDPOINT = \"local://chromium\"", "start-native.ps1", "Read-MenuChoice", "Read-ArrowMenu", "Read-ValidatedValue", "[int]::TryParse", "Ollama - local and private, no cloud key"]) {
   if (!nativeWindowsInstaller.includes(required)) throw new Error(`Native Windows installer boundary is missing: ${required}`);
 }
 for (const required of ["commits/main", "archive/$ReleaseSha.zip", ".barlas-version", "LOCALAPPDATA", "native.env", "barlas.cmd", "ExecutionPolicy Bypass", "nodejs.org", "node_modules\\playwright-core\\cli.js", "no Docker or WSL required"]) {

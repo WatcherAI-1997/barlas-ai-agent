@@ -55,23 +55,87 @@ function Read-Secret([string]$Prompt) {
     try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($Pointer) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($Pointer) }
 }
-function Read-Choice([string]$Prompt, [string[]]$Choices, [string]$Default) {
+
+function Read-ArrowChoice([string[]]$Values, [string[]]$Labels, [string]$Default) {
+    $CursorCaptured = $false
+    try {
+        if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { return $null }
+        $Width = [Console]::WindowWidth - 1
+        if ($Width -lt 20) { return $null }
+        $Selected = [Array]::IndexOf($Values, $Default)
+        if ($Selected -lt 0) { $Selected = 0 }
+        $ReservedLines = $Values.Count + 1
+        for ($Line = 0; $Line -lt $ReservedLines; $Line++) { Write-Host "" }
+        $Top = [Console]::CursorTop - $ReservedLines
+        $PreviousCursor = [Console]::CursorVisible
+        $CursorCaptured = $true
+        [Console]::CursorVisible = $false
+        while ($true) {
+            [Console]::SetCursorPosition(0, $Top)
+            $Width = [Console]::WindowWidth - 1
+            if ($Width -lt 20) { return $null }
+            for ($Index = 0; $Index -lt $Values.Count; $Index++) {
+                $Prefix = if ($Index -eq $Selected) { "  > " } else { "    " }
+                $DefaultMarker = if ($Values[$Index] -eq $Default) { "  default" } else { "" }
+                $Text = "$Prefix$($Labels[$Index])$DefaultMarker"
+                if ($Text.Length -gt $Width) { $Text = $Text.Substring(0, $Width) }
+                if ($Index -eq $Selected) { Write-Host $Text.PadRight($Width) -ForegroundColor Cyan }
+                else { Write-Host $Text.PadRight($Width) }
+            }
+            $Help = "  Up/Down or number; Enter selects; Esc keeps default"
+            if ($Help.Length -gt $Width) { $Help = $Help.Substring(0, $Width) }
+            Write-Host $Help.PadRight($Width) -ForegroundColor DarkGray
+            $Key = [Console]::ReadKey($true)
+            if ($Key.Key -eq [ConsoleKey]::UpArrow) { $Selected = ($Selected - 1 + $Values.Count) % $Values.Count; continue }
+            if ($Key.Key -eq [ConsoleKey]::DownArrow) { $Selected = ($Selected + 1) % $Values.Count; continue }
+            if ($Key.Key -eq [ConsoleKey]::Enter) { return $Values[$Selected] }
+            if ($Key.Key -eq [ConsoleKey]::Escape) { return $Default }
+            $Number = 0
+            if ([int]::TryParse([string]$Key.KeyChar, [ref]$Number) -and $Number -ge 1 -and $Number -le $Values.Count) { return $Values[$Number - 1] }
+        }
+    }
+    catch { return $null }
+    finally {
+        if ($CursorCaptured) { try { [Console]::CursorVisible = $PreviousCursor } catch { } }
+    }
+}
+
+function Read-MappedChoice([string]$Prompt, [string[]]$Values, [string[]]$Labels, [string]$Default) {
+    if ($Values.Count -ne $Labels.Count) { throw "Invalid setup menu" }
+    if ($Default -notin $Values) {
+        Write-Host "The previous value is no longer supported; using $($Labels[0])." -ForegroundColor Yellow
+        $Default = $Values[0]
+    }
     Write-Host ""
     Write-Host $Prompt -ForegroundColor Cyan
-    for ($Index = 0; $Index -lt $Choices.Count; $Index++) {
-        $DefaultMarker = if ($Choices[$Index] -eq $Default) { " (default)" } else { "" }
-        Write-Host "  [$($Index + 1)] $($Choices[$Index])$DefaultMarker"
+    $ArrowChoice = Read-ArrowChoice $Values $Labels $Default
+    if ($ArrowChoice) { return $ArrowChoice }
+    for ($Index = 0; $Index -lt $Values.Count; $Index++) {
+        $DefaultMarker = if ($Values[$Index] -eq $Default) { " (default)" } else { "" }
+        Write-Host "  [$($Index + 1)] $($Labels[$Index])$DefaultMarker"
     }
     while ($true) {
-        $DefaultNumber = 1 + [Array]::IndexOf($Choices, $Default)
-        $Answer = (Read-Host "Choose 1-$($Choices.Count) [$DefaultNumber]").Trim().ToLowerInvariant()
+        $DefaultNumber = 1 + [Array]::IndexOf($Values, $Default)
+        $Answer = (Read-Host "Choose 1-$($Values.Count) [$DefaultNumber]").Trim().ToLowerInvariant()
         if (-not $Answer) { return $Default }
-        if ($Answer -match '^\d+$') {
-            $Selected = [int]$Answer - 1
-            if ($Selected -ge 0 -and $Selected -lt $Choices.Count) { return $Choices[$Selected] }
+        $Number = 0
+        if ([int]::TryParse($Answer, [ref]$Number)) {
+            $Selected = $Number - 1
+            if ($Selected -ge 0 -and $Selected -lt $Values.Count) { return $Values[$Selected] }
         }
-        if ($Answer -in $Choices) { return $Answer }
-        Write-Host "Choose a menu number or one of: $($Choices -join ', ')" -ForegroundColor Yellow
+        $Exact = [Array]::IndexOf($Values, $Answer)
+        if ($Exact -ge 0) { return $Values[$Exact] }
+        Write-Host "That option is not available. Choose a number from 1 to $($Values.Count)." -ForegroundColor Yellow
+    }
+}
+function Read-Choice([string]$Prompt, [string[]]$Choices, [string]$Default) {
+    return Read-MappedChoice $Prompt $Choices $Choices $Default
+}
+function Read-ValidatedPlain([string]$Prompt, [string]$Default, [scriptblock]$Validate, [string]$ErrorMessage) {
+    while ($true) {
+        $Value = Read-Plain $Prompt $Default
+        if (& $Validate $Value) { return $Value }
+        Write-Host $ErrorMessage -ForegroundColor Yellow
     }
 }
 function Write-Step([int]$Number, [int]$Total, [string]$Title) {
@@ -100,11 +164,15 @@ function Save-Settings {
 }
 function Configure-General {
     Write-Step 1 9 "General"
-    $Port = Read-Plain "Local web port" (Current "PORT" "17840")
-    if ($Port -notmatch '^\d+$' -or [int]$Port -lt 1024 -or [int]$Port -gt 65535) { throw "Port must be between 1024 and 65535" }
+    $Port = Read-ValidatedPlain "Local web port" (Current "PORT" "17840") {
+        param($Candidate)
+        $Parsed = 0
+        [int]::TryParse([string]$Candidate, [ref]$Parsed) -and $Parsed -ge 1024 -and $Parsed -le 65535
+    } "Enter a port between 1024 and 65535."
     Set-Value "PORT" $Port; Set-Value "BARLAS_HTTP_PORT" $Port
-    $Email = Read-Plain "Owner email" (Current "OWNER_EMAIL" "owner@barlas.local")
-    if ($Email -notmatch '^.+@.+\..+$') { throw "Owner email is invalid" }
+    $Email = Read-ValidatedPlain "Owner email" (Current "OWNER_EMAIL" "owner@barlas.local") {
+        param($Candidate) [string]$Candidate -match '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    } "Enter a valid email address."
     Set-Value "OWNER_EMAIL" $Email
     Set-Value "OWNER_DISPLAY_NAME" (Read-Plain "Owner display name" (Current "OWNER_DISPLAY_NAME" "Barlas Owner"))
     Set-Value "OWNER_LANGUAGE" (Read-Plain "Language code" (Current "OWNER_LANGUAGE" "ru"))
@@ -122,8 +190,7 @@ function Configure-Identity {
 }
 function Configure-Models {
     Write-Step 3 9 "Models and voice"
-    $Provider = (Read-Plain "Provider: openai, anthropic, or local ollama" (Current "MODEL_PROVIDER" "openai")).ToLowerInvariant()
-    if ($Provider -notin @("openai", "anthropic", "ollama")) { throw "Provider must be openai, anthropic, or ollama" }
+    $Provider = Read-MappedChoice "Model provider" @("openai", "anthropic", "ollama") @("OpenAI API - cloud key required", "Anthropic API - cloud key required", "Ollama - local and private, no cloud key") (Current "MODEL_PROVIDER" "openai")
     Set-Value "MODEL_PROVIDER" $Provider
     Set-Value "MODEL_NAME" (Read-Plain "Default model" (Current "MODEL_NAME"))
     Set-Value "DEEP_MODEL_NAME" (Read-Plain "Deep model" (Current "DEEP_MODEL_NAME" (Current "MODEL_NAME")))

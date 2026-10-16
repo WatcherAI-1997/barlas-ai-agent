@@ -23,6 +23,8 @@ describe("production installer", () => {
     const configure = await readFile(join(root, "scripts", "configure-native.ps1"), "utf8");
     const nativeUpdater = await readFile(join(root, "scripts", "update-native.ps1"), "utf8");
     const nativeUninstaller = await readFile(join(root, "scripts", "uninstall-native.ps1"), "utf8");
+    const installerMenuTest = await readFile(join(root, "tests", "powershell-installer-menu.ps1"), "utf8");
+    const configureMenuTest = await readFile(join(root, "tests", "powershell-configure-menu.ps1"), "utf8");
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
     const cli = await readFile(join(root, "barlas.ps1"), "utf8");
 
@@ -34,14 +36,26 @@ describe("production installer", () => {
       "scripts\\start-native.ps1",
       "BARLAS PERSONAL SETUP",
       "Read-MenuChoice",
-      "Ollama local and private (no cloud key)",
+      "Read-ArrowMenu",
+      "Read-ValidatedValue",
+      "[int]::TryParse",
+      "Use Up/Down and Enter. Number keys also work.",
+      '"openai codex" = "openai"',
+      "Ollama - local and private, no cloud key",
       '"qwen3:8b"',
     ]) expect(installer).toContain(required);
+    expect(installer).not.toContain("$Answer.StartsWith($Candidate)");
     expect(installer).not.toContain("Docker");
     expect(doctor).toContain("Docker and WSL are not used");
     expect(configure).toContain('"file", "schema", "validate"');
     expect(configure).toContain("Do not put secrets in command history");
     expect(configure).toContain("Protect-File");
+    expect(configure).toContain("Read-ArrowChoice");
+    expect(configure).toContain("Read-MappedChoice");
+    expect(configure).toContain("[int]::TryParse");
+    expect(configure).not.toContain('Read-Plain "Provider: openai, anthropic, or local ollama"');
+    expect(installerMenuTest).toContain("invalid environment provider was accepted");
+    expect(configureMenuTest).toContain("invalid existing default");
     for (const profile of ["quick", "private", "developer", "server", "import"]) expect(configure).toContain(`\"${profile}\"`);
     for (const section of ["identity", "memory", "integrations", "automations", "security"]) expect(configure).toContain(`\"${section}\"`);
     expect(configure).toContain("Import existing Barlas configuration");
