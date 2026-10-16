@@ -19,6 +19,10 @@ export class ToolExecutor {
     return this.registry.list();
   }
 
+  listModelTools(allowedTools?: string[]) {
+    return this.registry.listForModel(allowedTools);
+  }
+
   async execute(input: {
     userId: string;
     toolName: string;

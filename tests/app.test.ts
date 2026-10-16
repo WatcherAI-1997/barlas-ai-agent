@@ -146,6 +146,44 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("runs the bounded autonomous agent loop", async () => {
+    const deps = dependencies();
+    const agentLoop = {
+      run: vi.fn(async () => ({
+        status: "completed" as const,
+        text: "Autonomous result",
+        steps: 2,
+        toolExecutions: 1,
+        approvalIds: [],
+        result: {
+          text: "Autonomous result",
+          provider: "test",
+          model: "test-model",
+          usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30, costUsd: 0.02 },
+        },
+      })),
+    };
+    const app = await buildApp({ apiToken, ...deps, agentLoop });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/agent/run",
+      headers: { authorization: `Bearer ${apiToken}` },
+      payload: { userId: "user-1", messages: [{ role: "user", content: "Use a tool" }], maxSteps: 4 },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: "completed",
+      message: { content: "Autonomous result" },
+      steps: 2,
+      toolExecutions: 1,
+      memoriesUsed: 0,
+    });
+    expect(agentLoop.run).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-1", maxSteps: 4 }));
+    expect(deps.database.saveTurn).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
   it("stores explicit long-term memory", async () => {
     const deps = dependencies();
     const app = await buildApp({ apiToken, ...deps });

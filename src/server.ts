@@ -3,6 +3,7 @@ import { AuthService } from "./auth/service.js";
 import { TelegramClient } from "./channels/telegram.js";
 import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
+import { AgentLoop } from "./core/agent-loop.js";
 import { RuntimeGovernance } from "./governance/runtime.js";
 import { createAgentJobHandler } from "./jobs/agent-handler.js";
 import { JobWorker } from "./jobs/worker.js";
@@ -62,6 +63,13 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   workspaceRoot: config.WORKSPACE_ROOT,
   ...(config.SEARXNG_BASE_URL ? { searxngBaseUrl: config.SEARXNG_BASE_URL } : {}),
 }), database, governance);
+const agentLoop = new AgentLoop(
+  modelProvider,
+  toolExecutor,
+  config.AGENT_MAX_STEPS,
+  config.AGENT_MAX_TOTAL_TOKENS,
+  config.AGENT_MAX_OUTPUT_TOKENS_PER_STEP,
+);
 const jobWorker = new JobWorker(database, {
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
   batchSize: config.JOB_WORKER_BATCH_SIZE,
@@ -81,6 +89,7 @@ const app = await buildApp({
   apiToken: config.BARLAS_API_TOKEN,
   database,
   modelProvider,
+  agentLoop,
   toolExecutor,
   skillRegistry,
   governance,

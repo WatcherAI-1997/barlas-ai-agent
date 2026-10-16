@@ -61,8 +61,9 @@ $("#chat-form").addEventListener("submit", async (event) => {
   event.preventDefault(); const input = $("#chat-input"); const text = input.value.trim(); if (!text) return;
   addMessage("user", text); input.value = "";
   try {
-    const data = await api("/v1/chat", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, messages: [{ role: "user", content: text }], taskClass: $("#task-class").value }) });
+    const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, messages: [{ role: "user", content: text }], taskClass: $("#task-class").value }) });
     state.conversationId = data.conversationId; addMessage("agent", data.message.content); await loadConversations();
+    if (data.status === "waiting_approval") await loadApprovals();
   } catch (error) { addMessage("agent", `Ошибка: ${error.message}`); }
 });
 

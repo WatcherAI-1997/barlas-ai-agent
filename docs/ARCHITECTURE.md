@@ -46,6 +46,11 @@ autonomy.
   already running task or retry of a task that has not failed.
 - Token counts are captured from provider responses. Cost is an estimate based
   only on explicitly configured model rates and is stored as integer micro-USD.
+- The autonomous runtime uses native model function calls. Only registry-derived
+  JSON schemas are exposed, model-safe names are mapped back to canonical tool
+  IDs, and every argument is validated at the executor boundary. Tool results
+  are fed back through the provider protocol until a final answer, approval
+  pause, or hard step limit is reached.
 
 ## Data boundaries
 

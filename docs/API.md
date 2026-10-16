@@ -22,6 +22,7 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `POST /v1/admin/users` — create an owner or user account; owner only.
 
 - `POST /v1/chat` — generate an answer using `fast`, `deep`, or `private` routing.
+- `POST /v1/agent/run` — run the bounded autonomous tool loop.
 - `GET /v1/conversations` — list a user's stored conversations.
 - `GET /v1/conversations/:id` — load ordered messages from one conversation.
 - `POST /v1/memory` — save an explicit long-term memory.
@@ -90,6 +91,19 @@ bootstrap is idempotent and never writes credentials to source control.
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.
 
+The autonomous endpoint accepts the same conversation fields as chat plus
+`maxSteps` (1–12, default configured by `AGENT_MAX_STEPS`), an optional
+`maxTotalTokens` budget that cannot exceed the operator's hard limit, and an
+optional `allowedTools` allowlist. The model receives JSON schemas only for registered,
+allowed tools. Each returned call is mapped back to the registry and validated
+again before execution. Read-only results are returned to the model for the
+next step. A write, external, or destructive call stops the loop with
+`waiting_approval` and an approval ID; it is never represented to the model as
+completed. At most four calls are accepted in one model step, tool output is
+bounded, and total model steps have a hard ceiling of twelve. Execution stops
+before another tool call when the total token budget is reached; output per
+model step is capped by `AGENT_MAX_OUTPUT_TOKENS_PER_STEP`.
+
 Conversation IDs are ownership-checked inside the database transaction. A
 client cannot attach messages to another user's conversation even if it learns
 or guesses its UUID.
@@ -116,3 +130,5 @@ Read-only tools may execute immediately. Write, external, and destructive tools
 are persisted as approval requests and cannot execute until the same user
 explicitly approves them. Requests, decisions, executions, and durable job
 creation, retries, completion, and failure are written to a separate audit log.
+The web cabinet uses the autonomous endpoint, while `/v1/chat` remains available
+for direct non-tool generation and integrations that need it.

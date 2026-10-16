@@ -14,6 +14,7 @@ import {
   type UserAccount,
 } from "./auth/service.js";
 import type { ModelProvider } from "./core/models.js";
+import type { AgentLoop } from "./core/agent-loop.js";
 import { QuotaExceededError, type RuntimeGovernance } from "./governance/runtime.js";
 import { agentJobSchema } from "./jobs/agent-handler.js";
 import { workflowJobSchema } from "./jobs/workflow-handler.js";
@@ -34,6 +35,12 @@ const chatBodySchema = z.object({
     .min(1)
     .max(100),
   taskClass: z.enum(["fast", "deep", "private"]).default("fast"),
+});
+
+const agentRunBodySchema = chatBodySchema.extend({
+  maxSteps: z.number().int().min(1).max(12).default(8),
+  maxTotalTokens: z.number().int().min(1_000).max(100_000).optional(),
+  allowedTools: z.array(z.string().min(1).max(128)).max(32).optional(),
 });
 
 const rememberBodySchema = z.object({
@@ -131,6 +138,7 @@ export interface AppDependencies {
   apiToken: string;
   database: AgentStore;
   modelProvider: ModelProvider;
+  agentLoop?: Pick<AgentLoop, "run">;
   toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
   skillRegistry?: Pick<SkillRegistry, "list">;
   governance?: RuntimeGovernance;
@@ -409,6 +417,92 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       memoriesUsed,
       traceId,
     };
+  });
+
+  app.post("/v1/agent/run", async (request, reply) => {
+    if (!dependencies.agentLoop) return reply.notFound();
+    const parsed = agentRunBodySchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid agent run request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    await dependencies.governance?.consume(userId, "chat");
+    const conversationId = parsed.data.conversationId ?? randomUUID();
+    const latestUserMessage = [...parsed.data.messages].reverse().find((message) => message.role === "user");
+    const memories = latestUserMessage
+      ? await dependencies.database.recall(userId, latestUserMessage.content, 5)
+      : [];
+    const memoryContext = memories.length > 0
+      ? [{
+          role: "system" as const,
+          content: [
+            "Use these Barlas AI Agent user memories only when relevant:",
+            ...memories.map((memory) => `- [${memory.category}] ${memory.content}`),
+          ].join("\n"),
+        }]
+      : [];
+    const traceId = dependencies.governance?.newTraceId();
+    if (traceId) {
+      await dependencies.governance?.trace({
+        traceId,
+        userId,
+        operation: "agent.loop",
+        status: "started",
+        details: { taskClass: parsed.data.taskClass, maxSteps: parsed.data.maxSteps },
+      });
+    }
+    try {
+      const result = await dependencies.agentLoop.run({
+        userId,
+        conversationId,
+        messages: [...memoryContext, ...parsed.data.messages],
+        taskClass: parsed.data.taskClass,
+        maxSteps: parsed.data.maxSteps,
+        ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
+        ...(parsed.data.allowedTools ? { allowedTools: parsed.data.allowedTools } : {}),
+      });
+      await dependencies.database.saveTurn({
+        userId,
+        conversationId,
+        messages: parsed.data.messages,
+        result: result.result,
+      });
+      if (traceId) {
+        await dependencies.governance?.trace({
+          traceId,
+          userId,
+          operation: "agent.loop",
+          status: result.status === "completed" ? "completed" : "pending",
+          details: {
+            agentStatus: result.status,
+            steps: result.steps,
+            toolExecutions: result.toolExecutions,
+            approvalIds: result.approvalIds,
+          },
+        });
+      }
+      return {
+        conversationId,
+        status: result.status,
+        message: { role: "assistant", content: result.text },
+        steps: result.steps,
+        toolExecutions: result.toolExecutions,
+        approvalIds: result.approvalIds,
+        model: { provider: result.result.provider, name: result.result.model },
+        usage: result.result.usage,
+        memoriesUsed: memories.length,
+        traceId,
+      };
+    } catch (error) {
+      if (traceId) {
+        await dependencies.governance?.trace({
+          traceId,
+          userId,
+          operation: "agent.loop",
+          status: "failed",
+          details: { error: error instanceof Error ? error.message.slice(0, 500) : "Unknown error" },
+        });
+      }
+      throw error;
+    }
   });
 
   app.post("/v1/memory", async (request, reply) => {

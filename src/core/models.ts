@@ -25,7 +25,43 @@ export interface GenerateResult {
   };
 }
 
+export interface ModelTool {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface ModelToolOutput {
+  callId: string;
+  output: string;
+}
+
+export interface GenerateToolRequest extends GenerateRequest {
+  tools: ModelTool[];
+  maxOutputTokens?: number;
+  previousResponseId?: string;
+  toolOutputs?: ModelToolOutput[];
+}
+
+export interface ModelToolCall {
+  callId: string;
+  name: string;
+  arguments: unknown;
+}
+
+export interface GenerateToolResult extends GenerateResult {
+  toolCalls: ModelToolCall[];
+}
+
 export interface ModelProvider {
   readonly name: string;
   generate(request: GenerateRequest): Promise<GenerateResult>;
+}
+
+export interface ToolCapableModelProvider extends ModelProvider {
+  generateWithTools(request: GenerateToolRequest): Promise<GenerateToolResult>;
+}
+
+export function supportsTools(provider: ModelProvider): provider is ToolCapableModelProvider {
+  return "generateWithTools" in provider && typeof provider.generateWithTools === "function";
 }
