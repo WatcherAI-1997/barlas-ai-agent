@@ -43,7 +43,10 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `POST /v1/memory` — save an explicit long-term memory.
 - `GET /v1/memory/search` — retrieve relevant memories for one user.
 - `GET /v1/tools` — list registered tools and their risk levels.
-- `GET /v1/skills` — list installed skill IDs, versions, descriptions, and tool permissions.
+- `GET /v1/skills` — list installed skill IDs, versions, descriptions, activation state, and tool permissions.
+- `POST /v1/skills` — owner-only installation of an inactive candidate skill version.
+- `POST /v1/skills/:id/:version/evaluate` — run 1–5 bounded, tool-free acceptance cases.
+- `POST /v1/skills/:id/:version/activate` — activate a custom version only after its latest evaluation passed.
 - `GET /v1/traces` — list recent execution trace events for one user.
 - `POST /v1/tools/execute` — execute a read-only tool or create an approval.
 - `POST /v1/approvals/:id/decision` — approve or reject a pending action.
@@ -212,7 +215,10 @@ explicit backfill process.
 The autonomous endpoint accepts the same conversation fields as chat plus
 `maxSteps` (1–12, default configured by `AGENT_MAX_STEPS`), an optional
 `maxTotalTokens` budget that cannot exceed the operator's hard limit, and an
-optional `allowedTools` allowlist. The model receives JSON schemas only for registered,
+optional `allowedTools` allowlist. `skillId` and optional `skillVersion` select
+an active evaluated skill, inject its versioned procedure, and reduce the
+available tools to that skill's permissions. A caller may narrow this allowlist
+further but cannot expand it. The model receives JSON schemas only for registered,
 allowed tools. Each returned call is mapped back to the registry and validated
 again before execution. Read-only results are returned to the model for the
 next step. A write, external, or destructive call stops the loop with
@@ -231,6 +237,14 @@ automatically. If the service stops after the tool decision but before the next
 model step, startup recovery finds the executed/rejected approval and continues
 from the saved provider response and call ID. Conditional state transitions
 prevent a cancelled run from being overwritten by a late model response.
+
+Custom skill versions are persisted as inactive candidates. Installation is
+owner-only, tool names must already exist in the deployment, and activation is
+blocked until the latest automated evaluation passes every required/forbidden
+string assertion. Evaluation runs have no tools, are limited to five cases,
+store assertion details rather than full model output, and are audited. Only
+one version per skill ID can be active; prior versions remain available for an
+evaluated rollback.
 
 Queued runs are leased with PostgreSQL `FOR UPDATE SKIP LOCKED`. A worker crash
 leaves a recoverable lease; after its timeout another worker may claim the run.

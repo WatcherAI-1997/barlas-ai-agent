@@ -25,6 +25,9 @@ autonomy.
   SHA-256 user key. It is not mounted from an existing agent installation.
 - Built-in skills have immutable IDs, semantic versions, explicit instructions,
   and declared tool allowlists. Runtime listing omits the internal prompt.
+- Owner-installed versions are persisted as inactive candidates. A bounded,
+  tool-free acceptance suite must pass before activation; autonomous runs can
+  select only active versions, and the skill allowlist is enforced as a ceiling.
 - Managed workflows contain at most six sequential subagent steps. A step can
   consume the previous result but cannot recursively create more subagents or
   claim that it performed external actions.

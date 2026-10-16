@@ -45,5 +45,18 @@ for (const legalFile of [
 ]) {
   if (!files.includes(legalFile)) throw new Error(`Release document is missing: ${legalFile}`);
 }
+for (const required of [
+  "migrations/016_skills.sql",
+  "src/skills/manager.ts",
+  "tests/skill-manager.test.ts",
+]) {
+  if (!files.includes(required)) throw new Error(`Skill lifecycle component is missing: ${required}`);
+}
+const skillManager = await readFile("src/skills/manager.ts", "utf8");
+for (const required of ["latest evaluation", "validateTools", "1 to 5 cases", "without tools"]) {
+  if (!skillManager.toLowerCase().includes(required.toLowerCase())) {
+    throw new Error(`Skill activation safety check is missing: ${required}`);
+  }
+}
 
 console.log(`Barlas AI Agent security baseline passed for ${textFiles.length} repository text files.`);

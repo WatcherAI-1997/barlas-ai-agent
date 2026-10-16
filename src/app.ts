@@ -35,6 +35,7 @@ import { QuotaExceededError, type RuntimeGovernance } from "./governance/runtime
 import { agentJobSchema } from "./jobs/agent-handler.js";
 import { workflowJobSchema } from "./jobs/workflow-handler.js";
 import type { SkillRegistry } from "./skills/registry.js";
+import type { SkillManager } from "./skills/manager.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
 
@@ -57,6 +58,11 @@ const agentRunBodySchema = chatBodySchema.extend({
   maxSteps: z.number().int().min(1).max(12).default(8),
   maxTotalTokens: z.number().int().min(1_000).max(100_000).optional(),
   allowedTools: z.array(z.string().min(1).max(128)).max(32).optional(),
+  skillId: z.string().regex(/^[a-z][a-z0-9.-]{2,63}$/u).optional(),
+  skillVersion: z.string().regex(/^\d+\.\d+\.\d+$/u).optional(),
+}).refine((input) => !input.skillVersion || input.skillId, {
+  message: "skillVersion requires skillId",
+  path: ["skillVersion"],
 });
 
 const rememberBodySchema = z.object({
@@ -169,6 +175,25 @@ const passwordResetSchema = z.object({
   code: z.string().min(20).max(256),
   password: z.string().min(12).max(256),
 }).strict();
+const skillParamsSchema = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9.-]{2,63}$/u),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/u),
+});
+const skillInstallSchema = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9.-]{2,63}$/u),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/u),
+  description: z.string().trim().min(1).max(500),
+  instructions: z.string().trim().min(1).max(20_000),
+  allowedTools: z.array(z.string().min(1).max(128)).max(32),
+}).strict();
+const skillEvaluationSchema = z.object({
+  cases: z.array(z.object({
+    name: z.string().trim().min(1).max(100),
+    prompt: z.string().min(1).max(10_000),
+    requiredStrings: z.array(z.string().min(1).max(500)).min(1).max(10),
+    forbiddenStrings: z.array(z.string().min(1).max(500)).max(10).default([]),
+  }).strict()).min(1).max(5),
+}).strict();
 
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -207,7 +232,8 @@ export interface AppDependencies {
   agentLoop?: Pick<AgentLoop, "run">;
   agentRuntime?: Pick<PersistentAgentRuntime, "start" | "enqueue" | "resume" | "resumeByApproval" | "get" | "list" | "events" | "cancel">;
   toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
-  skillRegistry?: Pick<SkillRegistry, "list">;
+  skillRegistry?: Pick<SkillRegistry, "list" | "get" | "isActive">;
+  skillManager?: Pick<SkillManager, "install" | "evaluate" | "activate">;
   governance?: RuntimeGovernance;
   authService?: Pick<AuthService,
     "authenticate" | "login" | "logout" | "listAccounts" | "createAccount" | "issuePasswordReset" | "resetPassword" | "getAccount" | "setLanguage"
@@ -352,6 +378,12 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (principal.authType === "service" || principal.role === "owner") return requestedUserId;
     if (requestedUserId && requestedUserId !== principal.userId) throw new AuthorizationError();
     return principal.userId;
+  };
+
+  const requireOwner = (request: FastifyRequest): Principal => {
+    const principal = principalFor(request);
+    if (principal.authType !== "service" && principal.role !== "owner") throw new AuthorizationError();
+    return principal;
   };
 
   app.post("/auth/login", async (request, reply) => {
@@ -773,6 +805,35 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         }]
       : [];
     const languageContext = await preferredLanguageContext(userId, dependencies.authService);
+    let skillContext: Array<{ role: "system"; content: string }> = [];
+    let allowedTools = parsed.data.allowedTools;
+    let selectedSkill: { id: string; version: string } | undefined;
+    if (parsed.data.skillId) {
+      if (!dependencies.skillRegistry) return reply.badRequest("Skills are not available");
+      let skill;
+      try {
+        skill = dependencies.skillRegistry.get(parsed.data.skillId, parsed.data.skillVersion);
+      } catch {
+        return reply.badRequest("Unknown skill or version");
+      }
+      if (!dependencies.skillRegistry.isActive(skill.id, skill.version)) {
+        return reply.badRequest("Only an active evaluated skill can be used");
+      }
+      const skillTools = new Set(skill.allowedTools);
+      if (allowedTools?.some((tool) => !skillTools.has(tool))) {
+        return reply.badRequest("Requested tools exceed the selected skill permissions");
+      }
+      allowedTools = allowedTools ?? skill.allowedTools;
+      selectedSkill = { id: skill.id, version: skill.version };
+      skillContext = [{
+        role: "system",
+        content: [
+          `Apply Barlas AI Agent skill ${skill.id}@${skill.version}.`,
+          skill.instructions,
+          `This skill permits only these tools: ${skill.allowedTools.join(", ") || "none"}.`,
+        ].join(" "),
+      }];
+    }
     const traceId = dependencies.governance?.newTraceId();
     if (traceId) {
       await dependencies.governance?.trace({
@@ -780,18 +841,18 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         userId,
         operation: "agent.loop",
         status: "started",
-        details: { taskClass: parsed.data.taskClass, maxSteps: parsed.data.maxSteps },
+        details: { taskClass: parsed.data.taskClass, maxSteps: parsed.data.maxSteps, selectedSkill },
       });
     }
     try {
       const loopInput = {
         userId,
         conversationId,
-        messages: [...languageContext, ...memoryContext, ...parsed.data.messages],
+        messages: [...languageContext, ...skillContext, ...memoryContext, ...parsed.data.messages],
         taskClass: parsed.data.taskClass,
         maxSteps: parsed.data.maxSteps,
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
-        ...(parsed.data.allowedTools ? { allowedTools: parsed.data.allowedTools } : {}),
+        ...(allowedTools ? { allowedTools } : {}),
       };
       if (dependencies.agentRuntime) {
         const run = await dependencies.agentRuntime.enqueue({
@@ -983,6 +1044,61 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   app.get("/v1/skills", async (_request, reply) => {
     if (!dependencies.skillRegistry) return reply.notFound();
     return { skills: dependencies.skillRegistry.list() };
+  });
+
+  app.post("/v1/skills", async (request, reply) => {
+    if (!dependencies.skillManager) return reply.notFound();
+    const principal = requireOwner(request);
+    const parsed = skillInstallSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid skill definition");
+    const skill = await dependencies.skillManager.install(parsed.data, principal.account?.id ?? null);
+    await dependencies.database.appendAudit({
+      userId: principal.userId,
+      eventType: "skill.installed",
+      resourceType: "skill",
+      resourceId: `${skill.id}@${skill.version}`,
+      details: { allowedTools: skill.allowedTools },
+    });
+    return reply.code(201).send({ skill });
+  });
+
+  app.post("/v1/skills/:id/:version/evaluate", async (request, reply) => {
+    if (!dependencies.skillManager) return reply.notFound();
+    const principal = requireOwner(request);
+    const params = skillParamsSchema.safeParse(request.params);
+    const body = skillEvaluationSchema.safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid skill evaluation request");
+    await dependencies.governance?.consume(principal.userId, "chat");
+    const evaluation = await dependencies.skillManager.evaluate({
+      skillId: params.data.id,
+      version: params.data.version,
+      cases: body.data.cases,
+      createdBy: principal.account?.id ?? null,
+    });
+    await dependencies.database.appendAudit({
+      userId: principal.userId,
+      eventType: "skill.evaluated",
+      resourceType: "skill",
+      resourceId: `${evaluation.skillId}@${evaluation.skillVersion}`,
+      details: { passed: evaluation.passed, passedCases: evaluation.passedCases, totalCases: evaluation.totalCases },
+    });
+    return { evaluation };
+  });
+
+  app.post("/v1/skills/:id/:version/activate", async (request, reply) => {
+    if (!dependencies.skillManager) return reply.notFound();
+    const principal = requireOwner(request);
+    const params = skillParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.badRequest("Invalid skill activation request");
+    const skill = await dependencies.skillManager.activate(params.data.id, params.data.version);
+    await dependencies.database.appendAudit({
+      userId: principal.userId,
+      eventType: "skill.activated",
+      resourceType: "skill",
+      resourceId: `${skill.id}@${skill.version}`,
+    });
+    const { instructions: _instructions, ...metadata } = skill;
+    return { skill: metadata };
   });
 
   app.get("/v1/traces", async (request, reply) => {

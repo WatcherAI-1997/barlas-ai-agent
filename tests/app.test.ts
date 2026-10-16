@@ -5,6 +5,7 @@ import { buildApp } from "../src/app.js";
 import type { ModelProvider } from "../src/core/models.js";
 import { RuntimeGovernance } from "../src/governance/runtime.js";
 import type { SupportedLanguageCode } from "../src/i18n/languages.js";
+import { SkillRegistry } from "../src/skills/registry.js";
 
 const apiToken = "a".repeat(32);
 
@@ -234,6 +235,109 @@ describe("Barlas AI Agent API", () => {
     });
     expect(agentLoop.run).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-1", maxSteps: 4 }));
     expect(deps.database.saveTurn).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("applies an active skill and enforces its tool allowlist", async () => {
+    const deps = dependencies();
+    const skillRegistry = new SkillRegistry();
+    skillRegistry.register({
+      id: "research.safe",
+      version: "1.0.0",
+      description: "Safe research",
+      instructions: "Cite sources and state uncertainty.",
+      allowedTools: ["web.open"],
+    });
+    const agentLoop = {
+      run: vi.fn(async () => ({
+        status: "completed" as const,
+        text: "Skill result",
+        steps: 1,
+        toolExecutions: 0,
+        approvalIds: [],
+        result: { text: "Skill result", provider: "test", model: "test-model" },
+      })),
+    };
+    const app = await buildApp({ apiToken, ...deps, agentLoop, skillRegistry });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/agent/run",
+      headers: { authorization: `Bearer ${apiToken}` },
+      payload: {
+        userId: "user-1",
+        messages: [{ role: "user", content: "Research this" }],
+        skillId: "research.safe",
+        skillVersion: "1.0.0",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(agentLoop.run).toHaveBeenCalledWith(expect.objectContaining({
+      allowedTools: ["web.open"],
+      messages: expect.arrayContaining([
+        expect.objectContaining({ role: "system", content: expect.stringContaining("research.safe@1.0.0") }),
+      ]),
+    }));
+
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/v1/agent/run",
+      headers: { authorization: `Bearer ${apiToken}` },
+      payload: {
+        userId: "user-1",
+        messages: [{ role: "user", content: "Research this" }],
+        skillId: "research.safe",
+        allowedTools: ["files.write"],
+      },
+    });
+    expect(rejected.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("exposes the owner skill candidate, evaluation, and activation lifecycle", async () => {
+    const deps = dependencies();
+    const installed = {
+      id: "research.custom", version: "1.0.0", description: "Research", instructions: "Be precise.",
+      allowedTools: ["web.open"], active: false, createdBy: null, createdAt: "2026-10-16T00:00:00.000Z",
+    };
+    const skillManager = {
+      install: vi.fn(async () => installed),
+      evaluate: vi.fn(async () => ({
+        id: "00000000-0000-4000-8000-000000000090",
+        skillId: installed.id,
+        skillVersion: installed.version,
+        passed: true,
+        passedCases: 1,
+        totalCases: 1,
+        details: [{ name: "quality", passed: true, missing: [], forbidden: [] }],
+        createdBy: null,
+        createdAt: "2026-10-16T00:00:01.000Z",
+      })),
+      activate: vi.fn(async () => installed),
+    };
+    const app = await buildApp({ apiToken, ...deps, skillManager });
+    const headers = { authorization: `Bearer ${apiToken}` };
+    const created = await app.inject({
+      method: "POST", url: "/v1/skills", headers,
+      payload: {
+        id: installed.id, version: installed.version, description: installed.description,
+        instructions: installed.instructions, allowedTools: installed.allowedTools,
+      },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const evaluated = await app.inject({
+      method: "POST", url: `/v1/skills/${installed.id}/${installed.version}/evaluate`, headers,
+      payload: { cases: [{ name: "quality", prompt: "Research", requiredStrings: ["source"] }] },
+    });
+    expect(evaluated.statusCode).toBe(200);
+    expect(evaluated.json().evaluation.passed).toBe(true);
+
+    const activated = await app.inject({
+      method: "POST", url: `/v1/skills/${installed.id}/${installed.version}/activate`, headers,
+    });
+    expect(activated.statusCode).toBe(200);
+    expect(activated.json().skill).not.toHaveProperty("instructions");
     await app.close();
   });
 

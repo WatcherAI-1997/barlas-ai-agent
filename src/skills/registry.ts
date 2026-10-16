@@ -12,7 +12,7 @@ export class SkillRegistry {
   private readonly skills = new Map<string, Map<string, SkillDefinition>>();
   private readonly activeVersions = new Map<string, string>();
 
-  register(skill: SkillDefinition): void {
+  register(skill: SkillDefinition, activate = true): void {
     if (!/^[a-z][a-z0-9.-]{2,63}$/u.test(skill.id)) {
       throw new Error(`Invalid skill id: ${skill.id}`);
     }
@@ -23,7 +23,7 @@ export class SkillRegistry {
     if (versions.has(skill.version)) throw new Error(`Skill ${skill.id}@${skill.version} is already registered`);
     versions.set(skill.version, Object.freeze({ ...skill, allowedTools: [...skill.allowedTools] }));
     this.skills.set(skill.id, versions);
-    this.activeVersions.set(skill.id, skill.version);
+    if (activate) this.activeVersions.set(skill.id, skill.version);
   }
 
   get(id: string, version?: string): SkillDefinition {
@@ -38,6 +38,14 @@ export class SkillRegistry {
     if (!skill) throw new Error(`Unknown skill version: ${id}@${version}`);
     this.activeVersions.set(id, version);
     return skill;
+  }
+
+  has(id: string, version: string): boolean {
+    return this.skills.get(id)?.has(version) ?? false;
+  }
+
+  isActive(id: string, version: string): boolean {
+    return this.activeVersions.get(id) === version;
   }
 
   list(): SkillMetadata[] {

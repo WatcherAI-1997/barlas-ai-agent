@@ -41,7 +41,7 @@ nav button.active { background: #d82035; }
 .message { max-width: 82%; padding: .9rem 1rem; border-radius: 1rem; white-space: pre-wrap; line-height: 1.5; background: #17191e; }
 .message.user { align-self: flex-end; background: #49121b; }
 .message.agent { align-self: flex-start; border: 1px solid #292c34; }
-.composer { display: grid; grid-template-columns: 1fr 130px 130px; gap: .7rem; margin-top: 1rem; }
+.composer { display: grid; grid-template-columns: minmax(0, 1fr) 110px minmax(190px, 240px) 120px; gap: .7rem; margin-top: 1rem; }
 .composer textarea { min-height: 84px; resize: vertical; }
 .grid { display: grid; gap: .7rem; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .8rem; }

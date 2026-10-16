@@ -22,7 +22,7 @@
 - Asynchronous leased agent-run queue, live progress polling, and Telegram result delivery. *(implemented)*
 - Durable long-running job storage and schedules. *(worker, leases, retries implemented)*
 - Isolated subagents and resumable workflows. *(bounded dependency workflows with up to three parallel subagents implemented)*
-- Versioned skills with evaluation and rollback. *(multi-version registry, exact pinning, and active-version rollback implemented; automated evaluation pending)*
+- Versioned skills with evaluation and rollback. *(persistent owner-installed candidates, bounded automated acceptance evaluation, activation gate, exact selection, tool-permission enforcement, and rollback implemented)*
 - Approval queue and audit trail. *(foundation implemented)*
 - Execution traces and per-user quotas. *(implemented foundation)*
 - Admin controls, observability, and cost reporting. *(operations dashboard implemented)*

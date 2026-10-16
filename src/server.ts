@@ -19,6 +19,7 @@ import { OrganizationService } from "./organizations/service.js";
 import { OpenAIProvider } from "./providers/openai-provider.js";
 import { Database } from "./storage/database.js";
 import { createBuiltinSkillRegistry } from "./skills/registry.js";
+import { SkillManager } from "./skills/manager.js";
 import { createBuiltinToolRegistry } from "./tools/builtins.js";
 import { ToolExecutor } from "./tools/executor.js";
 import { ManagedBrowser } from "./tools/managed-browser.js";
@@ -92,6 +93,13 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   ...(githubConnector ? { githubConnector } : {}),
   ...(googleConnector ? { googleConnector } : {}),
 }), database, governance);
+const skillManager = new SkillManager(
+  database,
+  skillRegistry,
+  modelProvider,
+  () => toolExecutor.listTools().map((tool) => tool.name),
+);
+await skillManager.load();
 const agentLoop = new AgentLoop(
   modelProvider,
   toolExecutor,
@@ -159,6 +167,7 @@ const app = await buildApp({
   agentRuntime,
   toolExecutor,
   skillRegistry,
+  skillManager,
   governance,
   authService,
   telegramLinks,

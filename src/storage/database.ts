@@ -4,6 +4,7 @@ import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth
 import type { SupportedLanguageCode } from "../i18n/languages.js";
 import type { TelegramLink, TelegramLinkStore } from "../auth/telegram-link.js";
 import type { SemanticMemoryStore } from "../memory/semantic.js";
+import type { SkillEvaluation, SkillStore, StoredSkill } from "../skills/manager.js";
 import type {
   Organization,
   OrganizationMember,
@@ -35,7 +36,7 @@ import type {
   MemoryEntry,
 } from "./types.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -48,6 +49,90 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async ping(): Promise<void> {
     await this.pool.query("select 1");
+  }
+
+  async listSkillVersions(): Promise<StoredSkill[]> {
+    const result = await this.pool.query<SkillRow>(
+      `select id, version, description, instructions, allowed_tools, active, created_by, created_at
+       from skill_versions order by id, created_at, version`,
+    );
+    return result.rows.map(mapSkill);
+  }
+
+  async insertSkill(input: {
+    id: string;
+    version: string;
+    description: string;
+    instructions: string;
+    allowedTools: string[];
+    createdBy: string | null;
+  }): Promise<StoredSkill> {
+    const result = await this.pool.query<SkillRow>(
+      `insert into skill_versions
+         (id, version, description, instructions, allowed_tools, created_by)
+       values ($1, $2, $3, $4, $5::jsonb, $6)
+       returning id, version, description, instructions, allowed_tools, active, created_by, created_at`,
+      [input.id, input.version, input.description, input.instructions, JSON.stringify(input.allowedTools), input.createdBy],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Skill insert returned no row");
+    return mapSkill(row);
+  }
+
+  async saveSkillEvaluation(input: Omit<SkillEvaluation, "createdAt">): Promise<SkillEvaluation> {
+    const result = await this.pool.query<SkillEvaluationRow>(
+      `insert into skill_evaluations
+         (id, skill_id, skill_version, passed, passed_cases, total_cases, details, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+       returning id, skill_id, skill_version, passed, passed_cases, total_cases, details, created_by, created_at`,
+      [
+        input.id,
+        input.skillId,
+        input.skillVersion,
+        input.passed,
+        input.passedCases,
+        input.totalCases,
+        JSON.stringify(input.details),
+        input.createdBy,
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Skill evaluation insert returned no row");
+    return mapSkillEvaluation(row);
+  }
+
+  async latestSkillEvaluation(skillId: string, version: string): Promise<SkillEvaluation | null> {
+    const result = await this.pool.query<SkillEvaluationRow>(
+      `select id, skill_id, skill_version, passed, passed_cases, total_cases, details, created_by, created_at
+       from skill_evaluations where skill_id = $1 and skill_version = $2
+       order by created_at desc, id desc limit 1`,
+      [skillId, version],
+    );
+    const row = result.rows[0];
+    return row ? mapSkillEvaluation(row) : null;
+  }
+
+  async activateSkill(skillId: string, version: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("update skill_versions set active = false where id = $1 and active", [skillId]);
+      const result = await client.query(
+        "update skill_versions set active = true where id = $1 and version = $2",
+        [skillId, version],
+      );
+      if (result.rowCount !== 1) {
+        await client.query("rollback");
+        return false;
+      }
+      await client.query("commit");
+      return true;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async createOrganization(input: {
@@ -1551,4 +1636,54 @@ interface AccountRow {
   active: boolean;
   language_code: SupportedLanguageCode | null;
   created_at: Date;
+}
+
+interface SkillRow {
+  id: string;
+  version: string;
+  description: string;
+  instructions: string;
+  allowed_tools: string[];
+  active: boolean;
+  created_by: string | null;
+  created_at: Date;
+}
+
+interface SkillEvaluationRow {
+  id: string;
+  skill_id: string;
+  skill_version: string;
+  passed: boolean;
+  passed_cases: number;
+  total_cases: number;
+  details: SkillEvaluation["details"];
+  created_by: string | null;
+  created_at: Date;
+}
+
+function mapSkill(row: SkillRow): StoredSkill {
+  return {
+    id: row.id,
+    version: row.version,
+    description: row.description,
+    instructions: row.instructions,
+    allowedTools: row.allowed_tools,
+    active: row.active,
+    createdBy: row.created_by,
+    createdAt: row.created_at.toISOString(),
+  };
+}
+
+function mapSkillEvaluation(row: SkillEvaluationRow): SkillEvaluation {
+  return {
+    id: row.id,
+    skillId: row.skill_id,
+    skillVersion: row.skill_version,
+    passed: row.passed,
+    passedCases: row.passed_cases,
+    totalCases: row.total_cases,
+    details: row.details,
+    createdBy: row.created_by,
+    createdAt: row.created_at.toISOString(),
+  };
 }

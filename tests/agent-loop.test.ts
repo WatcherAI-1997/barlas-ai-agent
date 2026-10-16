@@ -67,6 +67,20 @@ describe("Barlas AI Agent autonomous loop", () => {
     }));
   });
 
+  it("completes a long sequential tool plan within the bounded loop", async () => {
+    const model = provider([
+      ...Array.from({ length: 6 }, (_value, index) => ({
+        calls: [{ callId: `call-${index + 1}`, name: "system_time", arguments: {} }],
+      })),
+      { text: "All six verified steps are complete." },
+    ]);
+    const execute = vi.fn(async () => ({ status: "completed" as const, output: { ok: true } }));
+    const result = await new AgentLoop(model, tools(execute), 8).run(request);
+
+    expect(result).toMatchObject({ status: "completed", steps: 7, toolExecutions: 6 });
+    expect(execute).toHaveBeenCalledTimes(6);
+  });
+
   it("pauses before executing a risky action", async () => {
     const model = provider([{ calls: [{ callId: "call-1", name: "system_time", arguments: {} }] }]);
     const execute = vi.fn(async () => ({

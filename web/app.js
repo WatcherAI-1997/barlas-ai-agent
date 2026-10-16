@@ -1,4 +1,4 @@
-const state = { token: sessionStorage.getItem("barlasToken"), account: null, conversationId: null, languages: [] };
+const state = { token: sessionStorage.getItem("barlasToken"), account: null, conversationId: null, languages: [], skills: [] };
 const $ = (selector) => document.querySelector(selector);
 
 async function api(path, options = {}) {
@@ -65,8 +65,19 @@ async function showApp(account) {
   fillLanguageSelect("#new-language", "", true);
   $("#identity").textContent = `${account.displayName} · ${account.role}`;
   $("#users-tab").classList.toggle("hidden", account.role !== "owner");
+  await loadSkillOptions();
   newConversation();
   loadPanel("overview").catch((error) => alert(error.message));
+}
+
+async function loadSkillOptions() {
+  const data = await api("/v1/skills");
+  state.skills = data.skills;
+  const active = state.skills.filter((skill) => skill.active);
+  $("#skill-select").replaceChildren(
+    new Option("Без специального навыка", ""),
+    ...active.map((skill) => new Option(`${skill.id} · v${skill.version}`, `${skill.id}@${skill.version}`)),
+  );
 }
 
 function addMessage(kind, text) {
@@ -123,7 +134,10 @@ $("#chat-form").addEventListener("submit", async (event) => {
   event.preventDefault(); const input = $("#chat-input"); const text = input.value.trim(); if (!text) return;
   addMessage("user", text); input.value = "";
   try {
-    const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, messages: [{ role: "user", content: text }], taskClass: $("#task-class").value }) });
+    const selectedSkill = $("#skill-select").value;
+    const split = selectedSkill.lastIndexOf("@");
+    const skill = split > 0 ? { skillId: selectedSkill.slice(0, split), skillVersion: selectedSkill.slice(split + 1) } : {};
+    const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, messages: [{ role: "user", content: text }], taskClass: $("#task-class").value, ...skill }) });
     state.conversationId = data.conversationId;
     const statusNode = addMessage("agent", data.message.content);
     if (data.status === "queued" && data.runId) void watchAgentRun(data.runId, statusNode);
@@ -166,7 +180,10 @@ async function loadPanel(name) {
   if (name === "runs") await loadRuns();
   if (name === "jobs") await loadJobs();
   if (name === "traces") renderList("#traces", (await api(`/v1/traces?userId=${encodeURIComponent(state.account.id)}`)).traces, (item) => card(item.operation, `${item.status} · ${new Date(item.createdAt).toLocaleString()}`, item.traceId));
-  if (name === "skills") renderList("#skills", (await api("/v1/skills")).skills, (item) => card(item.id, `v${item.version} · ${item.allowedTools.join(", ")}`, item.description));
+  if (name === "skills") {
+    await loadSkillOptions();
+    renderList("#skills", state.skills, (item) => card(item.id, `v${item.version} · ${item.active ? "active" : "candidate"} · ${item.allowedTools.join(", ")}`, item.description));
+  }
   if (name === "organizations") await loadOrganizations();
   if (name === "connectors") await loadConnectors();
   if (name === "settings") fillLanguageSelect("#language-settings-select", state.account.languageCode);
