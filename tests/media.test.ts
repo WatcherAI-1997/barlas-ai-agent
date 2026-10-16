@@ -74,4 +74,15 @@ describe("secure multimodal media service", () => {
     await expect(service.createSpeech("alice", "media/reply.wav", "Salam", "alloy"))
       .rejects.toThrow(/\.mp3/i);
   });
+
+  it("processes an ephemeral voice turn without writing the microphone recording", async () => {
+    await expect(service.transcribeUpload(wav, "voice.wav", "audio/wav;codecs=pcm", "ru"))
+      .resolves.toEqual({ mimeType: "audio/wav", text: "audio result" });
+    await expect(service.createSpeechBuffer("Ответ", "nova"))
+      .resolves.toMatchObject({ content: Buffer.from("generated mp3"), mimeType: "audio/mpeg", voice: "nova" });
+    await expect(service.transcribeUpload(png, "voice.png", "image/png"))
+      .rejects.toThrow(/audio/i);
+    expect(model.transcribeAudio).toHaveBeenCalledWith(expect.objectContaining({ filename: "voice.wav", language: "ru" }));
+    await expect(service.transcribeAudio("alice", "voice.wav")).rejects.toThrow();
+  });
 });

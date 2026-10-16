@@ -85,8 +85,10 @@
                   <option value="">Без специального навыка</option>
                 </select>
                 <select id="chat-project" aria-label="Проект"><option value="">Без проекта</option></select>
+                <button id="voice-toggle" class="voice-button secondary" type="button" aria-label="Начать голосовой ввод" aria-pressed="false" title="Голосовой режим">🎙</button>
                 <button type="submit">Отправить</button>
               </form>
+              <p id="voice-status" class="meta voice-status" role="status">Голос выключен. Микрофон включается только после нажатия кнопки.</p>
               <form id="media-upload-form" class="inline-form">
                 <input id="media-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/webm" required>
                 <input id="media-path" maxlength="1000" placeholder="Путь, например media/photo.png" required>

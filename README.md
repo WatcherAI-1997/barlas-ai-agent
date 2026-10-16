@@ -54,6 +54,7 @@ preserve project state.
 | 🖥️ | **Real tools** | Files, documents, web research, JavaScript browser, offline Python/Node/Git/npm sandbox, MCP, and connected services. |
 | 👁️ | **Multimodal understanding** | Images, scanned PDFs, audio transcription, speech generation, and Unicode document workflows. |
 | 🎙️ | **Telegram voice mode** | `/voice` and `/call` return an agent answer as a bounded Telegram voice message through the official Bot API. |
+| 🗣️ | **Private push-to-talk** | The web chat records only after an explicit click, discards microphone audio after transcription, keeps conversation context, and plays the spoken answer. |
 | 📁 | **Project operating system** | Goals, ordered plans, checkpoints, linked runs, immutable artifact versions, and recoverable results. |
 | 🛡️ | **Human control** | External, write, and destructive operations stop before execution and require approval of the exact stored request. |
 

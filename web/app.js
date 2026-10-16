@@ -3,7 +3,7 @@ if (fragmentToken) {
   sessionStorage.setItem("barlasToken", fragmentToken);
   history.replaceState(null, "", `${location.pathname}${location.search}`);
 }
-const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [] };
+const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [], voiceRecorder: null, voiceStream: null, voiceChunks: [], voiceTimer: null };
 const $ = (selector) => document.querySelector(selector);
 const panelTitles = {
   overview: "Обзор", chat: "Чат", approvals: "Подтверждения", runs: "Запуски",
@@ -124,8 +124,17 @@ async function showApp(account) {
   $("#users-tab").classList.toggle("hidden", account.role !== "owner");
   await loadSkillOptions();
   await loadProjectOptions();
+  await loadVoiceAvailability();
   newConversation();
   loadPanel("overview").catch((error) => notify(error.message, "error"));
+}
+
+async function loadVoiceAvailability() {
+  const status = await api("/v1/voice/status");
+  $("#voice-toggle").disabled = !status.available;
+  $("#voice-status").textContent = status.available
+    ? "Голос выключен. Микрофон включается только после нажатия кнопки."
+    : "Голос недоступен: настройте media API для распознавания и озвучивания.";
 }
 
 async function loadSkillOptions() {
@@ -197,6 +206,107 @@ $("#chat-form").addEventListener("submit", async (event) => {
     if (data.status === "waiting_approval") await loadApprovals();
   } catch (error) { addMessage("agent", `Ошибка: ${error.message}`); }
 });
+
+function preferredRecordingType() {
+  for (const type of ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"]) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return "";
+}
+
+function stopVoiceTracks() {
+  if (state.voiceTimer) clearTimeout(state.voiceTimer);
+  state.voiceTimer = null;
+  state.voiceStream?.getTracks().forEach((track) => track.stop());
+  state.voiceStream = null;
+}
+
+async function playVoiceAudio(audio) {
+  const bytes = Uint8Array.from(atob(audio.base64), (character) => character.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: audio.mimeType }));
+  const player = new Audio(url);
+  player.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
+  player.addEventListener("error", () => URL.revokeObjectURL(url), { once: true });
+  await player.play();
+}
+
+async function submitVoiceTurn(blob, extension) {
+  const button = $("#voice-toggle");
+  const status = $("#voice-status");
+  button.disabled = true;
+  status.textContent = "Распознаю речь и готовлю ответ…";
+  try {
+    const formData = new FormData();
+    formData.append("file", blob, `voice.${extension}`);
+    const query = new URLSearchParams({
+      userId: state.account.id,
+      taskClass: $("#task-class").value,
+      consent: "true",
+      ...(state.conversationId ? { conversationId: state.conversationId } : {}),
+    });
+    const data = await upload(`/v1/voice/turn?${query}`, formData);
+    state.conversationId = data.conversationId;
+    addMessage("user", data.transcript);
+    addMessage("agent", data.message.content);
+    status.textContent = data.audio.truncated
+      ? "Ответ озвучен частично; полный текст показан в чате."
+      : "Ответ озвучен. Микрофон выключен.";
+    await loadConversations();
+    await playVoiceAudio(data.audio).catch(() => notify("Браузер заблокировал автовоспроизведение — текст ответа сохранён.", "error"));
+  } catch (error) {
+    status.textContent = `Ошибка голоса: ${error.message}`;
+  } finally {
+    button.disabled = false;
+    button.setAttribute("aria-pressed", "false");
+    button.textContent = "🎙";
+  }
+}
+
+$("#voice-toggle").addEventListener("click", async () => {
+  const button = $("#voice-toggle");
+  const status = $("#voice-status");
+  if (state.voiceRecorder?.state === "recording") {
+    state.voiceRecorder.stop();
+    button.disabled = true;
+    status.textContent = "Завершаю запись…";
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    notify("Этот браузер не поддерживает голосовую запись.", "error");
+    return;
+  }
+  try {
+    const mimeType = preferredRecordingType();
+    state.voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.voiceChunks = [];
+    state.voiceRecorder = new MediaRecorder(state.voiceStream, mimeType ? { mimeType } : undefined);
+    state.voiceRecorder.addEventListener("dataavailable", (event) => {
+      if (event.data.size > 0) state.voiceChunks.push(event.data);
+    });
+    state.voiceRecorder.addEventListener("stop", () => {
+      const actualType = state.voiceRecorder.mimeType || mimeType || "audio/webm";
+      const extension = actualType.includes("ogg") ? "ogg" : "webm";
+      const blob = new Blob(state.voiceChunks, { type: actualType });
+      stopVoiceTracks();
+      state.voiceRecorder = null;
+      void submitVoiceTurn(blob, extension);
+    }, { once: true });
+    state.voiceRecorder.start(250);
+    state.voiceTimer = setTimeout(() => {
+      if (state.voiceRecorder?.state === "recording") state.voiceRecorder.stop();
+    }, 120_000);
+    button.setAttribute("aria-pressed", "true");
+    button.textContent = "■";
+    status.textContent = "Слушаю только сейчас. Нажмите ещё раз, чтобы отправить фразу.";
+  } catch (error) {
+    stopVoiceTracks();
+    status.textContent = error.name === "NotAllowedError"
+      ? "Доступ к микрофону не разрешён. Измените разрешение сайта, если хотите использовать голос."
+      : `Не удалось включить микрофон: ${error.message}`;
+  }
+});
+
+window.addEventListener("pagehide", stopVoiceTracks);
 
 $("#media-file").addEventListener("change", (event) => {
   const file = event.target.files[0];

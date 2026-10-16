@@ -31,6 +31,10 @@
 - Multimodal image, document, and audio understanding. *(magic-byte-validated
   uploads, approval-gated image/PDF analysis, audio transcription, and MP3
   speech generation implemented; live provider quality evaluation pending)*
+- Consent-gated voice conversation. *(web push-to-talk implemented with
+  ephemeral microphone audio, contextual turns, spoken replies, immediate
+  track shutdown, and metadata-only audit; interruptible full-duplex streaming
+  remains provider-dependent future work)*
 - Execution traces and per-user quotas. *(implemented foundation)*
 - Admin controls, observability, and cost reporting. *(operations dashboard and
   owner-only, label-free Prometheus metrics implemented)*

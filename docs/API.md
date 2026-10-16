@@ -452,6 +452,19 @@ and are invalidated after use. Once linked, web and Telegram share the same
 account ID, memory, conversations, quotas, approvals, and permissions. A
 Telegram identity already linked to another account cannot be silently moved.
 
+## Web voice turns
+
+`GET /v1/voice/status` reports whether transcription and speech generation are
+configured. `POST /v1/voice/turn` accepts one magic-byte-validated audio file,
+only when the request includes `consent=true`, and runs a contextual chat turn.
+It returns the transcript, complete assistant text, and a bounded MP3 reply.
+The microphone recording is held only for that request and is not written to
+the workspace. The audit event contains byte counts, MIME type, selected voice,
+and truncation state, but never the transcript or answer. The browser stops all
+microphone tracks immediately after the user ends the recording and also on
+page exit. This is push-to-talk, not passive listening or a claimed native
+telephone call.
+
 ## Safety model
 
 Read-only tools may execute immediately. Write, external, and destructive tools

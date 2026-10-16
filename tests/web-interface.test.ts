@@ -21,6 +21,8 @@ describe("Barlas web interface", () => {
       'aria-live="polite"',
       'id="detail-dialog"',
       'aria-labelledby="dialog-title"',
+      'id="voice-toggle"',
+      'aria-pressed="false"',
     ]) expect(html).toContain(marker);
     expect(html).not.toMatch(/<script[^>]*>[^<]+<\/script>/u);
 
@@ -38,6 +40,9 @@ describe("Barlas web interface", () => {
       "aria-current",
       "navigator.clipboard.writeText",
       "closeNavigation",
+      "navigator.mediaDevices.getUserMedia",
+      "function stopVoiceTracks(",
+      'consent: "true"',
     ]) expect(script).toContain(marker);
     expect(script).not.toContain("alert(");
   });

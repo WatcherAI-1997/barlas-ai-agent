@@ -92,6 +92,27 @@ export class MediaService {
     return { path: file.path, mimeType: detected.mimeType, text };
   }
 
+  async transcribeUpload(content: Buffer, filename: string, declaredMimeType?: string, language?: string) {
+    if (content.byteLength === 0) throw new Error("Audio recording is empty");
+    if (content.byteLength > MAX_MEDIA_BYTES) throw new Error("Audio recording exceeds the 10 MB limit");
+    const detected = detectMedia(content);
+    if (detected.kind !== "audio") throw new Error("The uploaded recording is not supported audio");
+    assertExtension(filename, detected);
+    if (declaredMimeType && declaredMimeType !== "application/octet-stream") {
+      const normalized = declaredMimeType.toLowerCase().split(";", 1)[0]!;
+      if (!mimeAliases(detected.mimeType).includes(normalized)) {
+        throw new Error("Declared audio type does not match recording contents");
+      }
+    }
+    const text = await this.model.transcribeAudio({
+      content,
+      filename,
+      mimeType: detected.mimeType,
+      ...(language ? { language } : {}),
+    });
+    return { mimeType: detected.mimeType, text };
+  }
+
   async createSpeech(userId: string, path: string, text: string, voice: SpeechVoice) {
     if (extname(path).toLowerCase() !== ".mp3") throw new Error("Generated speech path must end in .mp3");
     const content = await this.model.createSpeech({ text, voice });
@@ -100,6 +121,14 @@ export class MediaService {
     }
     const stored = await this.workspace.writeBuffer(userId, path, content);
     return { ...stored, mimeType: "audio/mpeg", voice };
+  }
+
+  async createSpeechBuffer(text: string, voice: SpeechVoice) {
+    const content = await this.model.createSpeech({ text, voice });
+    if (content.byteLength === 0 || content.byteLength > MAX_MEDIA_BYTES) {
+      throw new Error("Generated speech exceeds the allowed media size");
+    }
+    return { content, mimeType: "audio/mpeg" as const, voice };
   }
 }
 

@@ -923,6 +923,52 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("runs a consent-gated ephemeral voice turn and returns playable speech", async () => {
+    const deps = dependencies();
+    const media = {
+      saveUpload: vi.fn(),
+      transcribeUpload: vi.fn(async () => ({ mimeType: "audio/webm", text: "Расскажи план" })),
+      createSpeechBuffer: vi.fn(async () => ({
+        content: Buffer.from("ID3spoken-answer"), mimeType: "audio/mpeg" as const, voice: "alloy" as const,
+      })),
+    };
+    const app = await buildApp({ apiToken, ...deps, media });
+    const boundary = "barlas-voice-boundary";
+    const audio = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4]);
+    const payload = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="voice.webm"\r\nContent-Type: audio/webm\r\n\r\n`),
+      audio,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const withoutConsent = await app.inject({
+      method: "POST", url: "/v1/voice/turn?userId=user-1",
+      headers: { authorization: `Bearer ${apiToken}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload,
+    });
+    const response = await app.inject({
+      method: "POST", url: "/v1/voice/turn?userId=user-1&consent=true&taskClass=fast&voice=alloy",
+      headers: { authorization: `Bearer ${apiToken}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload,
+    });
+
+    expect(withoutConsent.statusCode).toBe(400);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      transcript: "Расскажи план",
+      message: { role: "assistant", content: "Hello from Barlas AI Agent" },
+      audio: { mimeType: "audio/mpeg", base64: Buffer.from("ID3spoken-answer").toString("base64"), voice: "alloy" },
+    });
+    expect(media.transcribeUpload).toHaveBeenCalledWith(audio, "voice.webm", "audio/webm", undefined);
+    expect(deps.database.saveTurn).toHaveBeenCalledWith(expect.objectContaining({
+      messages: [{ role: "user", content: "Расскажи план" }],
+    }));
+    expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "voice.turn.completed",
+      details: expect.not.objectContaining({ transcript: expect.anything(), content: expect.anything() }),
+    }));
+    await app.close();
+  });
+
   it("lists, uploads, and downloads only through the authenticated workspace", async () => {
     const deps = dependencies();
     const workspace = {

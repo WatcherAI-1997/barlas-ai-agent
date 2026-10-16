@@ -1,9 +1,9 @@
 # Release readiness
 
-## Verified on 2026-10-16
+## Verified on 2026-10-17
 
 - TypeScript typecheck and production build pass.
-- 143 automated tests across 41 files pass.
+- 175 automated tests across 51 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -46,6 +46,10 @@
 - Telegram voice tests cover explicit `/voice` and `/call` parsing, bounded MP3
   generation in the owned workspace, multipart `sendVoice`, honest native-call
   limitation messaging, and voice-delivery metadata without answer content.
+- Web voice tests cover explicit consent, bounded magic-byte-validated audio,
+  ephemeral transcription without workspace persistence, contextual chat,
+  bounded speech output, immediate browser track shutdown, and metadata-only
+  audit events.
 - An isolated live load smoke completed 1,000 `/health` and `/ready` requests at
   concurrency 50 with zero failures and 37.7 ms p95 latency on the test host.
 - A PostgreSQL custom dump restored into a separate disposable PostgreSQL 17
@@ -60,7 +64,7 @@ deployment, resolve findings, rotate test credentials, and record the reviewed
 commit SHA. The Codex Security plugin has been suggested for this independent
 pass but was not installed during this run.
 
-## Staged release gates
+## Hosted production release gates
 
 1. Configure dedicated production secrets, model key, owner, domain, and bot.
 2. Store the connector vault key and backup encryption material off-host.
@@ -74,7 +78,9 @@ pass but was not installed during this run.
 8. Run `npm run eval:agent` against the pinned production-candidate models and
    retain the reviewed report with the deployed commit and model IDs.
 
-Public launch remains intentionally blocked until final credentials and the
-operator-selected domain/bot are supplied; no existing working agent is reused.
+The public source and domain-free native Windows installer are available now.
+A separately hosted multi-user production service remains intentionally blocked
+until the operator supplies dedicated credentials and completes the gates above;
+no existing working agent is reused.
 The privacy/terms/acceptable-use/security documents are operational templates,
 not legal advice, and require counsel review for the selected jurisdiction.

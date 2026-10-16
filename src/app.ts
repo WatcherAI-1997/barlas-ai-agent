@@ -44,7 +44,7 @@ import type { SkillManager } from "./skills/manager.js";
 import { parseSignedSkillPackageValue, verifySkillPackage } from "./skills/package.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
-import { MAX_MEDIA_BYTES, type MediaService } from "./tools/media.js";
+import { MAX_MEDIA_BYTES, speechVoices, type MediaService } from "./tools/media.js";
 import { DEFAULT_MAX_WORKSPACE_FILE_BYTES, type FileWorkspace } from "./tools/file-workspace.js";
 import type { ScheduleService } from "./schedules/service.js";
 import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } from "./projects/service.js";
@@ -154,6 +154,14 @@ const toolExecutionSchema = z.object({
 const mediaUploadQuerySchema = z.object({
   userId: z.string().min(1).max(128),
   path: z.string().min(1).max(1_000),
+}).strict();
+const voiceTurnQuerySchema = z.object({
+  userId: z.string().min(1).max(128),
+  conversationId: z.string().uuid().optional(),
+  taskClass: z.enum(["fast", "deep", "private"]).default("fast"),
+  voice: z.enum(speechVoices).default("alloy"),
+  language: z.string().regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/u).optional(),
+  consent: z.literal("true"),
 }).strict();
 const fileQuerySchema = z.object({
   userId: z.string().min(1).max(128), path: z.string().min(1).max(1_000).default("."),
@@ -358,7 +366,7 @@ export interface AppDependencies {
   googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
   memory?: Pick<SemanticMemory, "remember" | "recall">;
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
-  media?: Pick<MediaService, "saveUpload"> & Partial<Pick<MediaService, "createSpeech">>;
+  media?: Pick<MediaService, "saveUpload"> & Partial<Pick<MediaService, "createSpeech" | "transcribeUpload" | "createSpeechBuffer">>;
   workspace?: Pick<FileWorkspace, "list" | "readBuffer" | "writeUpload"> & Partial<Pick<FileWorkspace, "streamForRead" | "writeUploadStream">>;
   maxWorkspaceFileBytes?: number;
   projects?: Pick<ProjectService, "create" | "list" | "detail" | "context" | "attach" | "snapshot" | "restore" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "recordRunResult">;
@@ -426,7 +434,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     }
     reply.header(
       "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
     );
     return payload;
   });
@@ -1166,6 +1174,67 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       },
       memoriesUsed,
       traceId,
+    };
+  });
+
+  app.get("/v1/voice/status", async () => ({
+    available: Boolean(dependencies.media?.transcribeUpload && dependencies.media.createSpeechBuffer),
+    mode: "push-to-talk",
+    microphoneConsent: "explicit",
+    recordingRetention: "none",
+  }));
+
+  app.post("/v1/voice/turn", async (request, reply) => {
+    if (!dependencies.media?.transcribeUpload || !dependencies.media.createSpeechBuffer) return reply.notFound();
+    const query = voiceTurnQuerySchema.safeParse(request.query);
+    if (!query.success) return reply.badRequest("Voice requires explicit microphone consent and valid settings");
+    const userId = authorizeUser(request, query.data.userId);
+    if (!request.isMultipart()) return reply.badRequest("Expected multipart audio recording");
+    const part = await request.file({ limits: { fileSize: MAX_MEDIA_BYTES + 1, files: 1, fields: 0, parts: 1 } });
+    if (!part) return reply.badRequest("Audio recording is required");
+    const content = await part.toBuffer();
+    if (part.file.truncated || content.byteLength > MAX_MEDIA_BYTES) {
+      return reply.payloadTooLarge("Audio recording exceeds the 10 MB limit");
+    }
+    const transcript = await dependencies.media.transcribeUpload(
+      content,
+      part.filename,
+      part.mimetype,
+      query.data.language,
+    );
+    const text = transcript.text.trim();
+    if (!text) return reply.badRequest("No speech was detected");
+    const chat = await runChat({
+      userId,
+      ...(query.data.conversationId ? { conversationId: query.data.conversationId } : {}),
+      messages: [{ role: "user", content: text }],
+      taskClass: query.data.taskClass,
+    });
+    const spokenText = chat.result.text.slice(0, 4_096);
+    const speech = await dependencies.media.createSpeechBuffer(spokenText, query.data.voice);
+    await dependencies.database.appendAudit({
+      userId,
+      eventType: "voice.turn.completed",
+      resourceType: "conversation",
+      resourceId: chat.conversationId,
+      details: {
+        inputBytes: content.byteLength,
+        inputMimeType: transcript.mimeType,
+        outputBytes: speech.content.byteLength,
+        voice: speech.voice,
+        truncated: spokenText.length < chat.result.text.length,
+      },
+    });
+    return {
+      conversationId: chat.conversationId,
+      transcript: text,
+      message: { role: "assistant", content: chat.result.text },
+      audio: {
+        mimeType: speech.mimeType,
+        base64: speech.content.toString("base64"),
+        voice: speech.voice,
+        truncated: spokenText.length < chat.result.text.length,
+      },
     };
   });
 
