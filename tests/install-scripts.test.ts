@@ -32,6 +32,10 @@ describe("production installer", () => {
       "RandomNumberGenerator",
       'BROWSER_WS_ENDPOINT = "local://chromium"',
       "scripts\\start-native.ps1",
+      "BARLAS PERSONAL SETUP",
+      "Read-MenuChoice",
+      "Ollama local and private (no cloud key)",
+      '"qwen3:8b"',
     ]) expect(installer).toContain(required);
     expect(installer).not.toContain("Docker");
     expect(doctor).toContain("Docker and WSL are not used");
@@ -63,8 +67,8 @@ describe("production installer", () => {
       "barlas.cmd",
       'Start-Process ([string]$DashboardUrl).Trim()',
       "Show-PixelBanner",
-      'Write-Host "  ●   ●  "',
-      'Write-Host "    ●    "',
+      '"████  ███  ████  █     ███  ████"',
+      '"           A I   A G E N T"',
       "[$Number/5]",
       "install.log",
       '"ci", "--include=dev", "--ignore-scripts"',

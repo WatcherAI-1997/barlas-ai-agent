@@ -56,9 +56,23 @@ function Read-Secret([string]$Prompt) {
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($Pointer) }
 }
 function Read-Choice([string]$Prompt, [string[]]$Choices, [string]$Default) {
-    $Answer = (Read-Plain "$Prompt ($($Choices -join '/'))" $Default).ToLowerInvariant()
-    if ($Answer -notin $Choices) { throw "Choose one of: $($Choices -join ', ')" }
-    return $Answer
+    Write-Host ""
+    Write-Host $Prompt -ForegroundColor Cyan
+    for ($Index = 0; $Index -lt $Choices.Count; $Index++) {
+        $DefaultMarker = if ($Choices[$Index] -eq $Default) { " (default)" } else { "" }
+        Write-Host "  [$($Index + 1)] $($Choices[$Index])$DefaultMarker"
+    }
+    while ($true) {
+        $DefaultNumber = 1 + [Array]::IndexOf($Choices, $Default)
+        $Answer = (Read-Host "Choose 1-$($Choices.Count) [$DefaultNumber]").Trim().ToLowerInvariant()
+        if (-not $Answer) { return $Default }
+        if ($Answer -match '^\d+$') {
+            $Selected = [int]$Answer - 1
+            if ($Selected -ge 0 -and $Selected -lt $Choices.Count) { return $Choices[$Selected] }
+        }
+        if ($Answer -in $Choices) { return $Answer }
+        Write-Host "Choose a menu number or one of: $($Choices -join ', ')" -ForegroundColor Yellow
+    }
 }
 function Write-Step([int]$Number, [int]$Total, [string]$Title) {
     Write-Host "`n[$Number/$Total] $Title" -ForegroundColor Cyan

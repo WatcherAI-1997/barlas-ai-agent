@@ -23,6 +23,46 @@ function Read-Value([string]$Name, [string]$Label, [string]$Default = "", [switc
     return $Value
 }
 
+function Read-MenuChoice([string]$EnvironmentName, [string]$Title, [string[]]$Values, [string[]]$Labels, [string]$Default) {
+    if ($Values.Count -ne $Labels.Count) { throw "Invalid setup menu" }
+    $EnvironmentValue = if ($EnvironmentName) { [Environment]::GetEnvironmentVariable($EnvironmentName) } else { "" }
+    if (-not [string]::IsNullOrWhiteSpace($EnvironmentValue)) { return $EnvironmentValue.ToLowerInvariant() }
+    if ($NonInteractive) { return $Default }
+    Write-Host ""
+    Write-Host $Title -ForegroundColor Cyan
+    for ($Index = 0; $Index -lt $Values.Count; $Index++) {
+        $DefaultMarker = if ($Values[$Index] -eq $Default) { " (default)" } else { "" }
+        Write-Host "  [$($Index + 1)] $($Labels[$Index])$DefaultMarker"
+    }
+    while ($true) {
+        $DefaultNumber = 1 + [Array]::IndexOf($Values, $Default)
+        $Answer = (Read-Host "Choose 1-$($Values.Count) [$DefaultNumber]").Trim().ToLowerInvariant()
+        if (-not $Answer) { return $Default }
+        if ($Answer -match '^\d+$') {
+            $Selected = [int]$Answer - 1
+            if ($Selected -ge 0 -and $Selected -lt $Values.Count) { return $Values[$Selected] }
+        }
+        $Exact = [Array]::IndexOf($Values, $Answer)
+        if ($Exact -ge 0) { return $Values[$Exact] }
+        foreach ($Candidate in $Values) { if ($Answer.StartsWith($Candidate)) { return $Candidate } }
+        Write-Host "Choose a menu number or one of: $($Values -join ', ')" -ForegroundColor Yellow
+    }
+}
+
+function Read-OwnerLanguage {
+    $EnvironmentValue = [Environment]::GetEnvironmentVariable("OWNER_LANGUAGE")
+    if (-not [string]::IsNullOrWhiteSpace($EnvironmentValue)) { return $EnvironmentValue.ToLowerInvariant() }
+    if ($NonInteractive) { return "" }
+    $Choice = Read-MenuChoice "" "Interface language" @("ru", "en", "later", "other") @("Русский", "English", "Choose later in the web cabinet", "Another language code") "ru"
+    if ($Choice -eq "later") { return "" }
+    if ($Choice -ne "other") { return $Choice }
+    while ($true) {
+        $Code = (Read-Host "Language code").Trim().ToLowerInvariant()
+        if ($Code -in $SupportedLanguageCodes) { return $Code }
+        Write-Host "Unsupported code. Examples: ru, en, tr, az, uz, kk, ky, tt, mn." -ForegroundColor Yellow
+    }
+}
+
 function New-RandomHex([int]$Bytes) {
     $Buffer = New-Object byte[] $Bytes
     ([Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($Buffer)
@@ -50,13 +90,16 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     Protect-SecretFile $EnvFile
     Write-Host "[OK] Using existing protected native configuration" -ForegroundColor Green
 } else {
+    Write-Host ""
+    Write-Host "BARLAS PERSONAL SETUP" -ForegroundColor White
+    Write-Host "Choose menu numbers. Press Enter to accept a default." -ForegroundColor DarkGray
     $Port = Read-Value "BARLAS_HTTP_PORT" "Local web port" "17840"
     $OwnerEmail = Read-Value "OWNER_EMAIL" "First owner email (local identity only)" "owner@barlas.local"
     $OwnerDisplayName = Read-Value "OWNER_DISPLAY_NAME" "First owner display name" "Barlas Owner"
-    $OwnerLanguage = Read-Value "OWNER_LANGUAGE" "Owner language code; blank means choose on first login"
-    $ModelProvider = (Read-Value "MODEL_PROVIDER" "Model provider (openai, anthropic, or local ollama)" "openai").ToLowerInvariant()
-    if ($ModelProvider -notin @("openai", "anthropic", "ollama")) { throw "Model provider must be openai, anthropic, or ollama" }
-    $ModelName = Read-Value "MODEL_NAME" "Fast/default model name"
+    $OwnerLanguage = Read-OwnerLanguage
+    $ModelProvider = Read-MenuChoice "MODEL_PROVIDER" "Model provider" @("openai", "anthropic", "ollama") @("OpenAI API (cloud key required)", "Anthropic API (cloud key required)", "Ollama local and private (no cloud key)") "openai"
+    $DefaultModel = if ($ModelProvider -eq "ollama") { "qwen3:8b" } elseif ($ModelProvider -eq "anthropic") { "claude-sonnet-4-5" } else { "gpt-5" }
+    $ModelName = Read-Value "MODEL_NAME" "Fast/default model name" $DefaultModel
     $DeepModelName = Read-Value "DEEP_MODEL_NAME" "Deep model name" $ModelName
     $MediaApiKey = ""
     if ($ModelProvider -ne "openai") {
