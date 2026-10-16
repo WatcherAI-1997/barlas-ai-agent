@@ -105,7 +105,7 @@ try {
         Write-Step 3 "Building application (this may take a few minutes)"
         Push-Location $AppDir
         try {
-            Invoke-NativeCommand $NpmCmd @("ci", "--ignore-scripts", "--no-fund", "--no-audit") "Dependency installation failed"
+            Invoke-NativeCommand $NpmCmd @("ci", "--include=dev", "--ignore-scripts", "--no-fund", "--no-audit") "Dependency installation failed"
             Invoke-NativeCommand $NpmCmd @("run", "build") "Barlas build failed"
         } finally { Pop-Location }
         Write-Done "Application ready"

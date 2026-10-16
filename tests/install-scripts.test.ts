@@ -67,7 +67,7 @@ describe("production installer", () => {
       'Write-Host "    ●    "',
       "[$Number/5]",
       "install.log",
-      '"ci", "--ignore-scripts"',
+      '"ci", "--include=dev", "--ignore-scripts"',
       "Last installer log lines:",
       "RestoredEnv",
       "RestoredBuild",
