@@ -1,0 +1,39 @@
+# Release readiness
+
+## Verified on 2026-10-16
+
+- TypeScript typecheck and production build pass.
+- 71 automated tests across 23 files pass.
+- `npm audit --audit-level=low` reports zero known vulnerabilities.
+- The repository security baseline scans tracked text files for common committed
+  key formats and verifies container, terminal, and secret-ignore invariants.
+- All fourteen SQL migrations apply twice to a clean PostgreSQL 17 database.
+- The production Docker image builds and runs read-only with dropped capabilities.
+- An isolated live load smoke completed 1,000 `/health` and `/ready` requests at
+  concurrency 50 with zero failures and 37.7 ms p95 latency on the test host.
+- A PostgreSQL custom dump restored into a separate disposable PostgreSQL 17
+  instance; the recovery sentinel and all 18 public tables were present.
+- Test containers, networks, and volumes were removed after verification.
+
+## Security boundary
+
+This is an internal security baseline, not an independent penetration test.
+Before public release, run a separate reviewer/tool against the final commit and
+deployment, resolve findings, rotate test credentials, and record the reviewed
+commit SHA. The Codex Security plugin has been suggested for this independent
+pass but was not installed during this run.
+
+## Staged release gates
+
+1. Configure dedicated production secrets, model key, owner, domain, and bot.
+2. Store the connector vault key and backup encryption material off-host.
+3. Deploy to the dedicated Barlas AI Agent Compose project only.
+4. Run migrations, smoke test, owner login, Telegram link, and one approval flow.
+5. Create database and workspace backups, restore both into disposable targets,
+   and verify `/ready`, login, conversation history, and a bounded autonomous run.
+6. Admit only named private-alpha users; monitor errors, queue leases, token cost,
+   disk, backup age, and authentication failures for at least 48 hours.
+7. Expand gradually only after the independent security review and recovery drill.
+
+Public launch remains intentionally blocked until final credentials and the
+operator-selected domain/bot are supplied; no existing working agent is reused.

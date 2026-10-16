@@ -128,6 +128,7 @@ services:
     volumes:
       - ./deploy/backup-loop.sh:/opt/barlas/backup-loop.sh:ro
       - backups:/backups
+      - workspaces:/workspaces:ro
     depends_on:
       database:
         condition: service_healthy

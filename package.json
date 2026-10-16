@@ -13,7 +13,9 @@
     "start": "node dist/src/server.js",
     "test": "vitest run --exclude 'dist/**' tests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "check:isolation": "node scripts/check-isolation.mjs"
+    "check:isolation": "node scripts/check-isolation.mjs",
+    "check:security": "node scripts/security-check.mjs",
+    "test:load": "node scripts/load-smoke.mjs"
   },
   "dependencies": {
     "@fastify/sensible": "^6.0.3",

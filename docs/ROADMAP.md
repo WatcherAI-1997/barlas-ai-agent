@@ -34,4 +34,4 @@
 - Multi-user organizations, roles, and billing foundations. *(organizations, owner/admin/member/viewer memberships, plan profiles, owner-led onboarding, and one-time account recovery implemented; payment processing pending)*
 - Connector catalog and deployment automation. *(encrypted per-user vault plus read-only GitHub, Drive, Gmail, and Calendar metadata connectors implemented; production OAuth credentials pending)*
 - Isolated production Compose, HTTPS proxy, database backups, restore guard, and smoke test. *(implemented; credentials and deployment pending)*
-- Security review, recovery drill, and staged release.
+- Security review, recovery drill, and staged release. *(internal baseline, load test, database recovery drill, repeatable verification commands, and staged gates implemented; independent external review and credentialed release pending)*

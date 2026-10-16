@@ -48,3 +48,5 @@ Keep the previous image tag and database backup. Application rollback is an
 image-tag change. A database restore is a separate, explicit operation and
 requires `ALLOW_BARLAS_RESTORE=YES`; it must never target another agent's
 database or volume.
+
+Before admitting users, complete the gates in [Release readiness](RELEASE_READINESS.md).
