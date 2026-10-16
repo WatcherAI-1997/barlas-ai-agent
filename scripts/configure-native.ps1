@@ -450,7 +450,9 @@ if ($Action -eq "security-audit") {
     return
 }
 
-Write-Host "`n  B A R L A S" -ForegroundColor White
+Write-Host "`n  ∵  BARLAS · AI AGENT" -ForegroundColor White
+Write-Host "  THINK AHEAD. " -ForegroundColor Red -NoNewline
+Write-Host "ACT BEYOND." -ForegroundColor White
 Write-Host "  Personal AI setup" -ForegroundColor DarkGray
 Write-Host "  Press Enter to keep a value. Secrets are never displayed." -ForegroundColor DarkGray
 

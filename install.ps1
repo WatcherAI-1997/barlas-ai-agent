@@ -18,28 +18,16 @@ function Write-Ok([string]$Message) { Write-Host "[OK] $Message" -ForegroundColo
 function Stop-Install([string]$Message) { throw $Message }
 
 function Show-Banner {
-    $Font = @{
-        B = @("11110", "10001", "11110", "10001", "11110")
-        A = @("01110", "10001", "11111", "10001", "10001")
-        R = @("11110", "10001", "11110", "10100", "10010")
-        L = @("10000", "10000", "10000", "10000", "11111")
-        S = @("01111", "10000", "01110", "00001", "11110")
-    }
-    $Mark = @("  ▄████▄    ▄████▄  ", " ████████  ████████ ", "  ▀████▀    ▀████▀  ", "      ▄████▄        ", "     ████████       ", "      ▀████▀        ")
+    $Mark = @(" ▄██▄  ▄██▄ ", " ▀██▀  ▀██▀ ", "            ", "    ▄██▄    ", "    ▀██▀    ")
+    $Word = @("                             ", "█▀▀▄ ▄▀▀▄ █▀▀▄ █    ▄▀▀▄ ▄▀▀▀", "█▀▀▄ █▀▀█ █▀█  █    █▀▀█  ▀▀▄", "▀▀▀  ▀  ▀ ▀  ▀ ▀▀▀▀ ▀  ▀ ▀▀▀ ", "                             ")
     Write-Host ""
-    for ($Row = 0; $Row -lt 6; $Row++) {
-        Write-Host ($Mark[$Row] + "   ") -ForegroundColor Red -NoNewline
-        if ($Row -lt 5) {
-            $Letters = foreach ($Letter in "BARLAS".ToCharArray()) {
-                -join ($Font[[string]$Letter][$Row].ToCharArray() | ForEach-Object { if ($_ -eq '1') { "██" } else { "  " } })
-            }
-            Write-Host ($Letters -join "  ") -ForegroundColor White
-        } else {
-            Write-Host "A I   A G E N T" -ForegroundColor DarkGray
-        }
+    for ($Row = 0; $Row -lt $Mark.Count; $Row++) {
+        Write-Host ($Mark[$Row] + "  ") -ForegroundColor Red -NoNewline
+        Write-Host $Word[$Row] -ForegroundColor White
     }
-    Write-Host ""
-    Write-Host "Windows local installer - no domain required" -ForegroundColor DarkGray
+    Write-Host "              A I   A G E N T" -ForegroundColor DarkGray
+    Write-Host "              THINK AHEAD." -ForegroundColor Red -NoNewline
+    Write-Host " ACT BEYOND." -ForegroundColor White
     Write-Host ""
 }
 

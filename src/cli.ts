@@ -745,7 +745,17 @@ async function tui(ctx: CliContext): Promise<void> {
   const readline = createInterface({ input, output, terminal: true });
   let conversationId: string | undefined;
   let agentId: string | undefined;
-  output.write("\n⬤  ⬤  Barlas\n  ⬤   живой диалог · /help · /quit\n\n");
+  output.write(`
+ ▄██▄  ▄██▄
+ ▀██▀  ▀██▀   █▀▀▄ ▄▀▀▄ █▀▀▄ █    ▄▀▀▄ ▄▀▀▀
+              █▀▀▄ █▀▀█ █▀█  █    █▀▀█  ▀▀▄
+    ▄██▄      ▀▀▀  ▀  ▀ ▀  ▀ ▀▀▀▀ ▀  ▀ ▀▀▀
+    ▀██▀                A I   A G E N T
+              THINK AHEAD. ACT BEYOND.
+
+Живой диалог · /help · /quit
+
+`);
   try {
     while (true) {
       const line = (await readline.question("barlas> ")).trim();

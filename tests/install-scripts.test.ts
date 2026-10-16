@@ -35,7 +35,7 @@ describe("production installer", () => {
       "RandomNumberGenerator",
       "BROWSER_WS_ENDPOINT = $BrowserEndpoint",
       "scripts\\start-native.ps1",
-      "BARLAS PERSONAL SETUP",
+      "BARLAS · PERSONAL SETUP",
       "Read-MenuChoice",
       "Read-ArrowMenu",
       "Read-ValidatedValue",
@@ -164,9 +164,10 @@ describe("production installer", () => {
       },
     });
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("⬤  ⬤");
+    expect(result.stdout).toContain("▄██▄  ▄██▄");
     expect(result.stdout).toContain("Barlas");
-    expect(result.stdout).toContain("AI AGENT");
+    expect(result.stdout).toContain("A I   A G E N T");
+    expect(result.stdout).toContain("THINK AHEAD.");
     expect(`${result.stdout}${result.stderr}`).not.toContain("installer-$ecret");
     expect((await stat(envFile)).mode & 0o777).toBe(0o600);
     const environment = await readFile(envFile, "utf8");

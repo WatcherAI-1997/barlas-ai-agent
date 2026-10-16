@@ -213,7 +213,9 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     Write-Host "[OK] Using existing protected native configuration" -ForegroundColor Green
 } else {
     Write-Host ""
-    Write-Host "BARLAS PERSONAL SETUP" -ForegroundColor White
+    Write-Host "BARLAS · PERSONAL SETUP" -ForegroundColor White
+    Write-Host "THINK AHEAD. " -ForegroundColor Red -NoNewline
+    Write-Host "ACT BEYOND." -ForegroundColor White
     Write-Host "Use Up/Down and Enter. Number keys also work." -ForegroundColor DarkGray
     $SetupMode = Read-MenuChoice "BARLAS_SETUP_MODE" "Setup experience" @("complete", "quick") @("Complete - configure the full agent now", "Quick - essential settings with safe defaults") "complete"
     $Port = Read-ValidatedValue "BARLAS_HTTP_PORT" "Local web port" "17840" {

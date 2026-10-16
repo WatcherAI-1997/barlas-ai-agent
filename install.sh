@@ -163,9 +163,13 @@ render_inline_logo() {
 print_banner() {
   printf '\n'
   render_inline_logo || {
-    printf '  %s⬤  ⬤%s   %s%sBarlas%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_BRAND" "$C_RESET"
-    printf '  %s  ⬤%s     %sAI AGENT%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_RESET"
+    printf '%s ▄██▄  ▄██▄ %s  %s                             %s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_RESET"
+    printf '%s ▀██▀  ▀██▀ %s  %s█▀▀▄ ▄▀▀▄ █▀▀▄ █    ▄▀▀▄ ▄▀▀▀%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_RESET"
+    printf '              %s█▀▀▄ █▀▀█ █▀█  █    █▀▀█  ▀▀▄%s\n' "$C_BOLD" "$C_RESET"
+    printf '%s    ▄██▄    %s  %s▀▀▀  ▀  ▀ ▀  ▀ ▀▀▀▀ ▀  ▀ ▀▀▀ %s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_RESET"
+    printf '%s    ▀██▀    %s            A I   A G E N T\n' "$C_BRAND" "$C_RESET"
   }
+  printf '              %sTHINK AHEAD.%s%s ACT BEYOND.%s\n' "$C_BRAND" "$C_RESET" "$C_BOLD" "$C_RESET"
   printf '\n'
 }
 
