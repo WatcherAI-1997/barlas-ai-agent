@@ -122,8 +122,12 @@ env_value() {
 write_setting() { printf '%s=%s\n' "$1" "$(env_value "$2")" >>"$TEMP_FILE"; }
 
 print_banner() {
-  printf '\n%s%sBarlas AI Agent Installer%s\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
-  printf '%s\n\n' 'Think ahead. Act beyond.'
+  printf '\n'
+  printf '  %s●       ●%s     %s%sBARLAS%s\n' "$C_RED" "$C_RESET" "$C_BOLD" "$C_CYAN" "$C_RESET"
+  printf '  %s    ●%s         %sAI AGENT%s\n' "$C_RED" "$C_RESET" "$C_BOLD" "$C_RESET"
+  printf '                %sTHINK AHEAD. ACT BEYOND.%s\n' "$C_CYAN" "$C_RESET"
+  printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C_RED" "$C_RESET"
+  printf '  %s%sSecure Production Installer%s\n\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
 }
 
 print_banner

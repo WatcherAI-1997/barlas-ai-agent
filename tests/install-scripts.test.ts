@@ -38,6 +38,9 @@ describe("production installer", () => {
       },
     });
     expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("●       ●");
+    expect(result.stdout).toContain("THINK AHEAD. ACT BEYOND.");
+    expect(result.stdout).toContain("Secure Production Installer");
     expect(`${result.stdout}${result.stderr}`).not.toContain("installer-$ecret");
     expect((await stat(envFile)).mode & 0o777).toBe(0o600);
     const environment = await readFile(envFile, "utf8");
