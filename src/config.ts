@@ -26,6 +26,11 @@ const configSchema = z.object({
   DAILY_CHAT_QUOTA: z.coerce.number().int().min(1).max(100_000).default(500),
   DAILY_TOOL_QUOTA: z.coerce.number().int().min(1).max(100_000).default(1_000),
   DAILY_JOB_QUOTA: z.coerce.number().int().min(1).max(10_000).default(100),
+  SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(168),
+  OWNER_EMAIL: z.string().email().optional(),
+  OWNER_PASSWORD: z.string().min(12).max(256).optional(),
+  OWNER_DISPLAY_NAME: z.string().min(2).max(100).default("Barlas Owner"),
+  WEB_ROOT: z.string().min(1).default("/app/web"),
 }).superRefine((config, context) => {
   const telegramFields = [config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_WEBHOOK_SECRET];
   if (telegramFields.some(Boolean) && !telegramFields.every(Boolean)) {
@@ -44,6 +49,13 @@ const configSchema = z.object({
     context.addIssue({
       code: "custom",
       message: "All private model settings must be configured together",
+    });
+  }
+
+  if (Boolean(config.OWNER_EMAIL) !== Boolean(config.OWNER_PASSWORD)) {
+    context.addIssue({
+      code: "custom",
+      message: "OWNER_EMAIL and OWNER_PASSWORD must be configured together",
     });
   }
 });

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Barlas AI Agent</title>
+    <link rel="stylesheet" href="/ui/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section id="login-view" class="auth-card">
+        <img class="logo" src="/ui/brand/barlas-ai-agent-logo-original.png" alt="Barlas AI Agent">
+        <p class="eyebrow">Think ahead. Act beyond.</p>
+        <h1>Вход в Barlas AI Agent</h1>
+        <form id="login-form">
+          <label>Email<input id="email" type="email" autocomplete="username" required></label>
+          <label>Пароль<input id="password" type="password" autocomplete="current-password" minlength="12" required></label>
+          <button type="submit">Войти</button>
+          <p id="login-error" class="error" role="alert"></p>
+        </form>
+      </section>
+
+      <section id="app-view" class="app hidden">
+        <header>
+          <div class="brand"><span class="mark">●●●</span><strong>Barlas AI Agent</strong></div>
+          <div class="identity"><span id="identity"></span><button id="logout" class="secondary">Выйти</button></div>
+        </header>
+        <nav>
+          <button data-panel="chat" class="active">Чат</button>
+          <button data-panel="jobs">Задачи</button>
+          <button data-panel="traces">Трассировка</button>
+          <button data-panel="skills">Навыки</button>
+          <button id="users-tab" data-panel="users">Пользователи</button>
+        </nav>
+
+        <section id="panel-chat" class="panel">
+          <div id="messages" class="messages"></div>
+          <form id="chat-form" class="composer">
+            <textarea id="chat-input" maxlength="20000" placeholder="Поставьте задачу Barlas AI Agent…" required></textarea>
+            <select id="task-class" aria-label="Режим модели">
+              <option value="fast">Fast</option><option value="deep">Deep</option><option value="private">Private</option>
+            </select>
+            <button type="submit">Отправить</button>
+          </form>
+        </section>
+
+        <section id="panel-jobs" class="panel hidden"><h2>Долговременные задачи</h2><div id="jobs" class="grid"></div></section>
+        <section id="panel-traces" class="panel hidden"><h2>Трассировка</h2><div id="traces" class="grid"></div></section>
+        <section id="panel-skills" class="panel hidden"><h2>Навыки</h2><div id="skills" class="grid"></div></section>
+        <section id="panel-users" class="panel hidden">
+          <h2>Пользователи</h2>
+          <form id="user-form" class="inline-form">
+            <input id="new-name" placeholder="Имя" minlength="2" required>
+            <input id="new-email" type="email" placeholder="Email" required>
+            <input id="new-password" type="password" placeholder="Пароль (12+ символов)" minlength="12" required>
+            <select id="new-role"><option value="user">Пользователь</option><option value="owner">Владелец</option></select>
+            <button type="submit">Создать</button>
+          </form>
+          <p id="user-error" class="error" role="alert"></p>
+          <div id="users" class="grid"></div>
+        </section>
+      </section>
+    </main>
+    <script src="/ui/app.js" defer></script>
+  </body>
+</html>

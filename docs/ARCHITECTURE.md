@@ -34,6 +34,12 @@ autonomy.
   only bounded read-only file inspection operations.
 - Per-user UTC-day counters and execution traces live in the isolated PostgreSQL
   database. Quota consumption is atomic under concurrent requests.
+- Human authentication uses scrypt password hashes and opaque, expiring,
+  revocable server-side sessions. Roles are enforced in the API before user IDs
+  reach storage, tools, quotas, or model calls.
+- The branded web cabinet is served from immutable container assets with a
+  restrictive Content Security Policy, no third-party browser scripts, and no
+  access to the service automation token.
 
 ## Data boundaries
 

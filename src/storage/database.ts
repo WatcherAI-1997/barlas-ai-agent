@@ -1,10 +1,11 @@
 import { Pool } from "pg";
 
+import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth/service.js";
 import type { AgentMessage, GenerateResult } from "../core/models.js";
 import type { GovernanceStore, QuotaCategory, TraceEvent, TraceStatus } from "../governance/runtime.js";
 import type { AgentStore, ApprovalRequest, DurableJob, MemoryEntry } from "./types.js";
 
-export class Database implements AgentStore, GovernanceStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -401,6 +402,71 @@ export class Database implements AgentStore, GovernanceStore {
     }));
   }
 
+  async findAccountByEmail(email: string): Promise<StoredAccount | null> {
+    const result = await this.pool.query<AccountRow>(
+      `select id, email, display_name, role, password_hash, password_salt, active, created_at
+       from user_accounts where email = $1`,
+      [email],
+    );
+    const row = result.rows[0];
+    return row ? this.mapStoredAccount(row) : null;
+  }
+
+  async createAccount(input: {
+    email: string;
+    displayName: string;
+    role: AccountRole;
+    passwordHash: string;
+    passwordSalt: string;
+  }): Promise<UserAccount> {
+    const result = await this.pool.query<AccountRow>(
+      `insert into user_accounts (email, display_name, role, password_hash, password_salt)
+       values ($1, $2, $3, $4, $5)
+       returning id, email, display_name, role, password_hash, password_salt, active, created_at`,
+      [input.email, input.displayName, input.role, input.passwordHash, input.passwordSalt],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Account insert returned no row");
+    return this.mapAccount(row);
+  }
+
+  async listAccounts(): Promise<UserAccount[]> {
+    const result = await this.pool.query<AccountRow>(
+      `select id, email, display_name, role, password_hash, password_salt, active, created_at
+       from user_accounts order by created_at`,
+    );
+    return result.rows.map((row) => this.mapAccount(row));
+  }
+
+  async createSession(input: { accountId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
+    await this.pool.query(
+      `insert into user_sessions (account_id, token_hash, expires_at) values ($1, $2, $3)`,
+      [input.accountId, input.tokenHash, input.expiresAt],
+    );
+  }
+
+  async findSession(tokenHash: string): Promise<UserAccount | null> {
+    const result = await this.pool.query<AccountRow>(
+      `with touched as (
+         update user_sessions set last_seen_at = now()
+         where token_hash = $1 and expires_at > now()
+         returning account_id
+       )
+       select account.id, account.email, account.display_name, account.role,
+              account.password_hash, account.password_salt, account.active, account.created_at
+       from touched
+       join user_accounts account on account.id = touched.account_id
+       where account.active = true`,
+      [tokenHash],
+    );
+    const row = result.rows[0];
+    return row ? this.mapAccount(row) : null;
+  }
+
+  async deleteSession(tokenHash: string): Promise<void> {
+    await this.pool.query(`delete from user_sessions where token_hash = $1`, [tokenHash]);
+  }
+
   private mapApproval(row: {
     id: string;
     user_id: string;
@@ -439,6 +505,25 @@ export class Database implements AgentStore, GovernanceStore {
     if (row.error !== null) job.error = row.error;
     return job;
   }
+
+  private mapAccount(row: AccountRow): UserAccount {
+    return {
+      id: row.id,
+      email: row.email,
+      displayName: row.display_name,
+      role: row.role,
+      active: row.active,
+      createdAt: row.created_at.toISOString(),
+    };
+  }
+
+  private mapStoredAccount(row: AccountRow): StoredAccount {
+    return {
+      ...this.mapAccount(row),
+      passwordHash: row.password_hash,
+      passwordSalt: row.password_salt,
+    };
+  }
 }
 
 interface JobRow {
@@ -452,5 +537,16 @@ interface JobRow {
   max_attempts: number;
   result: unknown | null;
   error: string | null;
+  created_at: Date;
+}
+
+interface AccountRow {
+  id: string;
+  email: string;
+  display_name: string;
+  role: AccountRole;
+  password_hash: string;
+  password_salt: string;
+  active: boolean;
   created_at: Date;
 }

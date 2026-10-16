@@ -25,7 +25,8 @@ an auditable tool executor, durable job storage, container hardening, and
 automated tests. The private-alpha core also includes versioned skills, bounded
 subagent workflows, and per-user file workspaces. The next capability layer
 adds optional SearXNG web search, a no-shell read-only terminal inspector,
-atomic per-user quotas, and execution traces. No production agent, token,
+atomic per-user quotas, execution traces, secure owner/user accounts, and a
+branded web cabinet. No production agent, token,
 configuration, memory, port, database, or process is shared with this project.
 
 ## Local verification

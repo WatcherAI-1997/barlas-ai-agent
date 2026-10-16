@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { resolve } from "node:path";
 
 import { buildApp } from "../src/app.js";
 import type { ModelProvider } from "../src/core/models.js";
@@ -84,6 +85,18 @@ describe("Barlas AI Agent API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ name: "Barlas AI Agent", status: "ok" });
+    await app.close();
+  });
+
+  it("serves the branded web cabinet with strict browser security headers", async () => {
+    const deps = dependencies();
+    const app = await buildApp({ apiToken, ...deps, webRoot: resolve("web") });
+    const response = await app.inject({ method: "GET", url: "/ui/index.html" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("Barlas AI Agent");
+    expect(response.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(response.headers["x-frame-options"]).toBe("DENY");
     await app.close();
   });
 
@@ -211,6 +224,35 @@ describe("Barlas AI Agent API", () => {
       used: 1,
       limit: 1,
     });
+    expect(deps.modelProvider.generate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("prevents a user session from accessing another user's data", async () => {
+    const deps = dependencies();
+    const authService = {
+      authenticate: vi.fn(async () => ({
+        id: "account-1",
+        email: "user@example.com",
+        displayName: "User",
+        role: "user" as const,
+        active: true,
+        createdAt: "2026-10-16T00:00:00.000Z",
+      })),
+      login: vi.fn(),
+      logout: vi.fn(async () => undefined),
+      listAccounts: vi.fn(async () => []),
+      createAccount: vi.fn(),
+    };
+    const app = await buildApp({ apiToken, ...deps, authService });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/chat",
+      headers: { authorization: "Bearer user-session-token-which-is-long-enough" },
+      payload: { userId: "account-2", messages: [{ role: "user", content: "Hello" }] },
+    });
+
+    expect(response.statusCode).toBe(403);
     expect(deps.modelProvider.generate).not.toHaveBeenCalled();
     await app.close();
   });

@@ -25,7 +25,7 @@
 
 ## Phase 3 — Product
 
-- Branded web application.
-- Multi-user organizations, roles, and billing foundations.
+- Branded web application. *(authenticated cabinet foundation implemented)*
+- Multi-user organizations, roles, and billing foundations. *(accounts and owner/user roles implemented; organizations/billing pending)*
 - Connector catalog and deployment automation.
 - Security review, backups, recovery drills, and staged release.

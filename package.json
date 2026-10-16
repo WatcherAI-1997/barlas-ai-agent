@@ -10,13 +10,14 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "test": "vitest run --exclude 'dist/**' tests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:isolation": "node scripts/check-isolation.mjs"
   },
   "dependencies": {
     "@fastify/sensible": "^6.0.3",
+    "@fastify/static": "^10.1.6",
     "fastify": "^5.6.1",
     "openai": "^6.7.0",
     "pg": "^8.16.3",

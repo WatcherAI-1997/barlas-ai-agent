@@ -11,7 +11,15 @@ directly to public interfaces.
 
 ## Authenticated endpoints
 
-Send `Authorization: Bearer <BARLAS_API_TOKEN>`.
+Send `Authorization: Bearer <access token>`. Automation may use the dedicated
+`BARLAS_API_TOKEN`. Human users authenticate through `POST /auth/login` and
+receive an opaque expiring session token whose SHA-256 hash is stored server-side.
+
+- `POST /auth/login` — exchange email/password for an expiring session.
+- `GET /v1/me` — return the current account and authentication type.
+- `POST /v1/auth/logout` — revoke the current user session.
+- `GET /v1/admin/users` — list accounts; owner only.
+- `POST /v1/admin/users` — create an owner or user account; owner only.
 
 - `POST /v1/chat` — generate an answer using `fast`, `deep`, or `private` routing.
 - `POST /v1/memory` — save an explicit long-term memory.
@@ -60,6 +68,18 @@ Counters are incremented atomically in PostgreSQL. Exhausted requests return
 HTTP 429 with the category, current usage, and limit. Trace events record start,
 completion, pending approval, rejection, retry/failure, and the related IDs;
 tool inputs, prompts, file contents, and secrets are not copied into traces.
+
+## Account isolation
+
+Passwords use scrypt with a unique random salt. Raw session tokens are returned
+once and never persisted. A normal `user` session may submit only its own account
+ID to chat, memory, tools, approvals, jobs, and trace endpoints. Attempts to
+substitute another ID return HTTP 403. Owners and the service API token retain
+administrative scope. Login attempts are bounded per source address.
+
+The optional initial owner is created from `OWNER_EMAIL`, `OWNER_PASSWORD`, and
+`OWNER_DISPLAY_NAME`; both email and password must be supplied together. The
+bootstrap is idempotent and never writes credentials to source control.
 
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.

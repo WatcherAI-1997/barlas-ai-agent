@@ -1,9 +1,18 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 
 import sensible from "@fastify/sensible";
-import Fastify, { type FastifyInstance } from "fastify";
+import fastifyStatic from "@fastify/static";
+import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import {
+  AccountConflictError,
+  AuthenticationError,
+  AuthorizationError,
+  type AccountRole,
+  type AuthService,
+  type UserAccount,
+} from "./auth/service.js";
 import type { ModelProvider } from "./core/models.js";
 import { QuotaExceededError, type RuntimeGovernance } from "./governance/runtime.js";
 import { agentJobSchema } from "./jobs/agent-handler.js";
@@ -90,6 +99,26 @@ const listTracesSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+const loginSchema = z.object({
+  email: z.string().email().max(254),
+  password: z.string().min(1).max(256),
+}).strict();
+
+const createUserSchema = z.object({
+  email: z.string().min(3).max(254),
+  displayName: z.string().min(2).max(100),
+  password: z.string().min(12).max(256),
+  role: z.enum(["owner", "user"]).default("user"),
+}).strict();
+
+interface Principal {
+  userId: string;
+  role: AccountRole;
+  authType: "service" | "session";
+  account?: UserAccount;
+  token?: string;
+}
+
 export interface AppDependencies {
   apiToken: string;
   database: AgentStore;
@@ -97,6 +126,8 @@ export interface AppDependencies {
   toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
   skillRegistry?: Pick<SkillRegistry, "list">;
   governance?: RuntimeGovernance;
+  authService?: Pick<AuthService, "authenticate" | "login" | "logout" | "listAccounts" | "createAccount">;
+  webRoot?: string;
   telegram?: {
     webhookSecret: string;
     client: { sendMessage(chatId: number, text: string): Promise<void> };
@@ -113,6 +144,24 @@ function tokenMatches(expected: string, supplied: string): boolean {
 export async function buildApp(dependencies: AppDependencies): Promise<FastifyInstance> {
   const app = Fastify({ logger: dependencies.logger ?? false });
   await app.register(sensible);
+  if (dependencies.webRoot) {
+    await app.register(fastifyStatic, { root: dependencies.webRoot, prefix: "/ui/" });
+    app.get("/", async (_request, reply) => reply.redirect("/ui/index.html"));
+  }
+
+  app.addHook("onSend", async (request, reply, payload) => {
+    reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Referrer-Policy", "no-referrer");
+    if (request.url.startsWith("/v1/") || request.url === "/auth/login") {
+      reply.header("Cache-Control", "no-store");
+    }
+    reply.header(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+    );
+    return payload;
+  });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof QuotaExceededError) {
@@ -123,8 +172,20 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         limit: error.limit,
       });
     }
+    if (error instanceof AuthenticationError) {
+      return reply.code(401).send({ error: error.message });
+    }
+    if (error instanceof AuthorizationError) {
+      return reply.code(403).send({ error: error.message });
+    }
+    if (error instanceof AccountConflictError) {
+      return reply.code(409).send({ error: error.message });
+    }
     return reply.send(error);
   });
+
+  const principals = new WeakMap<FastifyRequest, Principal>();
+  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
   app.get("/health", async () => ({
     name: "Barlas AI Agent",
@@ -144,9 +205,106 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (!request.url.startsWith("/v1/")) return;
     const authorization = request.headers.authorization;
     const suppliedToken = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
-    if (!tokenMatches(dependencies.apiToken, suppliedToken)) {
-      return reply.unauthorized("Invalid API token");
+    if (tokenMatches(dependencies.apiToken, suppliedToken)) {
+      principals.set(request, { userId: "service", role: "owner", authType: "service" });
+      return;
     }
+    const account = dependencies.authService && suppliedToken
+      ? await dependencies.authService.authenticate(suppliedToken)
+      : null;
+    if (!account) return reply.unauthorized("Invalid or expired access token");
+    principals.set(request, {
+      userId: account.id,
+      role: account.role,
+      authType: "session",
+      account,
+      token: suppliedToken,
+    });
+  });
+
+  const principalFor = (request: FastifyRequest): Principal => {
+    const principal = principals.get(request);
+    if (!principal) throw new AuthenticationError();
+    return principal;
+  };
+
+  const authorizeUser = (request: FastifyRequest, requestedUserId: string): string => {
+    const principal = principalFor(request);
+    if (principal.authType === "service" || principal.role === "owner") return requestedUserId;
+    if (principal.userId !== requestedUserId) throw new AuthorizationError();
+    return principal.userId;
+  };
+
+  app.post("/auth/login", async (request, reply) => {
+    if (!dependencies.authService) return reply.notFound();
+    const parsed = loginSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid login request");
+    const now = Date.now();
+    for (const [key, value] of loginAttempts) {
+      if (value.resetAt <= now) loginAttempts.delete(key);
+    }
+    if (loginAttempts.size >= 10_000 && !loginAttempts.has(request.ip)) {
+      const oldest = loginAttempts.keys().next().value as string | undefined;
+      if (oldest) loginAttempts.delete(oldest);
+    }
+    const attempts = loginAttempts.get(request.ip);
+    if (attempts && attempts.resetAt > now && attempts.count >= 5) {
+      return reply.code(429).send({ error: "Too many login attempts. Try again later." });
+    }
+    try {
+      const session = await dependencies.authService.login(parsed.data.email, parsed.data.password);
+      loginAttempts.delete(request.ip);
+      return session;
+    } catch (error) {
+      const current = attempts && attempts.resetAt > now ? attempts : { count: 0, resetAt: now + 15 * 60_000 };
+      loginAttempts.set(request.ip, { ...current, count: current.count + 1 });
+      throw error;
+    }
+  });
+
+  app.get("/v1/me", async (request) => {
+    const principal = principalFor(request);
+    return {
+      principal: principal.account ?? {
+        id: principal.userId,
+        email: null,
+        displayName: "Service API",
+        role: principal.role,
+        active: true,
+      },
+      authType: principal.authType,
+    };
+  });
+
+  app.post("/v1/auth/logout", async (request, reply) => {
+    const principal = principalFor(request);
+    if (principal.authType !== "session" || !principal.token || !dependencies.authService) {
+      return reply.badRequest("Session logout requires a user access token");
+    }
+    await dependencies.authService.logout(principal.token);
+    return { ok: true };
+  });
+
+  app.get("/v1/admin/users", async (request, reply) => {
+    const principal = principalFor(request);
+    if (principal.role !== "owner" || !dependencies.authService) return reply.forbidden();
+    return { users: await dependencies.authService.listAccounts() };
+  });
+
+  app.post("/v1/admin/users", async (request, reply) => {
+    const principal = principalFor(request);
+    if (principal.role !== "owner" || !dependencies.authService) return reply.forbidden();
+    const parsed = createUserSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid user request");
+    const user = await dependencies.authService.createAccount(parsed.data);
+    await dependencies.database.appendAudit({
+      userId: principal.userId,
+      eventType: "account.created",
+      resourceType: "account",
+      resourceId: user.id,
+      details: { email: user.email, role: user.role },
+    });
+    return reply.code(201).send({ user });
   });
 
   const runChat = async (input: z.infer<typeof chatBodySchema>) => {
@@ -219,7 +377,8 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       return reply.badRequest("Invalid chat request");
     }
 
-    const { conversationId, result, memoriesUsed, traceId } = await runChat(parsed.data);
+    const userId = authorizeUser(request, parsed.data.userId);
+    const { conversationId, result, memoriesUsed, traceId } = await runChat({ ...parsed.data, userId });
 
     return {
       conversationId,
@@ -239,7 +398,10 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   app.post("/v1/memory", async (request, reply) => {
     const parsed = rememberBodySchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid memory request");
-    const memory = await dependencies.database.remember(parsed.data);
+    const memory = await dependencies.database.remember({
+      ...parsed.data,
+      userId: authorizeUser(request, parsed.data.userId),
+    });
     return reply.code(201).send({ memory });
   });
 
@@ -247,7 +409,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const parsed = recallQuerySchema.safeParse(request.query);
     if (!parsed.success) return reply.badRequest("Invalid memory search query");
     const memories = await dependencies.database.recall(
-      parsed.data.userId,
+      authorizeUser(request, parsed.data.userId),
       parsed.data.query,
       parsed.data.limit,
     );
@@ -268,14 +430,22 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (!dependencies.governance) return reply.notFound();
     const parsed = listTracesSchema.safeParse(request.query);
     if (!parsed.success) return reply.badRequest("Invalid traces query");
-    return { traces: await dependencies.governance.list(parsed.data.userId, parsed.data.limit) };
+    return {
+      traces: await dependencies.governance.list(
+        authorizeUser(request, parsed.data.userId),
+        parsed.data.limit,
+      ),
+    };
   });
 
   app.post("/v1/tools/execute", async (request, reply) => {
     if (!dependencies.toolExecutor) return reply.notFound();
     const parsed = toolExecutionSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid tool request");
-    return dependencies.toolExecutor.execute(parsed.data);
+    return dependencies.toolExecutor.execute({
+      ...parsed.data,
+      userId: authorizeUser(request, parsed.data.userId),
+    });
   });
 
   app.post("/v1/approvals/:id/decision", async (request, reply) => {
@@ -286,7 +456,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     try {
       return await dependencies.toolExecutor.decide({
         approvalId: params.data.id,
-        userId: body.data.userId,
+        userId: authorizeUser(request, body.data.userId),
         approved: body.data.approved,
       });
     } catch (error) {
@@ -300,16 +470,17 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   app.post("/v1/jobs", async (request, reply) => {
     const parsed = createJobSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid job request");
-    await dependencies.governance?.consume(parsed.data.userId, "job");
+    const userId = authorizeUser(request, parsed.data.userId);
+    await dependencies.governance?.consume(userId, "job");
     const traceId = dependencies.governance?.newTraceId();
     const job = await dependencies.database.createJob({
-      userId: parsed.data.userId,
+      userId,
       jobType: parsed.data.jobType,
       jobInput: parsed.data.input,
       scheduledFor: parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : new Date(),
     });
     await dependencies.database.appendAudit({
-      userId: parsed.data.userId,
+      userId,
       eventType: "job.created",
       resourceType: "job",
       resourceId: job.id,
@@ -318,7 +489,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (traceId) {
       await dependencies.governance?.trace({
         traceId,
-        userId: parsed.data.userId,
+        userId,
         operation: `job:${job.jobType}`,
         status: "pending",
         details: { jobId: job.id, scheduledFor: job.scheduledFor },
@@ -330,7 +501,10 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   app.get("/v1/jobs", async (request, reply) => {
     const parsed = listJobsSchema.safeParse(request.query);
     if (!parsed.success) return reply.badRequest("Invalid jobs query");
-    const jobs = await dependencies.database.listJobs(parsed.data.userId, parsed.data.limit);
+    const jobs = await dependencies.database.listJobs(
+      authorizeUser(request, parsed.data.userId),
+      parsed.data.limit,
+    );
     return { jobs };
   });
 

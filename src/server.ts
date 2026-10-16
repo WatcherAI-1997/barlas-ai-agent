@@ -1,4 +1,5 @@
 import { buildApp } from "./app.js";
+import { AuthService } from "./auth/service.js";
 import { TelegramClient } from "./channels/telegram.js";
 import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
@@ -14,6 +15,14 @@ import { ToolExecutor } from "./tools/executor.js";
 
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
+const authService = new AuthService(database, config.SESSION_TTL_HOURS);
+if (config.OWNER_EMAIL && config.OWNER_PASSWORD) {
+  await authService.bootstrapOwner({
+    email: config.OWNER_EMAIL,
+    password: config.OWNER_PASSWORD,
+    displayName: config.OWNER_DISPLAY_NAME,
+  });
+}
 const fastProvider = new OpenAIProvider({
   apiKey: config.MODEL_API_KEY,
   model: config.MODEL_NAME,
@@ -69,6 +78,8 @@ const app = await buildApp({
   toolExecutor,
   skillRegistry,
   governance,
+  authService,
+  webRoot: config.WEB_ROOT,
   ...(telegram ? { telegram } : {}),
   logger: true,
 });
