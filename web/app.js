@@ -53,6 +53,17 @@ $("#login-form").addEventListener("submit", async (event) => {
   } catch (error) { $("#login-error").textContent = error.message; }
 });
 
+$("#password-reset-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#password-reset-error").textContent = "";
+  try {
+    await api("/auth/password-reset", { method: "POST", body: JSON.stringify({
+      code: $("#password-reset-code").value.trim(),
+      password: $("#password-reset-password").value,
+    }) });
+    event.target.reset(); $("#password-reset-error").textContent = "Пароль изменён. Теперь войдите.";
+  } catch (error) { $("#password-reset-error").textContent = error.message; }
+});
+
 $("#logout").addEventListener("click", async () => {
   try { await api("/v1/auth/logout", { method: "POST" }); } catch {}
   sessionStorage.removeItem("barlasToken"); location.reload();
@@ -257,7 +268,15 @@ async function updateJob(id, action) {
 
 async function loadUsers() {
   const users = (await api("/v1/admin/users")).users;
-  renderList("#users", users, (user) => card(user.displayName, `${user.email} · ${user.role}`, user.active ? "Активен" : "Отключён"));
+  renderList("#users", users, (user) => {
+    const node = card(user.displayName, `${user.email} · ${user.role}`, user.active ? "Активен" : "Отключён");
+    const reset = document.createElement("button"); reset.textContent = "Код сброса"; reset.className = "secondary";
+    reset.addEventListener("click", async () => {
+      const data = await api(`/v1/admin/users/${user.id}/password-reset`, { method: "POST" });
+      alert(`Одноразовый код (15 минут):\n${data.code}`);
+    });
+    node.append(reset); return node;
+  });
 }
 
 async function loadOrganizations() {

@@ -1094,6 +1094,55 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     return result.rows.map((row) => this.mapAccount(row));
   }
 
+  async createPasswordReset(input: { accountId: string; codeHash: string; expiresAt: Date }): Promise<boolean> {
+    const result = await this.pool.query(
+      `with invalidated as (
+         update password_reset_codes set used_at = now()
+         where account_id = $1 and used_at is null
+       )
+       insert into password_reset_codes (account_id, code_hash, expires_at)
+       select id, $2, $3 from user_accounts where id = $1`,
+      [input.accountId, input.codeHash, input.expiresAt],
+    );
+    return result.rowCount === 1;
+  }
+
+  async consumePasswordReset(input: {
+    codeHash: string;
+    passwordHash: string;
+    passwordSalt: string;
+  }): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const reset = await client.query<{ id: string; account_id: string }>(
+        `select id, account_id from password_reset_codes
+         where code_hash = $1 and used_at is null and expires_at > now()
+         for update`,
+        [input.codeHash],
+      );
+      const row = reset.rows[0];
+      if (!row) {
+        await client.query("rollback");
+        return false;
+      }
+      await client.query(
+        `update user_accounts set password_hash = $2, password_salt = $3, updated_at = now()
+         where id = $1`,
+        [row.account_id, input.passwordHash, input.passwordSalt],
+      );
+      await client.query(`update password_reset_codes set used_at = now() where id = $1`, [row.id]);
+      await client.query(`delete from user_sessions where account_id = $1`, [row.account_id]);
+      await client.query("commit");
+      return true;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async createSession(input: { accountId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
     await this.pool.query(
       `insert into user_sessions (account_id, token_hash, expires_at) values ($1, $2, $3)`,

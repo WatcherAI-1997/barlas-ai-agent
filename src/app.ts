@@ -156,6 +156,11 @@ const organizationMemberSchema = z.object({
 const organizationPlanSchema = z.object({
   plan: z.enum(["private_alpha", "team", "business"]),
 }).strict();
+const accountParamsSchema = z.object({ id: z.string().uuid() });
+const passwordResetSchema = z.object({
+  code: z.string().min(20).max(256),
+  password: z.string().min(12).max(256),
+}).strict();
 
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -186,7 +191,9 @@ export interface AppDependencies {
   toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
   skillRegistry?: Pick<SkillRegistry, "list">;
   governance?: RuntimeGovernance;
-  authService?: Pick<AuthService, "authenticate" | "login" | "logout" | "listAccounts" | "createAccount">;
+  authService?: Pick<AuthService,
+    "authenticate" | "login" | "logout" | "listAccounts" | "createAccount" | "issuePasswordReset" | "resetPassword"
+  >;
   telegramLinks?: Pick<TelegramLinkService, "createCode" | "claim" | "get" | "resolve" | "unlink">;
   connectors?: Pick<ConnectorService, "save" | "list" | "delete">;
   githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
@@ -343,6 +350,14 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     }
   });
 
+  app.post("/auth/password-reset", async (request, reply) => {
+    if (!dependencies.authService) return reply.notFound();
+    const parsed = passwordResetSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid password reset request");
+    await dependencies.authService.resetPassword(parsed.data.code, parsed.data.password);
+    return { reset: true };
+  });
+
   app.get("/v1/me", async (request) => {
     const principal = principalFor(request);
     return {
@@ -404,6 +419,22 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       details: { email: user.email, role: user.role },
     });
     return reply.code(201).send({ user });
+  });
+
+  app.post("/v1/admin/users/:id/password-reset", async (request, reply) => {
+    const principal = principalFor(request);
+    if (principal.role !== "owner" || !dependencies.authService) return reply.forbidden();
+    const params = accountParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.badRequest("Invalid account request");
+    const reset = await dependencies.authService.issuePasswordReset(params.data.id);
+    await dependencies.database.appendAudit({
+      userId: principal.userId,
+      eventType: "account.password_reset.issued",
+      resourceType: "account",
+      resourceId: params.data.id,
+      details: { expiresAt: reset.expiresAt },
+    });
+    return reset;
   });
 
   app.get("/v1/organizations", async (request, reply) => {

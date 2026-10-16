@@ -402,6 +402,8 @@ describe("Barlas AI Agent API", () => {
       logout: vi.fn(async () => undefined),
       listAccounts: vi.fn(async () => []),
       createAccount: vi.fn(),
+      issuePasswordReset: vi.fn(),
+      resetPassword: vi.fn(async () => undefined),
     };
     const app = await buildApp({ apiToken, ...deps, authService });
     const response = await app.inject({

@@ -16,6 +16,7 @@ Send `Authorization: Bearer <access token>`. Automation may use the dedicated
 receive an opaque expiring session token whose SHA-256 hash is stored server-side.
 
 - `POST /auth/login` — exchange email/password for an expiring session.
+- `POST /auth/password-reset` — consume an owner-issued one-time code and set a new password.
 - `GET /v1/me` — return the current account and authentication type.
 - `POST /v1/auth/logout` — revoke the current user session.
 - `GET /v1/me/telegram` — return the current account's Telegram link.
@@ -23,6 +24,7 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `DELETE /v1/me/telegram` — remove the account's Telegram link.
 - `GET /v1/admin/users` — list accounts; owner only.
 - `POST /v1/admin/users` — create an owner or user account; owner only.
+- `POST /v1/admin/users/:id/password-reset` — issue a 15-minute recovery code; owner only.
 - `GET /v1/organizations` — list organizations for the current signed-in account.
 - `POST /v1/organizations` — create an organization and its first owner membership.
 - `GET /v1/organizations/:id/members` — list members for an organization member.
@@ -131,6 +133,13 @@ does not automatically expose another account's conversations, memory, files,
 connectors, approvals, or jobs. The `private_alpha`, `team`, and `business`
 values are billing/entitlement foundations only; no payment is charged and no
 paid entitlement is implied until a billing provider is explicitly configured.
+
+Password recovery codes contain 192 bits of randomness, are stored only as
+SHA-256 hashes, expire after fifteen minutes, and are consumed transactionally
+exactly once. A successful reset replaces the scrypt salt/hash and revokes all
+existing sessions for that account. Barlas AI Agent does not pretend to send
+email: until a dedicated mail connector is configured, an owner must deliver
+the code to the user through a trusted channel.
 
 ## Connector vault and GitHub
 

@@ -12,6 +12,7 @@ import {
 class MemoryAuthStore implements AuthStore {
   accounts: StoredAccount[] = [];
   sessions = new Map<string, string>();
+  resetCodes = new Map<string, string>();
 
   async findAccountByEmail(email: string) { return this.accounts.find((item) => item.email === email) ?? null; }
   async createAccount(input: Omit<StoredAccount, "id" | "active" | "createdAt">): Promise<UserAccount> {
@@ -26,6 +27,19 @@ class MemoryAuthStore implements AuthStore {
     return publicAccount;
   }
   async listAccounts(): Promise<UserAccount[]> { return this.accounts; }
+  async createPasswordReset(input: { accountId: string; codeHash: string }) {
+    if (!this.accounts.some((account) => account.id === input.accountId)) return false;
+    this.resetCodes.set(input.codeHash, input.accountId); return true;
+  }
+  async consumePasswordReset(input: { codeHash: string; passwordHash: string; passwordSalt: string }) {
+    const accountId = this.resetCodes.get(input.codeHash);
+    const account = this.accounts.find((item) => item.id === accountId);
+    if (!account) return false;
+    account.passwordHash = input.passwordHash; account.passwordSalt = input.passwordSalt;
+    this.resetCodes.delete(input.codeHash);
+    for (const [token, id] of this.sessions) if (id === accountId) this.sessions.delete(token);
+    return true;
+  }
   async createSession(input: { accountId: string; tokenHash: string }) { this.sessions.set(input.tokenHash, input.accountId); }
   async findSession(tokenHash: string) {
     const id = this.sessions.get(tokenHash);
@@ -76,5 +90,23 @@ describe("Barlas AI Agent authentication", () => {
       password: "another-secure-password",
       role: "user",
     })).rejects.toBeInstanceOf(AccountConflictError);
+  });
+
+  it("uses a password reset code once and revokes existing sessions", async () => {
+    const store = new MemoryAuthStore();
+    const auth = new AuthService(store);
+    const account = await auth.createAccount({
+      email: "user@example.com",
+      displayName: "User",
+      password: "old-secure-password",
+      role: "user",
+    });
+    const oldSession = await auth.login("user@example.com", "old-secure-password");
+    const reset = await auth.issuePasswordReset(account.id);
+    await auth.resetPassword(reset.code, "new-secure-password");
+
+    await expect(auth.authenticate(oldSession.token)).resolves.toBeNull();
+    await expect(auth.login("user@example.com", "new-secure-password")).resolves.toHaveProperty("token");
+    await expect(auth.resetPassword(reset.code, "another-password")).rejects.toBeInstanceOf(AuthenticationError);
   });
 });

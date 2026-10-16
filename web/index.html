@@ -19,6 +19,15 @@
           <button type="submit">Войти</button>
           <p id="login-error" class="error" role="alert"></p>
         </form>
+        <details>
+          <summary>Восстановить доступ по коду владельца</summary>
+          <form id="password-reset-form">
+            <label>Код<input id="password-reset-code" autocomplete="one-time-code" required></label>
+            <label>Новый пароль<input id="password-reset-password" type="password" autocomplete="new-password" minlength="12" required></label>
+            <button type="submit">Сменить пароль</button>
+            <p id="password-reset-error" class="error" role="alert"></p>
+          </form>
+        </details>
       </section>
 
       <section id="app-view" class="app hidden">

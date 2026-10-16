@@ -31,7 +31,7 @@
 
 - Branded web application. *(authenticated cabinet foundation implemented)*
 - Conversation history, approval inbox, and job controls. *(implemented)*
-- Multi-user organizations, roles, and billing foundations. *(organizations, owner/admin/member/viewer memberships, and plan profiles implemented; payment processing pending)*
+- Multi-user organizations, roles, and billing foundations. *(organizations, owner/admin/member/viewer memberships, plan profiles, owner-led onboarding, and one-time account recovery implemented; payment processing pending)*
 - Connector catalog and deployment automation. *(encrypted per-user vault and read-only GitHub connector implemented; Google services pending)*
 - Isolated production Compose, HTTPS proxy, database backups, restore guard, and smoke test. *(implemented; credentials and deployment pending)*
 - Security review, recovery drill, and staged release.

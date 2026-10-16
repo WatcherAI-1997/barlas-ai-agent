@@ -26,6 +26,12 @@ export interface AuthStore {
     passwordSalt: string;
   }): Promise<UserAccount>;
   listAccounts(): Promise<UserAccount[]>;
+  createPasswordReset(input: { accountId: string; codeHash: string; expiresAt: Date }): Promise<boolean>;
+  consumePasswordReset(input: {
+    codeHash: string;
+    passwordHash: string;
+    passwordSalt: string;
+  }): Promise<boolean>;
   createSession(input: { accountId: string; tokenHash: string; expiresAt: Date }): Promise<void>;
   findSession(tokenHash: string): Promise<UserAccount | null>;
   deleteSession(tokenHash: string): Promise<void>;
@@ -117,6 +123,31 @@ export class AuthService {
 
   listAccounts(): Promise<UserAccount[]> {
     return this.store.listAccounts();
+  }
+
+  async issuePasswordReset(accountId: string): Promise<{ code: string; expiresAt: string }> {
+    const code = `BARLAS-RESET-${randomBytes(24).toString("base64url")}`;
+    const expiresAt = new Date(Date.now() + 15 * 60_000);
+    const created = await this.store.createPasswordReset({
+      accountId,
+      codeHash: hashToken(code),
+      expiresAt,
+    });
+    if (!created) throw new Error("Account not found");
+    return { code, expiresAt: expiresAt.toISOString() };
+  }
+
+  async resetPassword(code: string, password: string): Promise<void> {
+    if (!/^BARLAS-RESET-[A-Za-z0-9_-]{20,}$/u.test(code)) throw new AuthenticationError();
+    validatePassword(password);
+    const passwordSalt = randomBytes(16).toString("base64url");
+    const passwordHash = await derivePassword(password, passwordSalt);
+    const consumed = await this.store.consumePasswordReset({
+      codeHash: hashToken(code),
+      passwordHash,
+      passwordSalt,
+    });
+    if (!consumed) throw new AuthenticationError();
   }
 }
 
