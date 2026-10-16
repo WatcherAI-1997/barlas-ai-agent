@@ -13,6 +13,12 @@ const configSchema = z.object({
   MODEL_PROVIDER: z.enum(["openai"]).default("openai"),
   MODEL_NAME: z.string().min(1),
   MODEL_API_KEY: z.string().min(1),
+  VISION_MODEL: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(1).optional(),
+  ),
+  TRANSCRIPTION_MODEL: z.string().min(1).default("gpt-4o-mini-transcribe"),
+  SPEECH_MODEL: z.string().min(1).default("gpt-4o-mini-tts"),
   EMBEDDING_MODEL: z.string().min(1).optional(),
   DEEP_MODEL_NAME: z.string().min(1).optional(),
   PRIVATE_MODEL_BASE_URL: z.string().url().optional(),

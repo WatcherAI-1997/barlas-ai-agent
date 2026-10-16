@@ -29,3 +29,9 @@ rotate model/bot/API/session/connector secrets, revoke sessions and OAuth
 grants, inspect approval and audit records, restore only from verified backups,
 notify affected users and authorities when required, and publish a blameless
 post-incident review.
+
+Media files are stored only in per-user workspaces. Upload format is determined
+from a fixed magic-byte allowlist rather than filename or browser MIME alone;
+SVG and unknown formats are rejected. Any vision, PDF, transcription, or speech
+model call is an external action and requires explicit approval before bytes
+are transmitted to the configured provider.

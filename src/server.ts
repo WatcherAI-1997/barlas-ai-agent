@@ -26,6 +26,8 @@ import { createBuiltinToolRegistry } from "./tools/builtins.js";
 import { ToolExecutor } from "./tools/executor.js";
 import { ManagedBrowser } from "./tools/managed-browser.js";
 import { CodeSandboxClient } from "./tools/code-sandbox.js";
+import { FileWorkspace } from "./tools/file-workspace.js";
+import { MediaService, OpenAIMediaModel } from "./tools/media.js";
 
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
@@ -89,6 +91,15 @@ const subagentCoordinator = new SubagentCoordinator(modelProvider);
 const codeSandbox = config.SANDBOX_SOCKET_PATH && config.SANDBOX_SHARED_TOKEN
   ? new CodeSandboxClient(config.SANDBOX_SOCKET_PATH, config.SANDBOX_SHARED_TOKEN)
   : undefined;
+const mediaService = new MediaService(
+  new FileWorkspace(config.WORKSPACE_ROOT),
+  new OpenAIMediaModel({
+    apiKey: config.MODEL_API_KEY,
+    visionModel: config.VISION_MODEL ?? config.MODEL_NAME,
+    transcriptionModel: config.TRANSCRIPTION_MODEL,
+    speechModel: config.SPEECH_MODEL,
+  }),
+);
 const governance = new RuntimeGovernance(database, {
   chat: config.DAILY_CHAT_QUOTA,
   tool: config.DAILY_TOOL_QUOTA,
@@ -103,6 +114,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   ...(githubConnector ? { githubConnector } : {}),
   ...(googleConnector ? { googleConnector } : {}),
   ...(mcpConnector ? { mcpConnector } : {}),
+  mediaService,
 }), database, governance);
 const skillManager = new SkillManager(
   database,
@@ -184,6 +196,7 @@ const app = await buildApp({
   telegramLinks,
   memory,
   organizations,
+  media: mediaService,
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },

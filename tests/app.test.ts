@@ -612,4 +612,37 @@ describe("Barlas AI Agent API", () => {
     expect(deps.database.listApprovals).toHaveBeenCalledWith("user-1", 30);
     await app.close();
   });
+
+  it("accepts one bounded multipart media upload and records metadata-only audit", async () => {
+    const deps = dependencies();
+    const media = {
+      saveUpload: vi.fn(async () => ({
+        path: "media/photo.png", bytes: 12, kind: "image" as const, mimeType: "image/png",
+      })),
+    };
+    const app = await buildApp({ apiToken, ...deps, media });
+    const boundary = "barlas-media-boundary";
+    const payload = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="photo.png"\r\nContent-Type: image/png\r\n\r\n`),
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/media/upload?userId=user-1&path=media%2Fphoto.png",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({ media: expect.objectContaining({ path: "media/photo.png", mimeType: "image/png" }) });
+    expect(media.saveUpload).toHaveBeenCalledWith("user-1", "media/photo.png", expect.any(Buffer), "image/png");
+    expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "user-1", eventType: "media.uploaded", details: expect.not.objectContaining({ content: expect.anything() }),
+    }));
+    await app.close();
+  });
 });

@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 
 import sensible from "@fastify/sensible";
+import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -38,6 +39,7 @@ import type { SkillRegistry } from "./skills/registry.js";
 import type { SkillManager } from "./skills/manager.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
+import { MAX_MEDIA_BYTES, type MediaService } from "./tools/media.js";
 
 const chatBodySchema = z.object({
   userId: z.string().min(1).max(128),
@@ -102,6 +104,11 @@ const toolExecutionSchema = z.object({
   toolInput: z.unknown(),
   summary: z.string().min(1).max(500),
 });
+
+const mediaUploadQuerySchema = z.object({
+  userId: z.string().min(1).max(128),
+  path: z.string().min(1).max(1_000),
+}).strict();
 
 const approvalParamsSchema = z.object({ id: z.string().uuid() });
 const approvalDecisionSchema = z.object({
@@ -257,6 +264,7 @@ export interface AppDependencies {
   googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
   memory?: Pick<SemanticMemory, "remember" | "recall">;
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
+  media?: Pick<MediaService, "saveUpload">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
   telegram?: {
@@ -290,6 +298,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   const app = Fastify({ logger: dependencies.logger ?? false });
   const memory = dependencies.memory ?? dependencies.database;
   await app.register(sensible);
+  await app.register(multipart, {
+    limits: { fileSize: MAX_MEDIA_BYTES, files: 1, fields: 0, parts: 1 },
+  });
   if (dependencies.webRoot) {
     await app.register(fastifyStatic, { root: dependencies.webRoot, prefix: "/ui/" });
     app.get("/", async (_request, reply) => reply.redirect("/ui/index.html"));
@@ -467,6 +478,32 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       details: { languageCode: account.languageCode },
     });
     return { account };
+  });
+
+  app.post("/v1/media/upload", async (request, reply) => {
+    if (!dependencies.media) return reply.notFound();
+    const query = mediaUploadQuerySchema.safeParse(request.query);
+    if (!query.success) return reply.badRequest("Invalid media upload query");
+    const userId = authorizeUser(request, query.data.userId);
+    if (!request.isMultipart()) return reply.badRequest("Expected multipart media upload");
+    const part = await request.file();
+    if (!part) return reply.badRequest("Media file is required");
+    const content = await part.toBuffer();
+    if (part.file.truncated) return reply.payloadTooLarge("Media file exceeds the 10 MB limit");
+    const stored = await dependencies.media.saveUpload(
+      userId,
+      query.data.path,
+      content,
+      part.mimetype,
+    );
+    await dependencies.database.appendAudit({
+      userId,
+      eventType: "media.uploaded",
+      resourceType: "workspace_file",
+      resourceId: stored.path,
+      details: { path: stored.path, bytes: stored.bytes, kind: stored.kind, mimeType: stored.mimeType },
+    });
+    return reply.code(201).send({ media: stored });
   });
 
   app.post("/v1/auth/logout", async (request, reply) => {

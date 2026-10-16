@@ -12,6 +12,7 @@ import type { CodeSandboxClient } from "./code-sandbox.js";
 import type { GitHubConnector } from "../connectors/github.js";
 import type { GoogleConnector } from "../connectors/google.js";
 import type { McpConnector } from "../connectors/mcp.js";
+import { speechVoices, type MediaService } from "./media.js";
 
 export function createBuiltinToolRegistry(options: {
   workspaceRoot?: string;
@@ -22,6 +23,7 @@ export function createBuiltinToolRegistry(options: {
   managedBrowser?: Pick<ManagedBrowser, "run">;
   subagentCoordinator?: Pick<SubagentCoordinator, "delegate">;
   codeSandbox?: Pick<CodeSandboxClient, "run">;
+  mediaService?: Pick<MediaService, "analyzeImage" | "analyzePdf" | "transcribeAudio" | "createSpeech">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
@@ -193,6 +195,63 @@ export function createBuiltinToolRegistry(options: {
           timeoutSeconds: number;
         }),
       }),
+    });
+  }
+
+  if (options.mediaService) {
+    registry.register({
+      name: "media.image.analyze",
+      description: "Analyze a PNG, JPEG, GIF, or WebP image from the current user's isolated workspace with the configured vision model.",
+      risk: "external",
+      inputSchema: z.object({
+        path: z.string().min(1).max(1_000),
+        prompt: z.string().min(1).max(20_000),
+        detail: z.enum(["auto", "low", "high"]).default("auto"),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { path: string; prompt: string; detail: "auto" | "low" | "high" };
+        return options.mediaService!.analyzeImage(context.userId, value.path, value.prompt, value.detail);
+      },
+    });
+    registry.register({
+      name: "media.pdf.analyze",
+      description: "Analyze a PDF, including scanned pages, from the current user's isolated workspace with the configured vision model.",
+      risk: "external",
+      inputSchema: z.object({
+        path: z.string().min(1).max(1_000),
+        prompt: z.string().min(1).max(20_000),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { path: string; prompt: string };
+        return options.mediaService!.analyzePdf(context.userId, value.path, value.prompt);
+      },
+    });
+    registry.register({
+      name: "media.audio.transcribe",
+      description: "Transcribe a supported audio file from the current user's isolated workspace.",
+      risk: "external",
+      inputSchema: z.object({
+        path: z.string().min(1).max(1_000),
+        language: z.string().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$/u).optional(),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { path: string; language?: string };
+        return options.mediaService!.transcribeAudio(context.userId, value.path, value.language);
+      },
+    });
+    registry.register({
+      name: "media.speech.create",
+      description: "Generate MP3 speech in the current user's isolated workspace.",
+      risk: "external",
+      inputSchema: z.object({
+        path: z.string().min(1).max(1_000),
+        text: z.string().min(1).max(4_096),
+        voice: z.enum(speechVoices).default("alloy"),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { path: string; text: string; voice: typeof speechVoices[number] };
+        return options.mediaService!.createSpeech(context.userId, value.path, value.text, value.voice);
+      },
     });
   }
 

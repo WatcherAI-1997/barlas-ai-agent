@@ -64,6 +64,8 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `GET /v1/integrations/google-drive/files` — list recent Drive file metadata.
 - `GET /v1/integrations/gmail/messages` — list recent Gmail message/thread IDs.
 - `GET /v1/integrations/google-calendar/events` — list upcoming primary-calendar events.
+- `POST /v1/media/upload?userId=...&path=media%2Fphoto.png` — upload one
+  multipart media file into the user's isolated workspace.
 
 An isolated background run uses `jobType: "agent.run"` and accepts an `input`
 with `objective`, optional bounded `context`, and `taskClass` (`fast`, `deep`,
@@ -122,6 +124,27 @@ oversized workflows are rejected before execution.
 - Document creation is a write action and therefore waits for explicit user
   approval. CSV cells are escaped server-side; paths retain the same traversal,
   symlink, size, and ownership protections as the other file tools.
+
+## Multimodal media
+
+- Media uploads accept one file up to 10 MB. The server identifies the format
+  from magic bytes, requires a matching extension and MIME type, and rejects
+  SVG or unknown content. Supported inputs are PNG, JPEG, GIF, WebP, PDF, MP3,
+  WAV, OGG, M4A/MP4 audio, and WebM audio.
+- `media.image.analyze` sends one owned image and a bounded prompt to the
+  configured vision model. `media.pdf.analyze` supports native and scanned PDF
+  pages. `media.audio.transcribe` sends supported audio to the configured
+  transcription model. `media.speech.create` creates an MP3 in the same user's
+  workspace using one allowlisted voice.
+- All four model-mediated media tools have `external` risk. The exact path and
+  arguments enter the approval queue before any file bytes leave the Barlas
+  deployment. Uploads themselves are local writes initiated directly by the
+  authenticated user and are recorded in the audit log without file contents.
+- The built-in `media.understanding` skill exposes only file listing and these
+  four approval-gated media operations; it cannot expand its own permissions.
+- Configure `VISION_MODEL` (defaults to `MODEL_NAME`), `TRANSCRIPTION_MODEL`,
+  and `SPEECH_MODEL`. Provider support and billing depend on the dedicated model
+  account; Barlas never silently falls back to another provider for a media call.
 
 ## Quotas and traces
 

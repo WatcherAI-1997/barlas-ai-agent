@@ -99,10 +99,18 @@ for (const toolName of [
   "google_calendar.event.create",
   "google_calendar.event.update",
   "mcp.tool.call",
+  "media.image.analyze",
+  "media.pdf.analyze",
+  "media.audio.transcribe",
+  "media.speech.create",
 ]) {
   const offset = builtins.indexOf(`name: "${toolName}"`);
   const block = builtins.slice(offset, offset + 500);
   if (offset < 0 || !block.includes('risk: "external"')) throw new Error(`External mutation is not approval-gated: ${toolName}`);
+}
+const mediaTools = await readFile("src/tools/media.ts", "utf8");
+for (const required of ["MAX_MEDIA_BYTES = 10_000_000", "detectMedia", "File extension does not match", "Unsupported or unrecognized", "workspace.readBuffer", "workspace.writeBuffer"]) {
+  if (!mediaTools.includes(required)) throw new Error(`Media boundary is missing: ${required}`);
 }
 const mcpConnector = await readFile("src/connectors/mcp.ts", "utf8");
 for (const required of ["assertPublicUrl", "publicNetworkFetch", "redirectPolicy: \"same-origin\"", "MAX_RESULT_BYTES = 1_000_000"]) {

@@ -3,7 +3,7 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 95 automated tests across 29 files pass.
+- 101 automated tests across 30 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -15,6 +15,9 @@
 - PDF/DOCX extraction and Unicode DOCX creation are bounded by workspace,
   regular-file, size, and output limits; DOCX CRC and expanded XML size are
   checked before text is returned.
+- Media tests verify binary-signature/MIME/extension agreement, rejection of
+  SVG and unknown content, per-user isolation, bounded upload, and external-risk
+  registration for every vision, PDF, transcription, and speech tool.
 - An isolated live load smoke completed 1,000 `/health` and `/ready` requests at
   concurrency 50 with zero failures and 37.7 ms p95 latency on the test host.
 - A PostgreSQL custom dump restored into a separate disposable PostgreSQL 17

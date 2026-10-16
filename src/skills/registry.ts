@@ -79,5 +79,12 @@ export function createBuiltinSkillRegistry(): SkillRegistry {
     instructions: "Use bounded steps, identify dependencies and risks, and include objective verification criteria.",
     allowedTools: ["files.read", "files.list", "agent.delegate"],
   });
+  registry.register({
+    id: "media.understanding",
+    version: "1.0.0",
+    description: "Analyze owned images, scanned PDFs, and audio, or create a spoken MP3 response.",
+    instructions: "Use only the user-provided workspace path. Explain what will be sent externally, request the smallest useful operation, and state uncertainty in visual or audio interpretation.",
+    allowedTools: ["files.list", "media.image.analyze", "media.pdf.analyze", "media.audio.transcribe", "media.speech.create"],
+  });
   return registry;
 }

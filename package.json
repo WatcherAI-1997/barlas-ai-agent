@@ -18,6 +18,7 @@
     "test:load": "node scripts/load-smoke.mjs"
   },
   "dependencies": {
+    "@fastify/multipart": "^10.1.4",
     "@fastify/sensible": "^6.0.3",
     "@fastify/static": "^10.1.6",
     "@modelcontextprotocol/sdk": "^1.32.1",

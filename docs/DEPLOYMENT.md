@@ -61,6 +61,13 @@ the minimum permissions required. Localhost, private networks, nonstandard
 ports, cross-origin redirects, and unbounded responses are rejected. A token of
 `-` explicitly selects an unauthenticated MCP endpoint.
 
+Set `VISION_MODEL` to a Responses API model that accepts images and PDF files.
+`TRANSCRIPTION_MODEL` and `SPEECH_MODEL` select the audio models. If
+`VISION_MODEL` is omitted, the regular `MODEL_NAME` is used; deployment smoke
+tests should confirm that model actually supports the requested media inputs.
+Media is never sent to the provider until the corresponding external action is
+approved.
+
 ## Rollback
 
 Keep the previous image tag and database backup. Application rollback is an

@@ -24,6 +24,9 @@
 - Isolated subagents and resumable workflows. *(bounded dependency workflows plus model-initiated delegation to up to three parallel, tool-free, non-recursive subagents implemented)*
 - Versioned skills with evaluation and rollback. *(persistent owner-installed candidates, bounded automated acceptance evaluation, activation gate, exact selection, tool-permission enforcement, and rollback implemented)*
 - Approval queue and audit trail. *(foundation implemented)*
+- Multimodal image, document, and audio understanding. *(magic-byte-validated
+  uploads, approval-gated image/PDF analysis, audio transcription, and MP3
+  speech generation implemented; live provider quality evaluation pending)*
 - Execution traces and per-user quotas. *(implemented foundation)*
 - Admin controls, observability, and cost reporting. *(operations dashboard implemented)*
 

@@ -41,6 +41,10 @@ autonomy.
   requested resource against the public-network policy before allowing it.
 - PDF/DOCX extraction and DOCX creation operate only on per-user workspace
   files with bounded input/output and no macros or active content execution.
+- Media uploads are limited to 10 MB and verified from binary signatures before
+  storage. Vision, scanned-PDF analysis, transcription, and speech generation
+  use owned workspace paths and remain external approval-gated model calls;
+  raw media and model results are not copied into traces or audit details.
 - The terminal surface has no arbitrary command or shell entry point. It exposes
   only bounded read-only file inspection operations.
 - Approved code execution is delegated to a separate read-only container over

@@ -60,3 +60,19 @@ describe("external mutation tool registration", () => {
     }
   });
 });
+
+describe("multimodal tool registration", () => {
+  it("exposes every model-mediated media action only behind external approval", () => {
+    const registry = createBuiltinToolRegistry({
+      mediaService: {
+        analyzeImage: async () => ({ path: "x.png", mimeType: "image/png", text: "x" }),
+        analyzePdf: async () => ({ path: "x.pdf", mimeType: "application/pdf", text: "x" }),
+        transcribeAudio: async () => ({ path: "x.mp3", mimeType: "audio/mpeg", text: "x" }),
+        createSpeech: async () => ({ path: "x.mp3", bytes: 1, mimeType: "audio/mpeg", voice: "alloy" as const }),
+      },
+    });
+    for (const name of ["media.image.analyze", "media.pdf.analyze", "media.audio.transcribe", "media.speech.create"]) {
+      expect(registry.list()).toContainEqual(expect.objectContaining({ name, risk: "external" }));
+    }
+  });
+});

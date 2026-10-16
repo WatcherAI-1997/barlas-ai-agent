@@ -10,6 +10,15 @@ async function api(path, options = {}) {
   return body;
 }
 
+async function upload(path, formData) {
+  const headers = {};
+  if (state.token) headers.authorization = `Bearer ${state.token}`;
+  const response = await fetch(path, { method: "POST", headers, body: formData });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || body.message || `HTTP ${response.status}`);
+  return body;
+}
+
 function card(title, meta, body = "") {
   const node = document.createElement("article");
   node.className = "card";
@@ -144,6 +153,27 @@ $("#chat-form").addEventListener("submit", async (event) => {
     else await loadConversations();
     if (data.status === "waiting_approval") await loadApprovals();
   } catch (error) { addMessage("agent", `Ошибка: ${error.message}`); }
+});
+
+$("#media-file").addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (file && !$("#media-path").value) $("#media-path").value = `media/${file.name}`;
+});
+
+$("#media-upload-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = $("#media-upload-status");
+  const file = $("#media-file").files[0];
+  if (!file) return;
+  status.textContent = "Загрузка…";
+  try {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    const query = new URLSearchParams({ userId: state.account.id, path: $("#media-path").value.trim() });
+    const data = await upload(`/v1/media/upload?${query}`, formData);
+    status.textContent = `Загружено: ${data.media.path} (${data.media.mimeType}, ${data.media.bytes} байт)`;
+    event.target.reset();
+  } catch (error) { status.textContent = `Ошибка: ${error.message}`; }
 });
 
 async function watchAgentRun(runId, statusNode) {
