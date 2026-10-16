@@ -38,7 +38,7 @@ export function createBuiltinSkillRegistry(): SkillRegistry {
     version: "1.0.0",
     description: "Extract verified findings, uncertainties, and sources from supplied context.",
     instructions: "Separate facts from assumptions. Preserve source references. State uncertainty explicitly.",
-    allowedTools: ["files.read", "files.list"],
+    allowedTools: ["files.read", "files.list", "web.search"],
   });
   registry.register({
     id: "writing.brief",

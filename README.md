@@ -23,7 +23,9 @@ API adapter, a task-aware model router, PostgreSQL conversation and long-term
 memory storage, an authenticated Telegram webhook, approval policy primitives,
 an auditable tool executor, durable job storage, container hardening, and
 automated tests. The private-alpha core also includes versioned skills, bounded
-subagent workflows, and per-user file workspaces. No production agent, token,
+subagent workflows, and per-user file workspaces. The next capability layer
+adds optional SearXNG web search, a no-shell read-only terminal inspector,
+atomic per-user quotas, and execution traces. No production agent, token,
 configuration, memory, port, database, or process is shared with this project.
 
 ## Local verification

@@ -22,6 +22,10 @@ const configSchema = z.object({
   JOB_WORKER_BATCH_SIZE: z.coerce.number().int().min(1).max(32).default(4),
   JOB_LEASE_SECONDS: z.coerce.number().int().min(30).max(3_600).default(300),
   WORKSPACE_ROOT: z.string().min(1).default("/var/lib/barlas/workspaces"),
+  SEARXNG_BASE_URL: z.string().url().optional(),
+  DAILY_CHAT_QUOTA: z.coerce.number().int().min(1).max(100_000).default(500),
+  DAILY_TOOL_QUOTA: z.coerce.number().int().min(1).max(100_000).default(1_000),
+  DAILY_JOB_QUOTA: z.coerce.number().int().min(1).max(10_000).default(100),
 }).superRefine((config, context) => {
   const telegramFields = [config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_WEBHOOK_SECRET];
   if (telegramFields.some(Boolean) && !telegramFields.every(Boolean)) {

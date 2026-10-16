@@ -28,6 +28,12 @@ autonomy.
 - Managed workflows contain at most six sequential subagent steps. A step can
   consume the previous result but cannot recursively create more subagents or
   claim that it performed external actions.
+- Web search uses a separately configured open-source SearXNG endpoint. It is
+  disabled by default and remains subject to the external-action approval gate.
+- The terminal surface has no arbitrary command or shell entry point. It exposes
+  only bounded read-only file inspection operations.
+- Per-user UTC-day counters and execution traces live in the isolated PostgreSQL
+  database. Quota consumption is atomic under concurrent requests.
 
 ## Data boundaries
 

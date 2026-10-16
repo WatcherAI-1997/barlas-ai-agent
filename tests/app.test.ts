@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { buildApp } from "../src/app.js";
 import type { ModelProvider } from "../src/core/models.js";
+import { RuntimeGovernance } from "../src/governance/runtime.js";
 
 const apiToken = "a".repeat(32);
 
@@ -185,6 +186,32 @@ describe("Barlas AI Agent API", () => {
     expect(response.statusCode).toBe(201);
     expect(response.json().job.status).toBe("queued");
     expect(deps.database.appendAudit).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("returns HTTP 429 when a daily quota is exhausted", async () => {
+    const deps = dependencies();
+    const governance = new RuntimeGovernance({
+      consumeQuota: vi.fn(async ({ limit }) => ({ allowed: false, used: limit, limit })),
+      appendTrace: vi.fn(async () => undefined),
+      listTraces: vi.fn(async () => []),
+    }, { chat: 1, tool: 1, job: 1 });
+    const app = await buildApp({ apiToken, ...deps, governance });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/chat",
+      headers: { authorization: `Bearer ${apiToken}` },
+      payload: { userId: "user-1", messages: [{ role: "user", content: "Hello" }] },
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toEqual({
+      error: "Quota exceeded",
+      category: "chat",
+      used: 1,
+      limit: 1,
+    });
+    expect(deps.modelProvider.generate).not.toHaveBeenCalled();
     await app.close();
   });
 });

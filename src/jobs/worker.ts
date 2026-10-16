@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import type { RuntimeGovernance } from "../governance/runtime.js";
 import type { AgentStore, DurableJob } from "../storage/types.js";
 
 export type JobHandler = (job: DurableJob) => Promise<unknown>;
@@ -11,6 +12,7 @@ export interface JobWorkerOptions {
   batchSize?: number;
   retryBaseMs?: number;
   onError?: (error: unknown) => void;
+  governance?: RuntimeGovernance;
 }
 
 export class JobWorker {
@@ -34,9 +36,11 @@ export class JobWorker {
     this.batchSize = options.batchSize ?? 4;
     this.retryBaseMs = options.retryBaseMs ?? 2_000;
     this.onError = options.onError ?? (() => undefined);
+    this.governance = options.governance;
   }
 
   private readonly onError: (error: unknown) => void;
+  private readonly governance: RuntimeGovernance | undefined;
 
   register(jobType: string, handler: JobHandler): void {
     if (this.handlers.has(jobType)) throw new Error(`Job handler ${jobType} is already registered`);
@@ -84,7 +88,17 @@ export class JobWorker {
 
   private async process(job: DurableJob): Promise<void> {
     const handler = this.handlers.get(job.jobType);
+    const traceId = this.governance?.newTraceId();
     try {
+      if (traceId) {
+        await this.governance?.trace({
+          traceId,
+          userId: job.userId,
+          operation: `worker:${job.jobType}`,
+          status: "started",
+          details: { jobId: job.id, attempt: job.attempts },
+        });
+      }
       if (!handler) throw new Error(`No handler registered for job type: ${job.jobType}`);
       const result = await handler(job);
       const completed = await this.store.completeJob({
@@ -100,6 +114,15 @@ export class JobWorker {
         resourceId: job.id,
         details: { jobType: job.jobType, attempts: job.attempts },
       });
+      if (traceId) {
+        await this.governance?.trace({
+          traceId,
+          userId: job.userId,
+          operation: `worker:${job.jobType}`,
+          status: "completed",
+          details: { jobId: job.id, attempt: job.attempts },
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown job failure";
       const canRetry = job.attempts < job.maxAttempts && handler !== undefined;
@@ -119,6 +142,15 @@ export class JobWorker {
         resourceId: job.id,
         details: { jobType: job.jobType, attempts: job.attempts, error: message.slice(0, 500) },
       });
+      if (traceId) {
+        await this.governance?.trace({
+          traceId,
+          userId: job.userId,
+          operation: `worker:${job.jobType}`,
+          status: "failed",
+          details: { jobId: job.id, attempt: job.attempts, retrying: status === "queued", error: message.slice(0, 500) },
+        });
+      }
     }
   }
 }

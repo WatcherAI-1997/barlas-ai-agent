@@ -2,6 +2,7 @@ import { buildApp } from "./app.js";
 import { TelegramClient } from "./channels/telegram.js";
 import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
+import { RuntimeGovernance } from "./governance/runtime.js";
 import { createAgentJobHandler } from "./jobs/agent-handler.js";
 import { JobWorker } from "./jobs/worker.js";
 import { createWorkflowJobHandler } from "./jobs/workflow-handler.js";
@@ -37,11 +38,20 @@ const modelProvider = new ModelRouter({
   private: privateProvider,
 });
 const skillRegistry = createBuiltinSkillRegistry();
-const toolExecutor = new ToolExecutor(createBuiltinToolRegistry(config.WORKSPACE_ROOT), database);
+const governance = new RuntimeGovernance(database, {
+  chat: config.DAILY_CHAT_QUOTA,
+  tool: config.DAILY_TOOL_QUOTA,
+  job: config.DAILY_JOB_QUOTA,
+});
+const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
+  workspaceRoot: config.WORKSPACE_ROOT,
+  ...(config.SEARXNG_BASE_URL ? { searxngBaseUrl: config.SEARXNG_BASE_URL } : {}),
+}), database, governance);
 const jobWorker = new JobWorker(database, {
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
   batchSize: config.JOB_WORKER_BATCH_SIZE,
   leaseSeconds: config.JOB_LEASE_SECONDS,
+  governance,
   onError: (error) => console.error("Barlas AI Agent job worker error", error),
 });
 jobWorker.register("agent.run", createAgentJobHandler(modelProvider));
@@ -58,6 +68,7 @@ const app = await buildApp({
   modelProvider,
   toolExecutor,
   skillRegistry,
+  governance,
   ...(telegram ? { telegram } : {}),
   logger: true,
 });

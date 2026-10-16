@@ -2,8 +2,13 @@ import { z } from "zod";
 
 import { ToolRegistry } from "./registry.js";
 import { FileWorkspace } from "./file-workspace.js";
+import { RestrictedTerminal } from "./terminal.js";
+import { SearxngSearchClient } from "./web-search.js";
 
-export function createBuiltinToolRegistry(workspaceRoot?: string): ToolRegistry {
+export function createBuiltinToolRegistry(options: {
+  workspaceRoot?: string;
+  searxngBaseUrl?: string;
+} = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
   registry.register({
@@ -30,8 +35,9 @@ export function createBuiltinToolRegistry(workspaceRoot?: string): ToolRegistry 
     },
   });
 
-  if (workspaceRoot) {
-    const workspace = new FileWorkspace(workspaceRoot);
+  if (options.workspaceRoot) {
+    const workspace = new FileWorkspace(options.workspaceRoot);
+    const terminal = new RestrictedTerminal(workspace);
     registry.register({
       name: "files.list",
       description: "List regular files and directories in the current user's isolated workspace.",
@@ -57,6 +63,41 @@ export function createBuiltinToolRegistry(workspaceRoot?: string): ToolRegistry 
       execute: async (input, context) => {
         const value = input as { path: string; content: string };
         return workspace.write(context.userId, value.path, value.content);
+      },
+    });
+    registry.register({
+      name: "terminal.inspect",
+      description: "Run one allowlisted read-only inspection operation on a workspace file.",
+      risk: "read",
+      inputSchema: z.object({
+        operation: z.enum(["sha256", "word_count", "head", "tail"]),
+        path: z.string().min(1).max(1_000),
+        lines: z.number().int().min(1).max(200).optional(),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as {
+          operation: "sha256" | "word_count" | "head" | "tail";
+          path: string;
+          lines?: number;
+        };
+        return terminal.inspect({ userId: context.userId, ...value });
+      },
+    });
+  }
+
+  if (options.searxngBaseUrl) {
+    const search = new SearxngSearchClient(options.searxngBaseUrl);
+    registry.register({
+      name: "web.search",
+      description: "Search the web through the deployment's isolated SearXNG provider.",
+      risk: "external",
+      inputSchema: z.object({
+        query: z.string().min(2).max(500),
+        limit: z.number().int().min(1).max(10).default(5),
+      }).strict(),
+      execute: async (input) => {
+        const value = input as { query: string; limit: number };
+        return search.search(value.query, value.limit);
       },
     });
   }

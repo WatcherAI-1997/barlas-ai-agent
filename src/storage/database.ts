@@ -1,9 +1,10 @@
 import { Pool } from "pg";
 
 import type { AgentMessage, GenerateResult } from "../core/models.js";
+import type { GovernanceStore, QuotaCategory, TraceEvent, TraceStatus } from "../governance/runtime.js";
 import type { AgentStore, ApprovalRequest, DurableJob, MemoryEntry } from "./types.js";
 
-export class Database implements AgentStore {
+export class Database implements AgentStore, GovernanceStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -332,6 +333,72 @@ export class Database implements AgentStore {
       [input.id, input.workerId, input.error, input.retryAt ?? null],
     );
     return result.rows[0]?.status ?? null;
+  }
+
+  async consumeQuota(input: {
+    userId: string;
+    category: QuotaCategory;
+    periodStart: string;
+    limit: number;
+  }): Promise<{ allowed: boolean; used: number; limit: number }> {
+    const result = await this.pool.query<{ count: number; allowed: boolean }>(
+      `with consumed as (
+         insert into usage_counters (user_id, category, period_start, count)
+         values ($1, $2, $3::date, 1)
+         on conflict (user_id, category, period_start) do update
+           set count = usage_counters.count + 1, updated_at = now()
+           where usage_counters.count < $4
+         returning count
+       )
+       select count, true as allowed from consumed
+       union all
+       select count, false as allowed
+       from usage_counters
+       where user_id = $1 and category = $2 and period_start = $3::date
+         and not exists (select 1 from consumed)
+       limit 1`,
+      [input.userId, input.category, input.periodStart, input.limit],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Quota update returned no row");
+    return { allowed: row.allowed, used: row.count, limit: input.limit };
+  }
+
+  async appendTrace(input: {
+    traceId: string;
+    userId: string;
+    operation: string;
+    status: TraceStatus;
+    details?: unknown;
+  }): Promise<void> {
+    await this.pool.query(
+      `insert into trace_events (trace_id, user_id, operation, status, details)
+       values ($1::uuid, $2, $3, $4, $5::jsonb)`,
+      [input.traceId, input.userId, input.operation, input.status, JSON.stringify(input.details ?? {})],
+    );
+  }
+
+  async listTraces(userId: string, limit: number): Promise<TraceEvent[]> {
+    const result = await this.pool.query<{
+      trace_id: string;
+      user_id: string;
+      operation: string;
+      status: TraceStatus;
+      details: unknown;
+      created_at: Date;
+    }>(
+      `select trace_id, user_id, operation, status, details, created_at
+       from trace_events where user_id = $1 order by created_at desc limit $2`,
+      [userId, limit],
+    );
+    return result.rows.map((row) => ({
+      traceId: row.trace_id,
+      userId: row.user_id,
+      operation: row.operation,
+      status: row.status,
+      details: row.details,
+      createdAt: row.created_at.toISOString(),
+    }));
   }
 
   private mapApproval(row: {

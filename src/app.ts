@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import type { ModelProvider } from "./core/models.js";
+import { QuotaExceededError, type RuntimeGovernance } from "./governance/runtime.js";
 import { agentJobSchema } from "./jobs/agent-handler.js";
 import { workflowJobSchema } from "./jobs/workflow-handler.js";
 import type { SkillRegistry } from "./skills/registry.js";
@@ -84,12 +85,18 @@ const listJobsSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+const listTracesSchema = z.object({
+  userId: z.string().min(1).max(128),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export interface AppDependencies {
   apiToken: string;
   database: AgentStore;
   modelProvider: ModelProvider;
   toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
   skillRegistry?: Pick<SkillRegistry, "list">;
+  governance?: RuntimeGovernance;
   telegram?: {
     webhookSecret: string;
     client: { sendMessage(chatId: number, text: string): Promise<void> };
@@ -106,6 +113,18 @@ function tokenMatches(expected: string, supplied: string): boolean {
 export async function buildApp(dependencies: AppDependencies): Promise<FastifyInstance> {
   const app = Fastify({ logger: dependencies.logger ?? false });
   await app.register(sensible);
+
+  app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof QuotaExceededError) {
+      return reply.code(429).send({
+        error: "Quota exceeded",
+        category: error.category,
+        used: error.used,
+        limit: error.limit,
+      });
+    }
+    return reply.send(error);
+  });
 
   app.get("/health", async () => ({
     name: "Barlas AI Agent",
@@ -131,6 +150,17 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   });
 
   const runChat = async (input: z.infer<typeof chatBodySchema>) => {
+    await dependencies.governance?.consume(input.userId, "chat");
+    const traceId = dependencies.governance?.newTraceId();
+    if (traceId) {
+      await dependencies.governance?.trace({
+        traceId,
+        userId: input.userId,
+        operation: "chat.generate",
+        status: "started",
+        details: { taskClass: input.taskClass },
+      });
+    }
     const conversationId = input.conversationId ?? randomUUID();
     const latestUserMessage = [...input.messages].reverse().find((message) => message.role === "user");
     const memories = latestUserMessage
@@ -145,21 +175,42 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           ].join("\n"),
         }]
       : [];
-    const result = await dependencies.modelProvider.generate({
-      userId: input.userId,
-      conversationId,
-      messages: [...memoryContext, ...input.messages],
-      taskClass: input.taskClass,
-    });
+    try {
+      const result = await dependencies.modelProvider.generate({
+        userId: input.userId,
+        conversationId,
+        messages: [...memoryContext, ...input.messages],
+        taskClass: input.taskClass,
+      });
 
-    await dependencies.database.saveTurn({
-      userId: input.userId,
-      conversationId,
-      messages: input.messages,
-      result,
-    });
-
-    return { conversationId, result, memoriesUsed: memories.length };
+      await dependencies.database.saveTurn({
+        userId: input.userId,
+        conversationId,
+        messages: input.messages,
+        result,
+      });
+      if (traceId) {
+        await dependencies.governance?.trace({
+          traceId,
+          userId: input.userId,
+          operation: "chat.generate",
+          status: "completed",
+          details: { provider: result.provider, model: result.model, memoriesUsed: memories.length },
+        });
+      }
+      return { conversationId, result, memoriesUsed: memories.length, traceId };
+    } catch (error) {
+      if (traceId) {
+        await dependencies.governance?.trace({
+          traceId,
+          userId: input.userId,
+          operation: "chat.generate",
+          status: "failed",
+          details: { error: error instanceof Error ? error.message.slice(0, 500) : "Unknown error" },
+        });
+      }
+      throw error;
+    }
   };
 
   app.post("/v1/chat", async (request, reply) => {
@@ -168,7 +219,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       return reply.badRequest("Invalid chat request");
     }
 
-    const { conversationId, result, memoriesUsed } = await runChat(parsed.data);
+    const { conversationId, result, memoriesUsed, traceId } = await runChat(parsed.data);
 
     return {
       conversationId,
@@ -181,6 +232,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         name: result.model,
       },
       memoriesUsed,
+      traceId,
     };
   });
 
@@ -212,6 +264,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     return { skills: dependencies.skillRegistry.list() };
   });
 
+  app.get("/v1/traces", async (request, reply) => {
+    if (!dependencies.governance) return reply.notFound();
+    const parsed = listTracesSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid traces query");
+    return { traces: await dependencies.governance.list(parsed.data.userId, parsed.data.limit) };
+  });
+
   app.post("/v1/tools/execute", async (request, reply) => {
     if (!dependencies.toolExecutor) return reply.notFound();
     const parsed = toolExecutionSchema.safeParse(request.body);
@@ -241,6 +300,8 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   app.post("/v1/jobs", async (request, reply) => {
     const parsed = createJobSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid job request");
+    await dependencies.governance?.consume(parsed.data.userId, "job");
+    const traceId = dependencies.governance?.newTraceId();
     const job = await dependencies.database.createJob({
       userId: parsed.data.userId,
       jobType: parsed.data.jobType,
@@ -254,7 +315,16 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       resourceId: job.id,
       details: { jobType: job.jobType, scheduledFor: job.scheduledFor },
     });
-    return reply.code(201).send({ job });
+    if (traceId) {
+      await dependencies.governance?.trace({
+        traceId,
+        userId: parsed.data.userId,
+        operation: `job:${job.jobType}`,
+        status: "pending",
+        details: { jobId: job.id, scheduledFor: job.scheduledFor },
+      });
+    }
+    return reply.code(201).send({ job, traceId });
   });
 
   app.get("/v1/jobs", async (request, reply) => {

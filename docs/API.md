@@ -18,6 +18,7 @@ Send `Authorization: Bearer <BARLAS_API_TOKEN>`.
 - `GET /v1/memory/search` — retrieve relevant memories for one user.
 - `GET /v1/tools` — list registered tools and their risk levels.
 - `GET /v1/skills` — list installed skill IDs, versions, descriptions, and tool permissions.
+- `GET /v1/traces` — list recent execution trace events for one user.
 - `POST /v1/tools/execute` — execute a read-only tool or create an approval.
 - `POST /v1/approvals/:id/decision` — approve or reject a pending action.
 - `POST /v1/jobs` — persist a durable task for immediate or scheduled work.
@@ -40,6 +41,25 @@ previous step result. Unknown skills and oversized workflows are rejected.
 - paths are relative to a per-user directory derived from a one-way user ID hash;
   absolute paths, traversal, symlink escapes, and files above 1 MB are rejected.
 - workspace data is stored in the dedicated `barlas-ai-agent-workspaces` volume.
+
+## Web search and restricted terminal
+
+- `web.search` is registered only when `SEARXNG_BASE_URL` points to an operator-
+  controlled SearXNG instance. Queries are approval-gated external actions,
+  safe-search is enabled, responses are limited to 2 MB, and at most ten
+  normalized results are returned.
+- `terminal.inspect` does not invoke a shell. It maps four fixed operations
+  (`sha256`, `word_count`, `head`, and `tail`) to direct executable calls over
+  a previously resolved regular file inside the user's workspace. Runtime and
+  output are bounded.
+
+## Quotas and traces
+
+UTC-day quotas are independently configurable for chat, tool, and job requests.
+Counters are incremented atomically in PostgreSQL. Exhausted requests return
+HTTP 429 with the category, current usage, and limit. Trace events record start,
+completion, pending approval, rejection, retry/failure, and the related IDs;
+tool inputs, prompts, file contents, and secrets are not copied into traces.
 
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.

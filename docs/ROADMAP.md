@@ -10,9 +10,9 @@
 
 - Telegram webhook and replies. *(foundation implemented; credentials pending)*
 - Persistent conversations and explicit long-term memory. *(implemented)*
-- Web research, files, terminal tools, and task execution. *(isolated file tools implemented)*
+- Web research, files, terminal tools, and task execution. *(SearXNG search, isolated files, and restricted inspection implemented)*
 - Model switching and routing. *(fast/deep/private foundation implemented)*
-- Approval gates, audit trail, and usage limits.
+- Approval gates, audit trail, and usage limits. *(implemented foundation)*
 
 ## Phase 2 — Agent capabilities
 
@@ -20,6 +20,7 @@
 - Isolated subagents and resumable workflows. *(bounded sequential workflows implemented)*
 - Versioned skills with evaluation and rollback. *(versioned registry implemented; evaluation/rollback pending)*
 - Approval queue and audit trail. *(foundation implemented)*
+- Execution traces and per-user quotas. *(implemented foundation)*
 - Admin controls, observability, and cost reporting.
 
 ## Phase 3 — Product

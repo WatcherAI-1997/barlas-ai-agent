@@ -29,6 +29,18 @@ export class FileWorkspace {
     return { path: relative(userRoot, target), content: await readFile(target, "utf8") };
   }
 
+  async pathForRead(userId: string, path: string): Promise<{
+    userRoot: string;
+    absolutePath: string;
+    relativePath: string;
+  }> {
+    const { userRoot, target } = await this.resolveExisting(userId, path);
+    const info = await lstat(target);
+    if (!info.isFile() || info.isSymbolicLink()) throw new Error("Only regular files can be inspected");
+    if (info.size > MAX_READ_BYTES) throw new Error("File exceeds the 1 MB inspection limit");
+    return { userRoot, absolutePath: target, relativePath: relative(userRoot, target) };
+  }
+
   async write(userId: string, path: string, content: string): Promise<{ path: string; bytes: number }> {
     const bytes = Buffer.byteLength(content);
     if (bytes > MAX_WRITE_BYTES) throw new Error("Content exceeds the 1 MB write limit");
