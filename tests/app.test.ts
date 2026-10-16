@@ -6,6 +6,7 @@ import type { ModelProvider } from "../src/core/models.js";
 import { RuntimeGovernance } from "../src/governance/runtime.js";
 import type { SupportedLanguageCode } from "../src/i18n/languages.js";
 import { SkillRegistry } from "../src/skills/registry.js";
+import { createBuiltinExtensionCatalog } from "../src/extensions/catalog.js";
 
 const apiToken = "a".repeat(32);
 
@@ -116,6 +117,24 @@ describe("Barlas AI Agent API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ name: "Barlas AI Agent", status: "ok" });
+    await app.close();
+  });
+
+  it("lists extension capabilities and configuration state", async () => {
+    const deps = dependencies();
+    const extensionCatalog = createBuiltinExtensionCatalog({
+      browser: false, github: false, google: false, mcp: false, sandbox: true,
+      telegram: true, privateModel: false,
+    });
+    const app = await buildApp({ apiToken, ...deps, extensionCatalog });
+    const response = await app.inject({
+      method: "GET", url: "/v1/extensions", headers: { authorization: `Bearer ${apiToken}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().extensions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "channel.telegram", configured: true }),
+      expect.objectContaining({ id: "runtime.browser", configured: false }),
+    ]));
     await app.close();
   });
 

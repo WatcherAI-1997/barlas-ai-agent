@@ -45,6 +45,9 @@
 - Provenance-checked fast-forward updates with pre-update database/workspace
   backup, health-gated automatic application rollback, and optional signed
   commit enforcement. *(implemented)*
+- Typed extension catalog with stable manifests, capability/risk metadata,
+  configuration-state API, and CLI discovery. *(built-in catalog implemented;
+  signed third-party package lifecycle pending)*
 
 - Branded web application. *(responsive authenticated cabinet, mobile
   navigation, accessible feedback/dialogs, and isolated file manager implemented)*

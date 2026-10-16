@@ -43,6 +43,7 @@ server-side; each plaintext token is shown only once.
 - `POST /v1/memory` — save an explicit long-term memory.
 - `GET /v1/memory/search` — retrieve relevant memories for one user.
 - `GET /v1/tools` — list registered tools and their risk levels.
+- `GET /v1/extensions` — list built-in extension manifests, capabilities, risk classes, required setting names, and current configuration state without secret values.
 - `GET /v1/skills` — list installed skill IDs, versions, descriptions, activation state, and tool permissions.
 - `POST /v1/skills` — owner-only installation of an inactive candidate skill version.
 - `POST /v1/skills/:id/:version/evaluate` — run 1–5 bounded, tool-free acceptance cases.

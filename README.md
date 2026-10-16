@@ -101,7 +101,12 @@ After installation, work from the terminal without copying a token:
 ./barlas ask "Проверь проект и составь план"
 ./barlas approvals
 ./barlas approve APPROVAL_ID
+./barlas extensions          # capabilities and configuration state
 ```
+
+The extension catalog declares each built-in channel, connector, provider,
+runtime, skill source, and device bridge together with its capabilities, risk
+classes, and required setting names. It never returns secret values.
 
 For a public HTTPS deployment on a dedicated Linux server, run `./install.sh`
 without `--local` and provide a domain.

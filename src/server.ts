@@ -34,6 +34,7 @@ import { MediaService, OpenAIMediaModel } from "./tools/media.js";
 import { ScheduleService } from "./schedules/service.js";
 import { ScheduleWorker } from "./schedules/worker.js";
 import { languageInstruction } from "./i18n/languages.js";
+import { createBuiltinExtensionCatalog } from "./extensions/catalog.js";
 
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
@@ -96,6 +97,15 @@ const subagentCoordinator = new SubagentCoordinator(modelProvider);
 const codeSandbox = config.SANDBOX_SOCKET_PATH && config.SANDBOX_SHARED_TOKEN
   ? new CodeSandboxClient(config.SANDBOX_SOCKET_PATH, config.SANDBOX_SHARED_TOKEN)
   : undefined;
+const extensionCatalog = createBuiltinExtensionCatalog({
+  browser: Boolean(config.BROWSER_WS_ENDPOINT),
+  github: Boolean(githubConnector),
+  google: Boolean(googleConnector),
+  mcp: Boolean(mcpConnector),
+  sandbox: Boolean(codeSandbox),
+  telegram: Boolean(config.TELEGRAM_BOT_TOKEN),
+  privateModel: Boolean(config.PRIVATE_MODEL_BASE_URL && config.PRIVATE_MODEL_NAME && config.PRIVATE_MODEL_API_KEY),
+});
 const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
 const projects = new ProjectService(database, workspace);
 const mediaService = new MediaService(
@@ -258,6 +268,7 @@ const app = await buildApp({
   toolExecutor,
   skillRegistry,
   skillManager,
+  extensionCatalog,
   governance,
   authService,
   telegramLinks,

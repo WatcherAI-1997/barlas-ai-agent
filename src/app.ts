@@ -48,6 +48,7 @@ import { DEFAULT_MAX_WORKSPACE_FILE_BYTES, type FileWorkspace } from "./tools/fi
 import type { ScheduleService } from "./schedules/service.js";
 import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } from "./projects/service.js";
 import { renderPrometheusMetrics } from "./operations/metrics.js";
+import type { ExtensionCatalog } from "./extensions/catalog.js";
 
 const chatBodySchema = z.object({
   userId: z.string().min(1).max(128),
@@ -293,6 +294,7 @@ export interface AppDependencies {
   toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
   skillRegistry?: Pick<SkillRegistry, "list" | "get" | "isActive">;
   skillManager?: Pick<SkillManager, "install" | "evaluate" | "activate">;
+  extensionCatalog?: Pick<ExtensionCatalog, "list" | "get">;
   governance?: RuntimeGovernance;
   authService?: Pick<AuthService,
     "authenticate" | "logout" | "listAccounts" | "createAccount" | "getAccount" | "setLanguage"
@@ -1326,6 +1328,11 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   app.get("/v1/tools", async (_request, reply) => {
     if (!dependencies.toolExecutor) return reply.notFound();
     return { tools: dependencies.toolExecutor.listTools() };
+  });
+
+  app.get("/v1/extensions", async (_request, reply) => {
+    if (!dependencies.extensionCatalog) return reply.notFound();
+    return { extensions: dependencies.extensionCatalog.list() };
   });
 
   app.get("/v1/skills", async (_request, reply) => {
