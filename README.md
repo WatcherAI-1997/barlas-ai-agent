@@ -52,3 +52,5 @@ and replace every placeholder secret before starting the containers.
 - [API](docs/API.md)
 - [Isolation policy](docs/ISOLATION.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Production deployment](docs/DEPLOYMENT.md)
+- [Backup and recovery](docs/BACKUP_RECOVERY.md)

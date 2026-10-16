@@ -33,4 +33,5 @@
 - Conversation history, approval inbox, and job controls. *(implemented)*
 - Multi-user organizations, roles, and billing foundations. *(accounts and owner/user roles implemented; organizations/billing pending)*
 - Connector catalog and deployment automation.
-- Security review, backups, recovery drills, and staged release.
+- Isolated production Compose, HTTPS proxy, database backups, restore guard, and smoke test. *(implemented; credentials and deployment pending)*
+- Security review, recovery drill, and staged release.
