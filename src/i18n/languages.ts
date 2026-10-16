@@ -34,6 +34,7 @@ export const supportedLanguages = [
   { code: "clw", name: "Chulym", nativeName: "Ӧс тили", direction: "ltr" },
   { code: "fuy", name: "Fuyu Kyrgyz", nativeName: "Fuyu Gïrgïs", direction: "ltr" },
   { code: "sty", name: "Siberian Tatar", nativeName: "Себер татар теле", direction: "ltr" },
+  { code: "mn", name: "Mongolian", nativeName: "Монгол хэл", direction: "ltr" },
   { code: "ru", name: "Russian", nativeName: "Русский", direction: "ltr" },
   { code: "en", name: "English", nativeName: "English", direction: "ltr" },
 ] as const;

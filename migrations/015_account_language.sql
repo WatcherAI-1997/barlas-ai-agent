@@ -9,7 +9,7 @@ alter table user_accounts
     language_code is null or language_code in (
       'tr', 'az', 'azb', 'tk', 'gag', 'qxq', 'kmz', 'klj', 'uz', 'ug', 'ili', 'slr', 'ybe',
       'kk', 'ky', 'kaa', 'nog', 'tt', 'ba', 'crh', 'kum', 'krc', 'kdr', 'uum', 'cv', 'sah',
-      'dlg', 'tyv', 'kim', 'alt', 'kjh', 'cjs', 'clw', 'fuy', 'sty', 'ru', 'en'
+      'dlg', 'tyv', 'kim', 'alt', 'kjh', 'cjs', 'clw', 'fuy', 'sty', 'mn', 'ru', 'en'
     )
   );
 

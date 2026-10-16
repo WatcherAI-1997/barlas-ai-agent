@@ -31,8 +31,9 @@ web search, a no-shell read-only terminal inspector,
 atomic per-user quotas, execution traces, secure owner/user accounts, and a
 branded web cabinet with conversation history, approvals, job controls, and
 token/cost monitoring. First-login onboarding and account settings provide a
-broad Turkic-language catalogue, Russian/English fallbacks, RTL handling, and a
-persisted response-language preference shared with linked Telegram. No production agent, token,
+broad Turkic-language catalogue, Mongolian, Russian/English fallbacks, RTL
+handling, and a persisted response-language preference shared with linked
+Telegram. No production agent, token,
 configuration, memory, port, database, or process is shared with this project.
 
 ## Local verification

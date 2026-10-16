@@ -134,8 +134,8 @@ bootstrap is idempotent and never writes credentials to source control.
 ## Language preferences
 
 `GET /languages` returns the supported language catalogue without requiring a
-session. It includes the broad modern Turkic language family plus Russian and
-English fallbacks, along with native names and writing direction.
+session. It includes the broad modern Turkic language family, Mongolian, plus
+Russian and English fallbacks, along with native names and writing direction.
 
 Authenticated users set or change their preference with
 `PATCH /v1/me/preferences` and `{ "languageCode": "uz" }`. The preference is

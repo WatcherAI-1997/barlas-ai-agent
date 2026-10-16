@@ -8,12 +8,12 @@ import {
 } from "../src/i18n/languages.js";
 
 describe("Barlas AI Agent languages", () => {
-  it("offers the broad Turkic language catalogue plus fallback languages", () => {
+  it("offers the broad Turkic catalogue, Mongolian, and fallback languages", () => {
     const codes = new Set(supportedLanguages.map((language) => language.code));
     expect(supportedLanguages.length).toBeGreaterThanOrEqual(35);
     for (const code of [
       "tr", "az", "tk", "uz", "ug", "kk", "ky", "kaa", "tt", "ba", "crh", "cv",
-      "sah", "tyv", "alt", "kjh", "cjs", "kum", "krc", "nog", "ru", "en",
+      "sah", "tyv", "alt", "kjh", "cjs", "kum", "krc", "nog", "mn", "ru", "en",
     ] as const) expect(codes.has(code)).toBe(true);
   });
 
@@ -21,6 +21,7 @@ describe("Barlas AI Agent languages", () => {
     expect(getLanguage("ug")?.direction).toBe("rtl");
     expect(getLanguage("tr")?.direction).toBe("ltr");
     expect(languageInstruction("kk")).toContain("Kazakh");
+    expect(languageInstruction("mn")).toContain("Mongolian");
     expect(languageInstruction("unknown")).toBeNull();
     expect(isSupportedLanguage("uz")).toBe(true);
     expect(isSupportedLanguage("de")).toBe(false);
