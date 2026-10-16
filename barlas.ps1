@@ -21,7 +21,34 @@ function Read-Setting([string]$Path, [string]$Name) {
 if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
     $NodeExe = Join-Path $BarlasHome "runtime\node\node.exe"
     if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) { throw "Barlas native runtime is missing. Run the one-line installer again." }
+    $Port = Read-Setting $NativeEnvFile "PORT"
+    $Token = Read-Setting $NativeEnvFile "BARLAS_GATEWAY_TOKEN"
     $LocalCommand = if ($Arguments.Count -gt 0) { $Arguments[0] } else { "" }
+    if ($LocalCommand -in @("gateway", "daemon")) {
+        $GatewayCommand = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "status" }
+        if ($GatewayCommand -in @("start", "run", "stop", "restart")) {
+            if ($GatewayCommand -in @("stop", "restart")) { & (Join-Path $RootDir "scripts\stop-native.ps1") }
+            if ($GatewayCommand -in @("start", "run", "restart")) { & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady }
+            exit 0
+        }
+        if ($GatewayCommand -eq "status") {
+            try {
+                $Response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/ready" -TimeoutSec 3
+                if ($Response.StatusCode -eq 200) { Write-Host "Barlas Gateway: running" -ForegroundColor Green; exit 0 }
+            } catch { }
+            Write-Host "Barlas Gateway: stopped" -ForegroundColor Yellow
+            exit 1
+        }
+        if ($GatewayCommand -eq "health") { & (Join-Path $RootDir "scripts\doctor-native.ps1"); exit $LASTEXITCODE }
+        if ($GatewayCommand -eq "logs") {
+            $LogFile = Join-Path $BarlasHome "logs\native.out.log"
+            if (-not (Test-Path -LiteralPath $LogFile -PathType Leaf)) { throw "Barlas Gateway log is not available yet." }
+            if ($Arguments -contains "--follow") { Get-Content -LiteralPath $LogFile -Tail 100 -Wait }
+            else { Get-Content -LiteralPath $LogFile -Tail 100 }
+            exit 0
+        }
+        throw "Unknown gateway command. Use: status, start, stop, restart, health, logs"
+    }
     if ($LocalCommand -in @("start", "stop", "restart")) {
         if ($LocalCommand -in @("stop", "restart")) { & (Join-Path $RootDir "scripts\stop-native.ps1") }
         if ($LocalCommand -in @("start", "restart")) { & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady }
@@ -48,8 +75,6 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
             exit $LASTEXITCODE
         } finally { Remove-Item -LiteralPath $UpdateScript -Force -ErrorAction SilentlyContinue }
     }
-    $Port = Read-Setting $NativeEnvFile "PORT"
-    $Token = Read-Setting $NativeEnvFile "BARLAS_GATEWAY_TOKEN"
     $env:BARLAS_URL = "http://127.0.0.1:$Port"
     $env:BARLAS_GATEWAY_TOKEN = $Token
     & $NodeExe (Join-Path $RootDir "dist\src\cli.js") @Arguments

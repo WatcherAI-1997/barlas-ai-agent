@@ -139,8 +139,10 @@ try {
     Write-Host "                         open interactive AI chat"
     Write-Host '  barlas ask "your task"' -ForegroundColor Cyan -NoNewline
     Write-Host "         run an autonomous task"
-    Write-Host "  barlas status" -ForegroundColor Cyan -NoNewline
-    Write-Host "                  agent status"
+    Write-Host "  barlas gateway status" -ForegroundColor Cyan -NoNewline
+    Write-Host "          gateway status"
+    Write-Host "  barlas gateway restart" -ForegroundColor Cyan -NoNewline
+    Write-Host "         restart gateway"
     Write-Host "  barlas runs" -ForegroundColor Cyan -NoNewline
     Write-Host "                    recent runs"
     Write-Host "  barlas approvals" -ForegroundColor Cyan -NoNewline

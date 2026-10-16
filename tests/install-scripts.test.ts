@@ -49,6 +49,8 @@ describe("production installer", () => {
       'barlas ask "your task"',
       "barlas approvals",
       "barlas approve ID",
+      "barlas gateway status",
+      "barlas gateway restart",
       "nodejs.org/dist",
       "playwright-core.cmd",
       "install-native.ps1",
