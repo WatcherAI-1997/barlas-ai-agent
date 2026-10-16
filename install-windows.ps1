@@ -133,7 +133,24 @@ try {
     if ($LASTEXITCODE -eq 0 -and $DashboardUrl) { Start-Process ([string]$DashboardUrl).Trim() }
     Write-Host ""
     Write-Host "Barlas is ready - Docker is not used." -ForegroundColor Green
-    Write-Host "Open a new PowerShell window and run: barlas"
+    Write-Host ""
+    Write-Host "AI AGENT COMMANDS" -ForegroundColor White
+    Write-Host "  barlas" -ForegroundColor Cyan -NoNewline
+    Write-Host "                         open interactive AI chat"
+    Write-Host '  barlas ask "your task"' -ForegroundColor Cyan -NoNewline
+    Write-Host "         run an autonomous task"
+    Write-Host "  barlas status" -ForegroundColor Cyan -NoNewline
+    Write-Host "                  agent status"
+    Write-Host "  barlas runs" -ForegroundColor Cyan -NoNewline
+    Write-Host "                    recent runs"
+    Write-Host "  barlas approvals" -ForegroundColor Cyan -NoNewline
+    Write-Host "               pending approvals"
+    Write-Host "  barlas approve ID" -ForegroundColor Cyan -NoNewline
+    Write-Host "              approve an action"
+    Write-Host "  barlas help" -ForegroundColor Cyan -NoNewline
+    Write-Host "                    all commands"
+    Write-Host ""
+    Write-Host "Start now: barlas" -ForegroundColor Green
     if (Test-Path -LiteralPath $PreviousDir) { Write-Host "Previous application source is preserved at: $PreviousDir" -ForegroundColor DarkGray }
 } catch {
     Write-Host ""
