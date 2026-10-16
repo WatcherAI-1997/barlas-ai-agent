@@ -96,7 +96,7 @@ function dependencies() {
 }
 
 describe("Barlas AI Agent API", () => {
-  it("authenticates the owner with an OpenClaw-style gateway token", async () => {
+  it("authenticates the owner with a Barlas gateway token", async () => {
     const deps = dependencies();
     const gatewayToken = "g".repeat(64);
     const gatewayOwner = { id: "00000000-0000-4000-8000-000000000099", email: "owner@example.com", displayName: "Owner", role: "owner" as const, active: true, languageCode: "uz" as const, languageConfigured: true, createdAt: "2026-10-16T00:00:00.000Z" };

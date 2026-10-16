@@ -72,7 +72,7 @@ autonomy.
   directory or the root-owned runner token.
 - Per-user UTC-day counters and execution traces live in the isolated PostgreSQL
   database. Quota consumption is atomic under concurrent requests.
-- Human authentication follows OpenClaw's gateway-token model: a separately
+- Human authentication follows the Barlas gateway-token model: a separately
   generated owner token authenticates the Control UI, while additional users
   receive opaque, expiring, revocable tokens stored only as SHA-256 hashes.
   Roles are enforced before user IDs reach storage, tools, quotas, or models.

@@ -13,7 +13,7 @@ directly to public interfaces.
 
 Send `Authorization: Bearer <access token>`. Automation uses the dedicated
 `BARLAS_API_TOKEN`. The owner Control UI uses the separately generated
-`BARLAS_GATEWAY_TOKEN`, following OpenClaw's shared gateway-token pattern.
+`BARLAS_GATEWAY_TOKEN`, following Barlas's own gateway-token flow.
 Additional users receive opaque expiring tokens whose SHA-256 hashes are stored
 server-side; each plaintext token is shown only once.
 

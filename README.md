@@ -40,10 +40,10 @@
 
 ## Built to do real work
 
-Barlas AI Agent combines the strongest product ideas behind OpenClaw, Codex,
-and Nous Research Hermes Agent in an independent, brand-owned platform. It is
-not a chat wrapper: it can hold a goal, build a plan, use tools, delegate work,
-pause for approval, recover after interruption, and preserve project state.
+Barlas AI Agent is an independent, brand-owned platform built for reliable
+autonomous work. It is not a chat wrapper: it can hold a goal, build a plan,
+use tools, delegate work, pause for approval, recover after interruption, and
+preserve project state.
 
 | | Capability | What it means |
 |---|---|---|
@@ -93,10 +93,10 @@ The guided installer checks prerequisites, asks for deployment-specific values,
 generates independent cryptographic secrets, protects them with mode `0600`,
 validates the entire production stack, starts it, and runs diagnostics.
 
-Like OpenClaw, the owner dashboard uses a generated gateway token instead of a
-login and password. Run `./scripts/dashboard-url.sh` on the server to produce a
-bootstrap `#token=...` link; the fragment is stripped after the browser stores it
-for the current tab.
+The owner dashboard uses a generated Barlas gateway token instead of a login
+and password. Run `./scripts/dashboard-url.sh` on the server to produce a
+bootstrap `#token=...` link; the fragment is stripped after the browser stores
+it for the current tab.
 
 ```bash
 # Prepare and validate without starting anything

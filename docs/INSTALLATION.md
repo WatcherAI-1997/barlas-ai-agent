@@ -86,11 +86,10 @@ an explicit dashboard bootstrap URL:
 ```
 
 The token is placed after `#token=`. URL fragments are not sent in HTTP requests
-or reverse-proxy logs. The web cabinet imports it into `sessionStorage` for the
-current browser tab and immediately removes it from the address bar, matching
-the OpenClaw Control UI bootstrap pattern. Closing the tab or pressing **Выйти**
-clears the browser copy. Keep the generated link private; anyone holding it has
-owner access.
+or reverse-proxy logs. The Barlas web cabinet imports it into `sessionStorage`
+for the current browser tab and immediately removes it from the address bar.
+Closing the tab or pressing **Выйти** clears the browser copy. Keep the generated
+link private; anyone holding it has owner access.
 
 ## Prerequisites and layout
 
@@ -114,7 +113,8 @@ with three true circular glyphs so the brand mark is never distorted.
 | Backups | `barlas-ai-agent-production-backups` |
 | Caddy state | dedicated Barlas Caddy volumes |
 
-No OpenClaw or Hermes directory is mounted into the production stack.
+Only dedicated Barlas directories and volumes are mounted into the production
+stack.
 
 ## Domain and ports
 
