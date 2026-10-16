@@ -38,8 +38,8 @@ describe("production installer", () => {
       },
     });
     expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain("▗▄██████▄▖          ▗▄██████▄▖");
-    expect(result.stdout).toContain("▝▀██████▀▘");
+    expect(result.stdout).toContain("●       ●");
+    expect(result.stdout).toContain("    ●");
     expect(result.stdout).toContain("B A R L A S   A I   A G E N T");
     expect(result.stdout).toContain("THINK AHEAD. ACT BEYOND.");
     expect(result.stdout).toContain("Secure Production Installer");

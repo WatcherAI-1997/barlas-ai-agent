@@ -121,30 +121,41 @@ env_value() {
 
 write_setting() { printf '%s=%s\n' "$1" "$(env_value "$2")" >>"$TEMP_FILE"; }
 
+render_inline_logo() {
+  local logo="$ROOT_DIR/assets/brand/barlas-ai-agent-logo-original.png" payload chunk more first=true
+  [[ -t 1 && -r "$logo" ]] || return 1
+
+  if [[ "${TERM:-}" == *kitty* ]] && command_exists base64; then
+    payload="$(base64 -w 0 -- "$logo")"
+    while [[ -n "$payload" ]]; do
+      chunk="${payload:0:4096}"
+      payload="${payload:4096}"
+      more=0; [[ -n "$payload" ]] && more=1
+      if [[ "$first" == true ]]; then
+        printf '\033_Ga=T,f=100,t=d,c=48,r=16,m=%s;%s\033\\' "$more" "$chunk"
+        first=false
+      else
+        printf '\033_Gm=%s;%s\033\\' "$more" "$chunk"
+      fi
+    done
+    printf '\n'
+    return 0
+  fi
+
+  if [[ "${TERM_PROGRAM:-}" == "iTerm.app" || "${TERM_PROGRAM:-}" == "WezTerm" ]] && command_exists base64; then
+    payload="$(base64 < "$logo" | tr -d '\n')"
+    printf '\033]1337;File=inline=1;width=48;preserveAspectRatio=1:%s\a\n' "$payload"
+    return 0
+  fi
+  return 1
+}
+
 print_banner() {
   printf '\n'
-  printf '%s' "$C_BRAND"
-  printf '       ▗▄██████▄▖          ▗▄██████▄▖\n'
-  printf '     ▗████████████▖      ▗████████████▖\n'
-  printf '    ▐██████████████▌    ▐██████████████▌\n'
-  printf '   ▐████████████████▌  ▐████████████████▌\n'
-  printf '   ██████████████████  ██████████████████\n'
-  printf '   ██████████████████  ██████████████████\n'
-  printf '   ▐████████████████▌  ▐████████████████▌\n'
-  printf '    ▐██████████████▌    ▐██████████████▌\n'
-  printf '     ▝████████████▘      ▝████████████▘\n'
-  printf '       ▝▀██████▀▘          ▝▀██████▀▘\n'
-  printf '              ▗▄██████▄▖\n'
-  printf '            ▗████████████▖\n'
-  printf '           ▐██████████████▌\n'
-  printf '          ▐████████████████▌\n'
-  printf '          ██████████████████\n'
-  printf '          ██████████████████\n'
-  printf '          ▐████████████████▌\n'
-  printf '           ▐██████████████▌\n'
-  printf '            ▝████████████▘\n'
-  printf '              ▝▀██████▀▘\n'
-  printf '%s' "$C_RESET"
+  render_inline_logo || {
+    printf '  %s●       ●%s\n' "$C_BRAND" "$C_RESET"
+    printf '  %s    ●%s\n' "$C_BRAND" "$C_RESET"
+  }
   printf '\n  %s%sB A R L A S   A I   A G E N T%s\n' "$C_BOLD" "$C_BRAND" "$C_RESET"
   printf '  %sTHINK AHEAD. ACT BEYOND.%s\n' "$C_BRAND" "$C_RESET"
   printf '  %s━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%s\n' "$C_BRAND" "$C_RESET"

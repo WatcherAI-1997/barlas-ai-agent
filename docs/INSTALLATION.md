@@ -98,6 +98,10 @@ The supported production path requires Linux, Git, curl, OpenSSL, Docker Engine,
 and Docker Compose v2. The current installer intentionally does not install or
 upgrade system packages and does not require Node.js on the host.
 
+On Kitty, iTerm2, and WezTerm, the installer renders the original Barlas PNG
+logo inline without redrawing it. Other terminals receive a compact Unicode
+fallback with three true circular glyphs so the brand mark is never distorted.
+
 | Item | Location or name |
 |---|---|
 | Source checkout | directory selected during `gh repo clone` |
