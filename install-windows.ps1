@@ -46,13 +46,13 @@ function Invoke-NativeCommand([string]$FilePath, [string[]]$Arguments, [string]$
 function Show-PixelBanner {
     Write-Host ""
     $Mark = @(
-        " ▄██▄ ▄██▄ ",
-        " ████ ████ ",
-        " ▀██▀ ▀██▀ ",
-        "           ",
-        "   ▄██▄    ",
-        "   ████    ",
-        "   ▀██▀    "
+        " ▄██▄  ▄██▄ ",
+        " ████  ████ ",
+        " ▀██▀  ▀██▀ ",
+        "            ",
+        "    ▄██▄    ",
+        "    ████    ",
+        "    ▀██▀    "
     )
     $Word = @(
         "                                   ",
