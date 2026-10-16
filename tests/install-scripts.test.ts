@@ -41,6 +41,10 @@ describe("production installer", () => {
       "barlas.cmd",
       'Start-Process ([string]$DashboardUrl).Trim()',
       "Show-PixelBanner",
+      'Write-Host "  ●   ●  "',
+      'Write-Host "    ●    "',
+      "[$Number/5]",
+      "install.log",
       "nodejs.org/dist",
       "playwright-core.cmd",
       "install-native.ps1",
@@ -48,6 +52,7 @@ describe("production installer", () => {
     ]) expect(bootstrap).toContain(required);
     expect(bootstrap).not.toContain("docker info");
     expect(bootstrap).not.toContain("Docker.DockerDesktop");
+    expect(bootstrap).not.toContain('"BARLAS".ToCharArray()');
     expect(bootstrap).not.toContain("gh auth");
     expect(bootstrap).toContain('$ErrorActionPreference = "Continue"');
     expect(bootstrap).toContain("$Code");

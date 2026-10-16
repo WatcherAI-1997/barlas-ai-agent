@@ -10,6 +10,8 @@ $BarlasHome = Join-Path $env:LOCALAPPDATA "Barlas"
 $AppDir = Join-Path $BarlasHome "app"
 $BinDir = Join-Path $BarlasHome "bin"
 $RuntimeDir = Join-Path $BarlasHome "runtime"
+$LogDir = Join-Path $BarlasHome "logs"
+$InstallLog = Join-Path $LogDir "install.log"
 $NodeDir = Join-Path $RuntimeDir "node"
 $NodeExe = Join-Path $NodeDir "node.exe"
 $NpmCmd = Join-Path $NodeDir "npm.cmd"
@@ -18,36 +20,27 @@ $Archive = Join-Path $WorkDir "barlas.zip"
 $Extracted = Join-Path $WorkDir "source"
 $PreviousDir = Join-Path $BarlasHome "previous"
 
-function Write-Step([string]$Message) { Write-Host "-> $Message" -ForegroundColor Cyan }
+function Write-Step([int]$Number, [string]$Message) { Write-Host "[$Number/5] $Message" -ForegroundColor Cyan }
 function Write-Done([string]$Message) { Write-Host "[OK] $Message" -ForegroundColor Green }
 
 function Invoke-NativeCommand([string]$FilePath, [string[]]$Arguments, [string]$FailureMessage) {
     $PreviousPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    try { & $FilePath @Arguments; $Code = $LASTEXITCODE }
+    try {
+        $Output = & $FilePath @Arguments 2>&1 | Out-String
+        $Code = $LASTEXITCODE
+        if ($Output) { [IO.File]::AppendAllText($InstallLog, $Output + [Environment]::NewLine, [Text.Encoding]::UTF8) }
+    }
     finally { $ErrorActionPreference = $PreviousPreference }
-    if ($Code -ne 0) { throw "$FailureMessage (exit code $Code)" }
+    if ($Code -ne 0) { throw "$FailureMessage. Details: $InstallLog" }
 }
 
 function Show-PixelBanner {
-    $Font = @{
-        B = @("11110", "10001", "11110", "10001", "11110")
-        A = @("01110", "10001", "11111", "10001", "10001")
-        R = @("11110", "10001", "11110", "10100", "10010")
-        L = @("10000", "10000", "10000", "10000", "11111")
-        S = @("01111", "10000", "01110", "00001", "11110")
-    }
-    $Mark = @("  ▄██▄    ▄██▄  ", " ██████  ██████ ", "  ▀██▀    ▀██▀  ", "     ▄██▄       ", "    ██████      ", "     ▀██▀       ")
     Write-Host ""
-    for ($Row = 0; $Row -lt 6; $Row++) {
-        Write-Host ($Mark[$Row] + "  ") -ForegroundColor Red -NoNewline
-        if ($Row -lt 5) {
-            $Letters = foreach ($Letter in "BARLAS".ToCharArray()) {
-                -join ($Font[[string]$Letter][$Row].ToCharArray() | ForEach-Object { if ($_ -eq '1') { "██" } else { "  " } })
-            }
-            Write-Host ($Letters -join "  ") -ForegroundColor White
-        } else { Write-Host "B A R L A S   A I   A G E N T" -ForegroundColor DarkGray }
-    }
+    Write-Host "  ●   ●  " -ForegroundColor Red -NoNewline
+    Write-Host "BARLAS" -ForegroundColor White
+    Write-Host "    ●    " -ForegroundColor Red -NoNewline
+    Write-Host "AI AGENT" -ForegroundColor DarkGray
     Write-Host ""
 }
 
@@ -55,7 +48,8 @@ Show-PixelBanner
 Write-Host "Native Windows installer - no Docker or WSL required" -ForegroundColor DarkGray
 Write-Host ""
 
-New-Item -ItemType Directory -Force -Path $WorkDir, $Extracted, $BarlasHome, $BinDir, $RuntimeDir | Out-Null
+New-Item -ItemType Directory -Force -Path $WorkDir, $Extracted, $BarlasHome, $BinDir, $RuntimeDir, $LogDir | Out-Null
+[IO.File]::WriteAllText($InstallLog, "Barlas Windows installation log`r`n", [Text.Encoding]::UTF8)
 try {
     if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) {
         $Architecture = switch ($env:PROCESSOR_ARCHITECTURE) {
@@ -66,22 +60,22 @@ try {
         $NodeArchive = Join-Path $WorkDir "node.zip"
         $NodeExtract = Join-Path $WorkDir "node"
         $NodeUrl = "https://nodejs.org/dist/v$NodeVersion/node-v$NodeVersion-win-$Architecture.zip"
-        Write-Step "Install private Node.js runtime"
+        Write-Step 1 "Preparing runtime"
         Invoke-WebRequest -UseBasicParsing -Uri $NodeUrl -OutFile $NodeArchive
         Expand-Archive -LiteralPath $NodeArchive -DestinationPath $NodeExtract -Force
         $ExtractedNode = Get-ChildItem -LiteralPath $NodeExtract -Directory | Select-Object -First 1
         if (-not $ExtractedNode -or -not (Test-Path (Join-Path $ExtractedNode.FullName "node.exe"))) { throw "Downloaded Node.js archive is incomplete" }
         if (Test-Path -LiteralPath $NodeDir) { Remove-Item -LiteralPath $NodeDir -Recurse -Force }
         Move-Item -LiteralPath $ExtractedNode.FullName -Destination $NodeDir
-        Write-Done "Portable Node.js $NodeVersion installed"
-    } else { Write-Done "Portable Node.js runtime is ready" }
+        Write-Done "Runtime ready"
+    } else { Write-Step 1 "Runtime already ready" }
 
-    Write-Step "Download Barlas from GitHub"
+    Write-Step 2 "Downloading Barlas"
     Invoke-WebRequest -UseBasicParsing -Uri $ArchiveUrl -OutFile $Archive
     Expand-Archive -LiteralPath $Archive -DestinationPath $Extracted -Force
     $SourceDir = Get-ChildItem -LiteralPath $Extracted -Directory | Select-Object -First 1
     if (-not $SourceDir -or -not (Test-Path -LiteralPath (Join-Path $SourceDir.FullName "install-native.ps1") -PathType Leaf)) { throw "Downloaded archive is incomplete" }
-    Write-Done "Barlas source downloaded"
+    Write-Done "Barlas downloaded"
 
     $ExistingEnv = Join-Path $AppDir "deploy\native.env"
     if (Test-Path -LiteralPath $ExistingEnv -PathType Leaf) {
@@ -96,22 +90,22 @@ try {
     Move-Item -LiteralPath $SourceDir.FullName -Destination $AppDir
 
     try {
-        Write-Step "Install local application packages"
+        Write-Step 3 "Building application (this may take a few minutes)"
         Push-Location $AppDir
         try {
             Invoke-NativeCommand $NpmCmd @("ci", "--no-fund", "--no-audit") "Dependency installation failed"
             Invoke-NativeCommand $NpmCmd @("run", "build") "Barlas build failed"
         } finally { Pop-Location }
-        Write-Done "Barlas application built"
+        Write-Done "Application ready"
 
-        Write-Step "Install private browser runtime"
+        Write-Step 4 "Preparing browser"
         $Playwright = Join-Path $AppDir "node_modules\.bin\playwright-core.cmd"
         Push-Location $AppDir
         try { Invoke-NativeCommand $Playwright @("install", "chromium") "Browser installation failed" }
         finally { Pop-Location }
-        Write-Done "Browser runtime installed"
+        Write-Done "Browser ready"
 
-        Write-Step "Run the guided setup"
+        Write-Step 5 "Personal setup"
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppDir "install-native.ps1")
         if ($LASTEXITCODE -ne 0) { throw "Barlas setup exited with code $LASTEXITCODE" }
     } catch {
@@ -141,6 +135,11 @@ try {
     Write-Host "Barlas is ready - Docker is not used." -ForegroundColor Green
     Write-Host "Open a new PowerShell window and run: barlas"
     if (Test-Path -LiteralPath $PreviousDir) { Write-Host "Previous application source is preserved at: $PreviousDir" -ForegroundColor DarkGray }
+} catch {
+    Write-Host ""
+    Write-Host "Installation stopped: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Nothing outside $BarlasHome was changed." -ForegroundColor DarkGray
+    Write-Host "Log: $InstallLog" -ForegroundColor DarkGray
 } finally {
     if (Test-Path -LiteralPath $WorkDir) { Remove-Item -LiteralPath $WorkDir -Recurse -Force }
 }
