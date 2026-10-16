@@ -3,7 +3,7 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 125 automated tests across 36 files pass.
+- 128 automated tests across 37 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -35,6 +35,8 @@
   persisted statuses, tools, content-safe events, output constraints, steps,
   tokens, and cost without model self-grading. Credentialed baseline results
   and the staging restart drill remain release requirements.
+- The owner/service-only Prometheus endpoint exports label-free uptime, worker,
+  queue, approval, token, and estimated-cost metrics without user content.
 - Recurring schedule tests cover IANA timezone calculation, invalid zones,
   pause/resume, idempotency-keyed autonomous dispatch, and fail-closed Telegram
   delivery when an account is not linked.

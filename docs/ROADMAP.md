@@ -30,7 +30,8 @@
   uploads, approval-gated image/PDF analysis, audio transcription, and MP3
   speech generation implemented; live provider quality evaluation pending)*
 - Execution traces and per-user quotas. *(implemented foundation)*
-- Admin controls, observability, and cost reporting. *(operations dashboard implemented)*
+- Admin controls, observability, and cost reporting. *(operations dashboard and
+  owner-only, label-free Prometheus metrics implemented)*
 - Reproducible long-task quality evaluation. *(strict live scenarios and
   deterministic status/tool/event/output/step/token/cost scoring implemented;
   credentialed model baselines and staging restart drill pending)*

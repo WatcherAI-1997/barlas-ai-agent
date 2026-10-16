@@ -615,6 +615,47 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("exposes deployment metrics only to an owner or service token", async () => {
+    const deps = dependencies();
+    const userAccount = {
+      id: "00000000-0000-4000-8000-000000000098",
+      email: "user@example.com",
+      displayName: "User",
+      role: "user" as const,
+      active: true,
+      languageCode: "en" as const,
+      languageConfigured: true,
+      createdAt: "2026-10-16T00:00:00.000Z",
+    };
+    const authService = {
+      authenticate: vi.fn(async (token: string) => token === "user-session-token-which-is-long-enough" ? userAccount : null),
+      logout: vi.fn(),
+      listAccounts: vi.fn(),
+      createAccount: vi.fn(),
+      getAccount: vi.fn(),
+      setLanguage: vi.fn(),
+    };
+    const app = await buildApp({ apiToken, ...deps, authService, runtimeInfo: { workerEnabled: true } });
+    const ownerResponse = await app.inject({
+      method: "GET",
+      url: "/v1/metrics",
+      headers: { authorization: `Bearer ${apiToken}` },
+    });
+    const userResponse = await app.inject({
+      method: "GET",
+      url: "/v1/metrics",
+      headers: { authorization: "Bearer user-session-token-which-is-long-enough" },
+    });
+
+    expect(ownerResponse.statusCode).toBe(200);
+    expect(ownerResponse.headers["content-type"]).toContain("text/plain");
+    expect(ownerResponse.body).toContain("barlas_up 1");
+    expect(ownerResponse.body).toContain("barlas_worker_enabled 1");
+    expect(userResponse.statusCode).toBe(403);
+    expect(deps.database.getDashboardStats).toHaveBeenCalledWith();
+    await app.close();
+  });
+
   it("lists the authenticated user's approval queue", async () => {
     const deps = dependencies();
     const app = await buildApp({ apiToken, ...deps });

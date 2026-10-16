@@ -182,6 +182,13 @@ for (const required of ["writeUpload", "constants.O_EXCL", "MAX_DOCUMENT_BYTES"]
 for (const required of ["application/octet-stream", "Content-Disposition", "explicit overwrite is required"]) {
   if (!appSource.includes(required)) throw new Error(`Workspace download/upload boundary is missing: ${required}`);
 }
+for (const required of ['app.get("/v1/metrics"', "requireOwner(request)", "renderPrometheusMetrics"]) {
+  if (!appSource.includes(required)) throw new Error(`Protected operations metrics boundary is missing: ${required}`);
+}
+const operationsMetrics = await readFile("src/operations/metrics.ts", "utf8");
+if (operationsMetrics.includes("userId") || operationsMetrics.includes("email")) {
+  throw new Error("Operations metrics must not contain user-identifying labels");
+}
 for (const prohibited of ["/auth/login", "password-reset"]) {
   if (appSource.includes(prohibited)) throw new Error(`Legacy password authentication route remains: ${prohibited}`);
 }

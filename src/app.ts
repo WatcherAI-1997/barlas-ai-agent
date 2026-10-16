@@ -44,6 +44,7 @@ import { MAX_MEDIA_BYTES, type MediaService } from "./tools/media.js";
 import type { FileWorkspace } from "./tools/file-workspace.js";
 import type { ScheduleService } from "./schedules/service.js";
 import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } from "./projects/service.js";
+import { renderPrometheusMetrics } from "./operations/metrics.js";
 
 const chatBodySchema = z.object({
   userId: z.string().min(1).max(128),
@@ -1557,6 +1558,18 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       workerEnabled: dependencies.runtimeInfo?.workerEnabled ?? false,
       stats,
     };
+  });
+
+  app.get("/v1/metrics", async (request, reply) => {
+    requireOwner(request);
+    const stats = await dependencies.database.getDashboardStats();
+    return reply
+      .type("text/plain; version=0.0.4; charset=utf-8")
+      .send(renderPrometheusMetrics({
+        uptimeSeconds: process.uptime(),
+        workerEnabled: dependencies.runtimeInfo?.workerEnabled ?? false,
+        stats,
+      }));
   });
 
   app.post("/channels/telegram/webhook", async (request, reply) => {

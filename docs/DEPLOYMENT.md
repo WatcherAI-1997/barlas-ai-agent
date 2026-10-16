@@ -59,6 +59,21 @@ may start the same optional sidecar with `docker compose --profile browser up`.
 The one-shot `migrate` service applies the ordered, idempotent SQL files after
 PostgreSQL becomes healthy and before the API is allowed to start.
 
+## Monitoring
+
+An owner or service token can scrape deployment-wide Prometheus text metrics:
+
+```bash
+curl --fail --silent --show-error \
+  --header "Authorization: Bearer ${BARLAS_API_TOKEN}" \
+  "https://${BARLAS_DOMAIN}/v1/metrics"
+```
+
+Configure the collector to read the token from its secret store; never place it
+in a public scrape configuration or URL. The endpoint has no user labels or
+message content. Alert at minimum on sustained active jobs, failed jobs, pending
+approvals, unexpected worker disablement, token growth, and estimated cost.
+
 ## Upgrade
 
 Create and verify a backup first. Pull the reviewed commit, rebuild only this

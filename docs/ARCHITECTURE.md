@@ -85,6 +85,8 @@ autonomy.
   already running task or retry of a task that has not failed.
 - Token counts are captured from provider responses. Cost is an estimate based
   only on explicitly configured model rates and is stored as integer micro-USD.
+- Deployment-wide Prometheus text metrics reuse the bounded dashboard counters,
+  contain no user labels or content, and require an owner or service token.
 - The autonomous runtime uses native model function calls. Only registry-derived
   JSON schemas are exposed, model-safe names are mapped back to canonical tool
   IDs, and every argument is validated at the executor boundary. Tool results

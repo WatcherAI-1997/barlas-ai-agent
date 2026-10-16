@@ -61,6 +61,9 @@ server-side; each plaintext token is shown only once.
 - `POST /v1/schedules/:id/resume` — recompute the next occurrence and resume.
 - `POST /v1/schedules/:id/disable` — permanently disable a schedule.
 - `GET /v1/dashboard` — return health, queue, token, and estimated-cost totals.
+- `GET /v1/metrics` — owner/service-only Prometheus text metrics for uptime,
+  worker state, queues, approvals, token usage, and estimated model cost. The
+  output has no user labels or content-bearing fields.
 - `GET /v1/connectors?userId=...` — list the current user's connector metadata.
 - `POST /v1/connectors` — encrypt and save a per-user connector credential.
 - `DELETE /v1/connectors/:id` — delete an owned connector.
