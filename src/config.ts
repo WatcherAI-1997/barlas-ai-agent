@@ -11,9 +11,10 @@ const configSchema = z.object({
   DATABASE_URL: z.string().min(1),
   BARLAS_API_TOKEN: z.string().min(32),
   BARLAS_GATEWAY_TOKEN: z.string().min(32),
-  MODEL_PROVIDER: z.enum(["codex_cli", "openai", "anthropic", "ollama"]).default("openai"),
+  MODEL_PROVIDER: z.enum(["codex_cli", "openai", "anthropic", "ollama", "openai_compatible"]).default("openai"),
   MODEL_NAME: z.string().min(1),
   MODEL_API_KEY: z.string().default(""),
+  MODEL_BASE_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
   OLLAMA_BASE_URL: z.string().url().default("http://127.0.0.1:11434"),
   MEDIA_API_KEY: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   VISION_MODEL: z.preprocess(
@@ -94,7 +95,10 @@ const configSchema = z.object({
   PRIVATE_MODEL_OUTPUT_USD_PER_MILLION: z.coerce.number().min(0).default(0),
 }).superRefine((config, context) => {
   if (config.MODEL_PROVIDER !== "ollama" && config.MODEL_PROVIDER !== "codex_cli" && !config.MODEL_API_KEY) {
-    context.addIssue({ code: "custom", message: "MODEL_API_KEY is required for OpenAI and Anthropic" });
+    context.addIssue({ code: "custom", message: "MODEL_API_KEY is required for hosted model providers" });
+  }
+  if (config.MODEL_PROVIDER === "openai_compatible" && !config.MODEL_BASE_URL) {
+    context.addIssue({ code: "custom", message: "MODEL_BASE_URL is required for an OpenAI-compatible provider" });
   }
   const telegramFields = [config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_WEBHOOK_SECRET];
   if (telegramFields.some(Boolean) && !telegramFields.every(Boolean)) {

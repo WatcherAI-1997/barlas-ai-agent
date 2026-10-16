@@ -70,6 +70,7 @@ const fastProvider = createModelProvider({
   apiKey: config.MODEL_API_KEY,
   model: config.MODEL_NAME,
   ...(config.MODEL_PROVIDER === "ollama" ? { baseURL: config.OLLAMA_BASE_URL } : {}),
+  ...(config.MODEL_PROVIDER === "openai_compatible" && config.MODEL_BASE_URL ? { baseURL: config.MODEL_BASE_URL } : {}),
   inputUsdPerMillion: config.MODEL_INPUT_USD_PER_MILLION,
   outputUsdPerMillion: config.MODEL_OUTPUT_USD_PER_MILLION,
 });
@@ -78,6 +79,7 @@ const deepProvider = createModelProvider({
   apiKey: config.MODEL_API_KEY,
   model: config.DEEP_MODEL_NAME ?? config.MODEL_NAME,
   ...(config.MODEL_PROVIDER === "ollama" ? { baseURL: config.OLLAMA_BASE_URL } : {}),
+  ...(config.MODEL_PROVIDER === "openai_compatible" && config.MODEL_BASE_URL ? { baseURL: config.MODEL_BASE_URL } : {}),
   inputUsdPerMillion: config.DEEP_MODEL_INPUT_USD_PER_MILLION ?? config.MODEL_INPUT_USD_PER_MILLION,
   outputUsdPerMillion: config.DEEP_MODEL_OUTPUT_USD_PER_MILLION ?? config.MODEL_OUTPUT_USD_PER_MILLION,
 });

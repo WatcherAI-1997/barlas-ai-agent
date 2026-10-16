@@ -171,9 +171,12 @@ function Read-ModelSelection([string]$Provider, [string]$Title, [string]$Default
     } elseif ($Provider -eq "anthropic") {
         $Values = @("claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-1", "custom")
         $Labels = @("Claude Sonnet 4.5", "Claude Haiku 4.5", "Claude Opus 4.1", "Any other current or future model ID")
-    } else {
+    } elseif ($Provider -eq "ollama") {
         $Values = @("qwen3:8b", "qwen3:14b", "qwen3:30b", "gpt-oss:20b", "gpt-oss:120b", "llama3.3", "deepseek-r1", "custom")
         $Labels = @("Qwen 3 8B - recommended for laptops", "Qwen 3 14B", "Qwen 3 30B", "GPT-OSS 20B", "GPT-OSS 120B", "Llama 3.3", "DeepSeek R1", "Any installed Ollama model ID")
+    } else {
+        $Values = @("custom")
+        $Labels = @("Enter the exact model ID supported by the endpoint")
     }
     $MenuDefault = if ($Default -in $Values) { $Default } else { "custom" }
     $Selected = Read-MenuChoice "" $Title $Values $Labels $MenuDefault
@@ -230,8 +233,8 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
         param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and ([string]$Value).Length -le 80
     } "Enter a display name up to 80 characters."
     $OwnerLanguage = Read-OwnerLanguage
-    $ProviderAliases = @{ "openai account" = "codex_cli"; "openai oauth" = "codex_cli"; "cli oauth" = "codex_cli"; "openai api" = "openai"; "openai codex" = "codex_cli"; "anthropic api" = "anthropic"; "local ollama" = "ollama" }
-    $ModelProvider = Read-MenuChoice "MODEL_PROVIDER" "Model access" @("codex_cli", "openai", "anthropic", "ollama") @("OpenAI account - browser sign-in, no API key", "OpenAI API - usage-based key", "Anthropic API - usage-based key", "Ollama - local and private") "codex_cli" $ProviderAliases
+    $ProviderAliases = @{ "openai account" = "codex_cli"; "openai oauth" = "codex_cli"; "cli oauth" = "codex_cli"; "openai api" = "openai"; "openai codex" = "codex_cli"; "anthropic api" = "anthropic"; "local ollama" = "ollama"; "compatible" = "openai_compatible"; "custom api" = "openai_compatible" }
+    $ModelProvider = Read-MenuChoice "MODEL_PROVIDER" "Model access" @("codex_cli", "openai", "anthropic", "ollama", "openai_compatible") @("OpenAI account - browser sign-in, no API key", "OpenAI API - usage-based key", "Anthropic API - usage-based key", "Ollama - local and private", "Compatible API - hosted or self-hosted endpoint") "codex_cli" $ProviderAliases
     if ($ModelProvider -eq "codex_cli") {
         $AuthState = & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status -Quiet
         if ($AuthState -ne "connected") {
@@ -239,7 +242,7 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
             & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action login
         }
     }
-    $DefaultModel = if ($ModelProvider -eq "ollama") { "qwen3:8b" } elseif ($ModelProvider -eq "anthropic") { "claude-sonnet-4-5" } else { "gpt-6.1-sol" }
+    $DefaultModel = if ($ModelProvider -eq "ollama") { "qwen3:8b" } elseif ($ModelProvider -eq "anthropic") { "claude-sonnet-4-5" } elseif ($ModelProvider -eq "openai_compatible") { "model-name" } else { "gpt-6.1-sol" }
     $EnvironmentModel = [Environment]::GetEnvironmentVariable("MODEL_NAME")
     $ModelName = if ($EnvironmentModel) { $EnvironmentModel } else { Read-ModelSelection $ModelProvider "Default model" $DefaultModel }
     $EnvironmentDeepModel = [Environment]::GetEnvironmentVariable("DEEP_MODEL_NAME")
@@ -255,6 +258,13 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
         } "An API key is required for this provider." -Secret
     }
     $OllamaBaseUrl = if ($ModelProvider -eq "ollama") { Read-Value "OLLAMA_BASE_URL" "Ollama URL" "http://127.0.0.1:11434" } else { "http://127.0.0.1:11434" }
+    $ModelBaseUrl = if ($ModelProvider -eq "openai_compatible") {
+        Read-ValidatedValue "MODEL_BASE_URL" "Compatible API base URL" "https://api.example.com/v1" {
+            param($Value)
+            $Parsed = $null
+            [Uri]::TryCreate([string]$Value, [UriKind]::Absolute, [ref]$Parsed) -and $Parsed.Scheme -in @("http", "https")
+        } "Enter an absolute http:// or https:// URL ending at the API version root."
+    } else { "" }
     $TelegramBotToken = Read-Value "TELEGRAM_BOT_TOKEN" "Dedicated Telegram bot token; blank disables Telegram" "" -Secret
 
     $AgentName = "Barlas"; $AgentStyle = "balanced"; $AgentInstructions = ""
@@ -306,7 +316,7 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
         DATABASE_URL = "postgresql://native-runtime"; BARLAS_NATIVE_ROOT = $RootDir
         BARLAS_NATIVE_DATA = (Join-Path $BarlasHome "data"); BARLAS_NATIVE_DATABASE_PORT = "17841"
         BARLAS_API_TOKEN = New-RandomHex 32; BARLAS_GATEWAY_TOKEN = New-RandomHex 32
-        MODEL_PROVIDER = $ModelProvider; MODEL_NAME = $ModelName; MODEL_API_KEY = $ModelApiKey; OLLAMA_BASE_URL = $OllamaBaseUrl
+        MODEL_PROVIDER = $ModelProvider; MODEL_NAME = $ModelName; MODEL_API_KEY = $ModelApiKey; MODEL_BASE_URL = $ModelBaseUrl; OLLAMA_BASE_URL = $OllamaBaseUrl
         MEDIA_API_KEY = $MediaApiKey; VISION_MODEL = $VisionModel; TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe"
         SPEECH_MODEL = "gpt-4o-mini-tts"; DEFAULT_SPEECH_VOICE = $DefaultVoice; EMBEDDING_MODEL = $EmbeddingModel; DEEP_MODEL_NAME = $DeepModelName
         CONNECTOR_VAULT_KEY = New-RandomBase64 32; CONNECTOR_VAULT_KEY_VERSION = "1"

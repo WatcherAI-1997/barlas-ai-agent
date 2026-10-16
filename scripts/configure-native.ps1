@@ -13,7 +13,7 @@ $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $EnvFile = Join-Path $RootDir "deploy\native.env"
 $AllowedKeys = @(
     "PORT", "BARLAS_HTTP_PORT", "OWNER_EMAIL", "OWNER_DISPLAY_NAME", "OWNER_LANGUAGE",
-    "MODEL_PROVIDER", "MODEL_NAME", "MODEL_API_KEY", "OLLAMA_BASE_URL", "DEEP_MODEL_NAME", "MEDIA_API_KEY", "VISION_MODEL",
+    "MODEL_PROVIDER", "MODEL_NAME", "MODEL_API_KEY", "MODEL_BASE_URL", "OLLAMA_BASE_URL", "DEEP_MODEL_NAME", "MEDIA_API_KEY", "VISION_MODEL",
     "TRANSCRIPTION_MODEL", "SPEECH_MODEL", "DEFAULT_SPEECH_VOICE", "EMBEDDING_MODEL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET",
     "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED", "AGENT_MAX_STEPS", "AGENT_MAX_TOTAL_TOKENS", "AGENT_MAX_OUTPUT_TOKENS_PER_STEP",
     "DAILY_CHAT_QUOTA", "DAILY_TOOL_QUOTA", "DAILY_JOB_QUOTA", "AGENT_NAME", "AGENT_STYLE", "AGENT_INSTRUCTIONS",
@@ -153,8 +153,10 @@ function Read-ModelSelection([string]$Provider, [string]$Prompt, [string]$Defaul
         $Values = @("gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro", "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini", "gpt-5.4-nano", "custom")
     } elseif ($Provider -eq "anthropic") {
         $Values = @("claude-sonnet-4-5", "claude-haiku-4-5", "claude-opus-4-1", "custom")
-    } else {
+    } elseif ($Provider -eq "ollama") {
         $Values = @("qwen3:8b", "qwen3:14b", "qwen3:30b", "gpt-oss:20b", "gpt-oss:120b", "llama3.3", "deepseek-r1", "custom")
+    } else {
+        $Values = @("custom")
     }
     $Labels = @($Values | ForEach-Object { if ($_ -eq "custom") { "Any other current, future, or installed model ID" } else { $_ } })
     $MenuDefault = if ($Default -in $Values) { $Default } else { "custom" }
@@ -214,14 +216,14 @@ function Configure-Identity {
 }
 function Configure-Models {
     Write-Step 3 10 "Models and voice"
-    $Provider = Read-MappedChoice "Model access" @("codex_cli", "openai", "anthropic", "ollama") @("OpenAI account - browser sign-in, no API key", "OpenAI API - usage-based key", "Anthropic API - usage-based key", "Ollama - local and private") (Current "MODEL_PROVIDER" "codex_cli")
+    $Provider = Read-MappedChoice "Model access" @("codex_cli", "openai", "anthropic", "ollama", "openai_compatible") @("OpenAI account - browser sign-in, no API key", "OpenAI API - usage-based key", "Anthropic API - usage-based key", "Ollama - local and private", "Compatible API - hosted or self-hosted endpoint") (Current "MODEL_PROVIDER" "codex_cli")
     Set-Value "MODEL_PROVIDER" $Provider
     if ($Provider -eq "codex_cli") {
         $AuthState = & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status -Quiet
         if ($AuthState -ne "connected") { & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action login }
         Set-Value "MODEL_API_KEY" ""
     }
-    $DefaultModel = if ($Provider -eq "ollama") { "qwen3:8b" } elseif ($Provider -eq "anthropic") { "claude-sonnet-4-5" } else { "gpt-6.1-sol" }
+    $DefaultModel = if ($Provider -eq "ollama") { "qwen3:8b" } elseif ($Provider -eq "anthropic") { "claude-sonnet-4-5" } elseif ($Provider -eq "openai_compatible") { Current "MODEL_NAME" "model-name" } else { "gpt-6.1-sol" }
     Set-Value "MODEL_NAME" (Read-ModelSelection $Provider "Default model" (Current "MODEL_NAME" $DefaultModel))
     $DeepDefault = if ($Provider -in @("codex_cli", "openai")) { "gpt-6-astra" } else { Current "DEEP_MODEL_NAME" (Current "MODEL_NAME") }
     Set-Value "DEEP_MODEL_NAME" (Read-ModelSelection $Provider "Deep model" (Current "DEEP_MODEL_NAME" $DeepDefault))
@@ -229,6 +231,14 @@ function Configure-Models {
         Set-Value "MODEL_API_KEY" ""
         Set-Value "OLLAMA_BASE_URL" (Read-Plain "Ollama URL" (Current "OLLAMA_BASE_URL" "http://127.0.0.1:11434"))
     } elseif ($Provider -ne "codex_cli") {
+        if ($Provider -eq "openai_compatible") {
+            $BaseUrl = Read-ValidatedPlain "Compatible API base URL" (Current "MODEL_BASE_URL" "https://api.example.com/v1") {
+                param($Candidate)
+                $Parsed = $null
+                [Uri]::TryCreate([string]$Candidate, [UriKind]::Absolute, [ref]$Parsed) -and $Parsed.Scheme -in @("http", "https")
+            } "Enter an absolute http:// or https:// URL ending at the API version root."
+            Set-Value "MODEL_BASE_URL" $BaseUrl.TrimEnd('/')
+        }
         $NewKey = Read-Secret "Model API key (blank keeps current)"
         if ($NewKey) { Set-Value "MODEL_API_KEY" $NewKey }
     }
@@ -381,11 +391,12 @@ if ($Action -eq "validate") {
     if ((Current "HOST" "127.0.0.1") -ne "127.0.0.1") { $Problems += "HOST must remain 127.0.0.1 in native mode" }
     $Port = Current "PORT"
     if ($Port -notmatch '^\d+$' -or [int]$Port -lt 1024 -or [int]$Port -gt 65535) { $Problems += "PORT is invalid" }
-    if ((Current "MODEL_PROVIDER") -notin @("codex_cli", "openai", "anthropic", "ollama")) { $Problems += "MODEL_PROVIDER is invalid" }
+    if ((Current "MODEL_PROVIDER") -notin @("codex_cli", "openai", "anthropic", "ollama", "openai_compatible")) { $Problems += "MODEL_PROVIDER is invalid" }
     foreach ($Required in @("MODEL_NAME", "BARLAS_GATEWAY_TOKEN", "BARLAS_API_TOKEN", "CONNECTOR_VAULT_KEY")) {
         if ([string]::IsNullOrWhiteSpace((Current $Required))) { $Problems += "$Required is missing" }
     }
     if ((Current "MODEL_PROVIDER") -notin @("ollama", "codex_cli") -and [string]::IsNullOrWhiteSpace((Current "MODEL_API_KEY"))) { $Problems += "MODEL_API_KEY is missing" }
+    if ((Current "MODEL_PROVIDER") -eq "openai_compatible" -and [string]::IsNullOrWhiteSpace((Current "MODEL_BASE_URL"))) { $Problems += "MODEL_BASE_URL is missing" }
     if ((Current "BARLAS_GATEWAY_TOKEN").Length -lt 32) { $Problems += "BARLAS_GATEWAY_TOKEN is too short" }
     if ((Current "AGENT_NAME" "Barlas").Length -gt 80) { $Problems += "AGENT_NAME is too long" }
     if ((Current "AGENT_STYLE" "balanced") -notin @("balanced", "concise", "warm", "analytical", "creative")) { $Problems += "AGENT_STYLE is invalid" }
@@ -418,6 +429,7 @@ if ($Action -eq "models-status") {
     Write-Output "Default model: $(Current 'MODEL_NAME')"
     Write-Output "Deep model: $(Current 'DEEP_MODEL_NAME')"
     if ((Current "MODEL_PROVIDER") -eq "ollama") { Write-Output "Ollama URL: $(Current 'OLLAMA_BASE_URL' 'http://127.0.0.1:11434')" }
+    if ((Current "MODEL_PROVIDER") -eq "openai_compatible") { Write-Output "Compatible API URL: $(Current 'MODEL_BASE_URL')" }
     Write-Output "Vision model: $(Current 'VISION_MODEL' 'disabled')"
     Write-Output "Authentication: $(if ((Current 'MODEL_PROVIDER') -eq 'codex_cli') { 'OpenAI account session' } elseif ((Current 'MODEL_PROVIDER') -eq 'ollama') { 'local, no key' } elseif (Current 'MODEL_API_KEY') { 'API key configured' } else { 'missing' })"
     if ((Current "MODEL_PROVIDER") -eq "codex_cli") {

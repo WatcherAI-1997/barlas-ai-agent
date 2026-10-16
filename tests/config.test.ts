@@ -35,6 +35,13 @@ describe("Barlas configuration", () => {
     expect(() => loadConfig({ ...base, MODEL_PROVIDER: "openai", MODEL_API_KEY: "" })).toThrow(/MODEL_API_KEY/u);
   });
 
+  it("accepts a portable compatible endpoint only with an explicit base URL", () => {
+    expect(loadConfig({
+      ...base, MODEL_PROVIDER: "openai_compatible", MODEL_BASE_URL: "https://models.example/v1",
+    })).toMatchObject({ MODEL_PROVIDER: "openai_compatible", MODEL_BASE_URL: "https://models.example/v1" });
+    expect(() => loadConfig({ ...base, MODEL_PROVIDER: "openai_compatible" })).toThrow(/MODEL_BASE_URL/u);
+  });
+
   it("requires an explicit OpenAI vision model when Anthropic media is enabled", () => {
     expect(() => loadConfig({ ...base, MODEL_PROVIDER: "anthropic", MEDIA_API_KEY: "openai-key" }))
       .toThrow(/VISION_MODEL/u);

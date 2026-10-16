@@ -174,10 +174,13 @@ Automation may provide configuration through its secret manager and then run:
 ```
 
 Local mode requires only `MODEL_NAME` and `MODEL_API_KEY`; set
-`MODEL_PROVIDER` to `openai` or `anthropic` (default `openai`). Owner email defaults
+`MODEL_PROVIDER` to `openai`, `anthropic`, or `openai_compatible` (default `openai`).
+For a compatible hosted or self-hosted Chat Completions endpoint, also set
+`MODEL_BASE_URL` to its API version root, such as `https://provider.example/v1`.
+Owner email defaults
 to `owner@barlas.local`. Public mode additionally requires `BARLAS_DOMAIN` and
 `OWNER_EMAIL`. Optional variables include
-`DEEP_MODEL_NAME`, `MEDIA_API_KEY`, `VISION_MODEL`, `TRANSCRIPTION_MODEL`, `SPEECH_MODEL`,
+`DEEP_MODEL_NAME`, `MODEL_BASE_URL`, `MEDIA_API_KEY`, `VISION_MODEL`, `TRANSCRIPTION_MODEL`, `SPEECH_MODEL`,
 `EMBEDDING_MODEL`, `OWNER_DISPLAY_NAME`, `OWNER_LANGUAGE`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
 `TELEGRAM_BOT_API_BASE_URL`, `TELEGRAM_MAX_UPLOAD_BYTES`,
