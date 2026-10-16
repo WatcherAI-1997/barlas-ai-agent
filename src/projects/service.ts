@@ -70,6 +70,7 @@ export class ProjectService {
     if (!detail) return null;
     return [
       `Active Barlas project: ${detail.project.name}.`,
+      `Active project ID for project tools: ${detail.project.id}.`,
       detail.project.description ? `Project objective/context: ${detail.project.description}` : "",
       ...detail.goals.filter((goal) => goal.status !== "completed").slice(0, 25).map((goal) => `Goal [${goal.status}, priority ${goal.priority}]: ${goal.title}`),
       ...detail.steps.filter((step) => !["completed", "skipped"].includes(step.status)).slice(0, 50).map((step) => `Plan step ${step.position} [${step.status}]: ${step.title}`),

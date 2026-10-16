@@ -13,6 +13,7 @@ import type { GitHubConnector } from "../connectors/github.js";
 import type { GoogleConnector } from "../connectors/google.js";
 import type { McpConnector } from "../connectors/mcp.js";
 import { speechVoices, type MediaService } from "./media.js";
+import type { ProjectService } from "../projects/service.js";
 
 export function createBuiltinToolRegistry(options: {
   workspaceRoot?: string;
@@ -24,6 +25,7 @@ export function createBuiltinToolRegistry(options: {
   subagentCoordinator?: Pick<SubagentCoordinator, "delegate">;
   codeSandbox?: Pick<CodeSandboxClient, "run">;
   mediaService?: Pick<MediaService, "analyzeImage" | "analyzePdf" | "transcribeAudio" | "createSpeech">;
+  projectService?: Pick<ProjectService, "detail" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "snapshot" | "restore">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
@@ -251,6 +253,110 @@ export function createBuiltinToolRegistry(options: {
       execute: async (input, context) => {
         const value = input as { path: string; text: string; voice: typeof speechVoices[number] };
         return options.mediaService!.createSpeech(context.userId, value.path, value.text, value.voice);
+      },
+    });
+  }
+
+  if (options.projectService) {
+    const projectId = z.string().uuid();
+    const goalId = z.string().uuid();
+    const requireResult = <T>(value: T | null, message: string): T => {
+      if (value === null) throw new Error(message);
+      return value;
+    };
+    registry.register({
+      name: "projects.get",
+      description: "Read the current user's project, linked resources, goals, plan steps, checkpoints, and artifact version metadata.",
+      risk: "read",
+      inputSchema: z.object({ projectId }).strict(),
+      execute: async (input, context) => requireResult(
+        await options.projectService!.detail(context.userId, (input as { projectId: string }).projectId),
+        "Project not found",
+      ),
+    });
+    registry.register({
+      name: "projects.goal.create",
+      description: "Create a goal in one of the current user's projects.",
+      risk: "write",
+      inputSchema: z.object({
+        projectId,
+        title: z.string().min(1).max(500),
+        description: z.string().max(10_000).default(""),
+        priority: z.number().int().min(0).max(100).default(0),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { projectId: string; title: string; description: string; priority: number };
+        return requireResult(await options.projectService!.createGoal(context.userId, value.projectId, value.title, value.description, value.priority), "Project not found");
+      },
+    });
+    registry.register({
+      name: "projects.goal.update",
+      description: "Update the status of a goal in one of the current user's projects.",
+      risk: "write",
+      inputSchema: z.object({ projectId, goalId, status: z.enum(["planned", "in_progress", "blocked", "completed"]) }).strict(),
+      execute: async (input, context) => {
+        const value = input as { projectId: string; goalId: string; status: "planned" | "in_progress" | "blocked" | "completed" };
+        return requireResult(await options.projectService!.updateGoal(context.userId, value.projectId, value.goalId, value.status), "Project goal not found");
+      },
+    });
+    registry.register({
+      name: "projects.step.create",
+      description: "Append an ordered plan step to one of the current user's projects, optionally under a goal.",
+      risk: "write",
+      inputSchema: z.object({ projectId, goalId: goalId.optional(), title: z.string().min(1).max(1_000) }).strict(),
+      execute: async (input, context) => {
+        const value = input as { projectId: string; goalId?: string; title: string };
+        return requireResult(await options.projectService!.createStep(context.userId, value.projectId, value.title, value.goalId), "Project or goal not found");
+      },
+    });
+    registry.register({
+      name: "projects.step.update",
+      description: "Update the status of a plan step in one of the current user's projects.",
+      risk: "write",
+      inputSchema: z.object({
+        projectId,
+        stepId: z.string().uuid(),
+        status: z.enum(["pending", "in_progress", "blocked", "completed", "skipped"]),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { projectId: string; stepId: string; status: "pending" | "in_progress" | "blocked" | "completed" | "skipped" };
+        return requireResult(await options.projectService!.updateStep(context.userId, value.projectId, value.stepId, value.status), "Project step not found");
+      },
+    });
+    registry.register({
+      name: "projects.checkpoint.create",
+      description: "Record a bounded progress checkpoint in one of the current user's projects.",
+      risk: "write",
+      inputSchema: z.object({
+        projectId,
+        goalId: goalId.optional(),
+        title: z.string().min(1).max(500),
+        summary: z.string().max(10_000).default(""),
+        progress: z.number().int().min(0).max(100),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { projectId: string; goalId?: string; title: string; summary: string; progress: number };
+        return requireResult(await options.projectService!.checkpoint(context.userId, value.projectId, value.title, value.summary, value.progress, value.goalId), "Project or goal not found");
+      },
+    });
+    registry.register({
+      name: "projects.artifact.snapshot",
+      description: "Save an immutable version of a workspace file as a project artifact.",
+      risk: "write",
+      inputSchema: z.object({ projectId, path: z.string().min(1).max(1_000) }).strict(),
+      execute: async (input, context) => {
+        const value = input as { projectId: string; path: string };
+        return options.projectService!.snapshot(context.userId, value.projectId, value.path);
+      },
+    });
+    registry.register({
+      name: "projects.artifact.restore",
+      description: "Restore one immutable project artifact version to its original workspace path.",
+      risk: "write",
+      inputSchema: z.object({ projectId, versionId: z.string().uuid() }).strict(),
+      execute: async (input, context) => {
+        const value = input as { projectId: string; versionId: string };
+        return requireResult(await options.projectService!.restore(context.userId, value.projectId, value.versionId), "Artifact version not found");
       },
     });
   }

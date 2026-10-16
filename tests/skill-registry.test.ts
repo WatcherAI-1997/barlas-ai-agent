@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { SkillRegistry } from "../src/skills/registry.js";
+import { createBuiltinSkillRegistry, SkillRegistry } from "../src/skills/registry.js";
 import { createBuiltinToolRegistry } from "../src/tools/builtins.js";
+import type { ProjectService } from "../src/projects/service.js";
 
 describe("versioned skill registry", () => {
   it("keeps multiple versions and can activate an earlier safe version", () => {
@@ -74,5 +75,29 @@ describe("multimodal tool registration", () => {
     for (const name of ["media.image.analyze", "media.pdf.analyze", "media.audio.transcribe", "media.speech.create"]) {
       expect(registry.list()).toContainEqual(expect.objectContaining({ name, risk: "external" }));
     }
+  });
+});
+
+describe("project execution tool registration", () => {
+  it("keeps project reads immediate and marks every mutation as approval-gated write", () => {
+    const projectService = {
+      detail: async () => null,
+      createGoal: async () => null,
+      updateGoal: async () => null,
+      createStep: async () => null,
+      updateStep: async () => null,
+      checkpoint: async () => null,
+      snapshot: async () => ({ id: "x" }),
+      restore: async () => null,
+    };
+    const registry = createBuiltinToolRegistry({ projectService: projectService as unknown as Pick<ProjectService, "detail" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "snapshot" | "restore"> });
+    expect(registry.list()).toContainEqual(expect.objectContaining({ name: "projects.get", risk: "read" }));
+    for (const name of [
+      "projects.goal.create", "projects.goal.update", "projects.step.create", "projects.step.update",
+      "projects.checkpoint.create", "projects.artifact.snapshot", "projects.artifact.restore",
+    ]) {
+      expect(registry.list()).toContainEqual(expect.objectContaining({ name, risk: "write" }));
+    }
+    expect(createBuiltinSkillRegistry().get("project.execution").allowedTools).toContain("projects.get");
   });
 });

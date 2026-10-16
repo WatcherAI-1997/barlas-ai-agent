@@ -53,6 +53,10 @@ autonomy.
   Worker completion writes an idempotent checkpoint for every linked project;
   approval pauses are excluded and later terminal updates replace the same
   run checkpoint rather than duplicating progress.
+- The agent can inspect an owned project through a read-only tool. Goal, plan,
+  checkpoint, artifact snapshot, and artifact restore tools are all classified
+  as writes, so the exact validated input is persisted and execution pauses
+  until the owning user approves it. The model never supplies a user ID.
 - Media uploads are limited to 10 MB and verified from binary signatures before
   storage. Vision, scanned-PDF analysis, transcription, and speech generation
   use owned workspace paths and remain external approval-gated model calls;

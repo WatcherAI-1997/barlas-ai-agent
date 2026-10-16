@@ -3,7 +3,7 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 117 automated tests across 33 files pass.
+- 121 automated tests across 34 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -25,6 +25,9 @@
   explicit restoration of selected versions.
 - Project-execution tests cover owned goals, ordered plans, bounded manual
   checkpoints, automatic terminal-run summaries, and retry-safe deduplication.
+- Project-tool tests verify that tenant identity comes only from execution
+  context, reads execute immediately, and no agent-proposed project mutation
+  runs before the exact stored request is approved.
 - The live agent evaluation suite validates scenario definitions and scores
   persisted statuses, tools, content-safe events, output constraints, steps,
   tokens, and cost without model self-grading. Credentialed baseline results

@@ -121,6 +121,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   ...(googleConnector ? { googleConnector } : {}),
   ...(mcpConnector ? { mcpConnector } : {}),
   mediaService,
+  projectService: projects,
 }), database, governance);
 const skillManager = new SkillManager(
   database,

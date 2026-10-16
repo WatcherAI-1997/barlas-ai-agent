@@ -127,6 +127,23 @@ for (const toolName of [
   const block = builtins.slice(offset, offset + 500);
   if (offset < 0 || !block.includes('risk: "external"')) throw new Error(`External mutation is not approval-gated: ${toolName}`);
 }
+for (const toolName of [
+  "projects.goal.create",
+  "projects.goal.update",
+  "projects.step.create",
+  "projects.step.update",
+  "projects.checkpoint.create",
+  "projects.artifact.snapshot",
+  "projects.artifact.restore",
+]) {
+  const offset = builtins.indexOf(`name: "${toolName}"`);
+  const block = builtins.slice(offset, offset + 500);
+  if (offset < 0 || !block.includes('risk: "write"')) throw new Error(`Project mutation is not approval-gated: ${toolName}`);
+}
+const projectReadOffset = builtins.indexOf('name: "projects.get"');
+if (projectReadOffset < 0 || !builtins.slice(projectReadOffset, projectReadOffset + 500).includes('risk: "read"')) {
+  throw new Error("Project read tool must remain read-only");
+}
 const mediaTools = await readFile("src/tools/media.ts", "utf8");
 for (const required of ["MAX_MEDIA_BYTES = 10_000_000", "detectMedia", "File extension does not match", "Unsupported or unrecognized", "workspace.readBuffer", "workspace.writeBuffer"]) {
   if (!mediaTools.includes(required)) throw new Error(`Media boundary is missing: ${required}`);

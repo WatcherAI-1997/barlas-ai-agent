@@ -48,6 +48,11 @@ describe("project service", () => {
     await expect(service.detail("user-2", project.id)).resolves.toBeNull();
   });
 
+  it("supplies the owned project identifier for project tools", async () => {
+    const { service } = setup();
+    await expect(service.context("user-1", project.id)).resolves.toContain(`Active project ID for project tools: ${project.id}.`);
+  });
+
   it("records a completed linked agent run as an idempotent checkpoint request", async () => {
     const { service, store } = setup();
     vi.mocked(store.projectIdsForResource).mockResolvedValue([project.id]);

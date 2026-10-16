@@ -42,6 +42,9 @@
   and recoverable artifact versions. *(implemented)*
 - Project goals, ordered execution plans, progress checkpoints, and automatic
   retry-safe preservation of agent-run outcomes. *(implemented)*
+- Agent-managed project execution with read-only state inspection and
+  approval-gated goal, plan, checkpoint, artifact snapshot, and restore tools.
+  *(implemented)*
 - Conversation history, approval inbox, and job controls. *(implemented)*
 - Multi-user organizations, roles, and billing foundations. *(organizations, owner/admin/member/viewer memberships, plan profiles, owner-led onboarding, and one-time account recovery implemented; payment processing pending)*
 - Connector catalog and deployment automation. *(encrypted per-user vault, GitHub branches/commits/PRs/issues, Drive text-file writes, Gmail drafts/send, Calendar event writes, and remote MCP Streamable HTTP tools implemented with mandatory approval; production OAuth credentials pending)*

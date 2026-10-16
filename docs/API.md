@@ -334,6 +334,14 @@ model step, startup recovery finds the executed/rejected approval and continues
 from the saved provider response and call ID. Conditional state transitions
 prevent a cancelled run from being overwritten by a late model response.
 
+The built-in `project.execution` skill can read the current user's project and
+propose goal, ordered-plan, checkpoint, artifact snapshot, or artifact restore
+operations. `projects.get` is read-only. Every other `projects.*` operation is
+a write: its exact project/goal/step/version identifiers and bounded content are
+stored in the normal approval queue and executed only after approval by the
+same authenticated user. User identity is taken from tool execution context,
+never from model input, preserving tenant isolation.
+
 Custom skill versions are persisted as inactive candidates. Installation is
 owner-only, tool names must already exist in the deployment, and activation is
 blocked until the latest automated evaluation passes every required/forbidden

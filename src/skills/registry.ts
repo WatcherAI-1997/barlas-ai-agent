@@ -86,5 +86,16 @@ export function createBuiltinSkillRegistry(): SkillRegistry {
     instructions: "Use only the user-provided workspace path. Explain what will be sent externally, request the smallest useful operation, and state uncertainty in visual or audio interpretation.",
     allowedTools: ["files.list", "media.image.analyze", "media.pdf.analyze", "media.audio.transcribe", "media.speech.create"],
   });
+  registry.register({
+    id: "project.execution",
+    version: "1.0.0",
+    description: "Inspect and maintain an approved project plan, progress, and recoverable artifact versions.",
+    instructions: "Use the active project ID from system context and read the current project before proposing changes. Keep goals and steps concrete, update only verified progress, never mark unfinished work complete, and explain the exact mutation before requesting approval. Snapshot important workspace results before risky revisions.",
+    allowedTools: [
+      "projects.get", "projects.goal.create", "projects.goal.update", "projects.step.create",
+      "projects.step.update", "projects.checkpoint.create", "projects.artifact.snapshot",
+      "projects.artifact.restore", "files.list", "files.read",
+    ],
+  });
   return registry;
 }
