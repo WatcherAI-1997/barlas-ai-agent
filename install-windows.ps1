@@ -18,6 +18,55 @@ $PreviousDir = Join-Path $BarlasHome "previous"
 function Write-Step([string]$Message) { Write-Host "-> $Message" -ForegroundColor Cyan }
 function Write-Done([string]$Message) { Write-Host "[OK] $Message" -ForegroundColor Green }
 
+function Find-DockerDesktop {
+    $Candidates = @(
+        $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe" }),
+        $(if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} "Docker\Docker\Docker Desktop.exe" }),
+        $(if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "Docker\Docker Desktop.exe" }),
+        $(if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "Programs\Docker\Docker\Docker Desktop.exe" })
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
+    if ($Candidates) { return [string]($Candidates | Select-Object -First 1) }
+
+    foreach ($RegistryPath in @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )) {
+        $Entry = Get-ItemProperty $RegistryPath -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like "Docker Desktop*" -and $_.DisplayIcon } |
+            Select-Object -First 1
+        if ($Entry) {
+            $DisplayIcon = [string]$Entry.DisplayIcon
+            if ($DisplayIcon -match '^"([^"]+)"') { $Executable = $Matches[1] }
+            else { $Executable = ($DisplayIcon -split ',', 2)[0].Trim('"') }
+            if (Test-Path -LiteralPath $Executable -PathType Leaf) { return $Executable }
+        }
+    }
+    return ""
+}
+
+function Start-DockerDesktop {
+    $Executable = Find-DockerDesktop
+    if ($Executable) {
+        Start-Process -FilePath $Executable | Out-Null
+        return $true
+    }
+    $StartApp = Get-Command Get-StartApps -ErrorAction SilentlyContinue
+    if ($StartApp) {
+        $DockerApp = Get-StartApps | Where-Object { $_.Name -like "Docker Desktop*" } | Select-Object -First 1
+        if ($DockerApp) {
+            Start-Process explorer.exe "shell:AppsFolder\$($DockerApp.AppID)" | Out-Null
+            return $true
+        }
+    }
+    try {
+        Start-Process "docker-desktop:" | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 function Show-PixelBanner {
     $Font = @{
         B = @("11110", "10001", "11110", "10001", "11110")
@@ -26,7 +75,7 @@ function Show-PixelBanner {
         L = @("10000", "10000", "10000", "10000", "11111")
         S = @("01111", "10000", "01110", "00001", "11110")
     }
-    $Mark = @(" ████    ████ ", "██████  ██████", " ████    ████ ", "    ████      ", "   ██████     ", "    ████      ")
+    $Mark = @("  ▄████▄    ▄████▄  ", " ████████  ████████ ", "  ▀████▀    ▀████▀  ", "      ▄████▄        ", "     ████████       ", "      ▀████▀        ")
     Write-Host ""
     for ($Row = 0; $Row -lt 6; $Row++) {
         Write-Host ($Mark[$Row] + "   ") -ForegroundColor Red -NoNewline
@@ -54,15 +103,14 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     } else {
         Write-Host "Download Docker Desktop from https://www.docker.com/products/docker-desktop/"
     }
-    throw "Install and start Docker Desktop, then run the Barlas command again."
+    Write-Host "Install and start Docker Desktop, then run the Barlas command again." -ForegroundColor Red
+    return
 }
 
 & cmd.exe /d /c "docker info >nul 2>nul"
 if ($LASTEXITCODE -ne 0) {
-    $DockerDesktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
-    if (Test-Path -LiteralPath $DockerDesktop -PathType Leaf) {
+    if (Start-DockerDesktop) {
         Write-Step "Start Docker Desktop"
-        Start-Process -FilePath $DockerDesktop | Out-Null
         $DockerReady = $false
         for ($Attempt = 0; $Attempt -lt 60; $Attempt++) {
             Start-Sleep -Seconds 3
@@ -70,9 +118,15 @@ if ($LASTEXITCODE -ne 0) {
             if ($LASTEXITCODE -eq 0) { $DockerReady = $true; break }
         }
         if ($DockerReady) { Write-Done "Docker Desktop is ready" }
-        else { throw "Docker Desktop did not become ready within three minutes. Open it, finish any WSL 2 setup it requests, then run this command again." }
+        else {
+            Write-Host "Docker Desktop did not become ready within three minutes." -ForegroundColor Red
+            Write-Host "Open Docker Desktop, finish any WSL 2 setup it requests, then run this command again."
+            return
+        }
     } else {
-        throw "Docker Desktop is installed but its Linux engine is not running. Start Docker Desktop, wait until it is ready, then run this command again."
+        Write-Host "Docker Desktop is installed, but its Linux engine is not running." -ForegroundColor Red
+        Write-Host "Open Docker Desktop from the Start menu, wait until it says Engine running, then run this command again."
+        return
     }
 }
 
