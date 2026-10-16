@@ -8,6 +8,7 @@ import {
   type StoredAccount,
   type UserAccount,
 } from "../src/auth/service.js";
+import type { SupportedLanguageCode } from "../src/i18n/languages.js";
 
 class MemoryAuthStore implements AuthStore {
   accounts: StoredAccount[] = [];
@@ -15,11 +16,26 @@ class MemoryAuthStore implements AuthStore {
   resetCodes = new Map<string, string>();
 
   async findAccountByEmail(email: string) { return this.accounts.find((item) => item.email === email) ?? null; }
-  async createAccount(input: Omit<StoredAccount, "id" | "active" | "createdAt">): Promise<UserAccount> {
+  async findAccountById(id: string) {
+    const account = this.accounts.find((item) => item.id === id);
+    if (!account) return null;
+    const { passwordHash: _hash, passwordSalt: _salt, ...publicAccount } = account;
+    return publicAccount;
+  }
+  async createAccount(input: {
+    email: string;
+    displayName: string;
+    role: "owner" | "user";
+    passwordHash: string;
+    passwordSalt: string;
+    languageCode?: SupportedLanguageCode;
+  }): Promise<UserAccount> {
     const account: StoredAccount = {
       ...input,
       id: `account-${this.accounts.length + 1}`,
       active: true,
+      languageCode: input.languageCode ?? null,
+      languageConfigured: Boolean(input.languageCode),
       createdAt: "2026-10-16T00:00:00.000Z",
     };
     this.accounts.push(account);
@@ -27,6 +43,14 @@ class MemoryAuthStore implements AuthStore {
     return publicAccount;
   }
   async listAccounts(): Promise<UserAccount[]> { return this.accounts; }
+  async updateAccountLanguage(accountId: string, languageCode: SupportedLanguageCode) {
+    const account = this.accounts.find((item) => item.id === accountId);
+    if (!account) return null;
+    account.languageCode = languageCode;
+    account.languageConfigured = true;
+    const { passwordHash: _hash, passwordSalt: _salt, ...publicAccount } = account;
+    return publicAccount;
+  }
   async createPasswordReset(input: { accountId: string; codeHash: string }) {
     if (!this.accounts.some((account) => account.id === input.accountId)) return false;
     this.resetCodes.set(input.codeHash, input.accountId); return true;
@@ -90,6 +114,23 @@ describe("Barlas AI Agent authentication", () => {
       password: "another-secure-password",
       role: "user",
     })).rejects.toBeInstanceOf(AccountConflictError);
+  });
+
+  it("requires a language choice for an unconfigured account and persists it", async () => {
+    const store = new MemoryAuthStore();
+    const auth = new AuthService(store);
+    const account = await auth.createAccount({
+      email: "language@example.com",
+      displayName: "Language User",
+      password: "very-secure-password",
+      role: "user",
+    });
+    expect(account).toMatchObject({ languageCode: null, languageConfigured: false });
+    await expect(auth.setLanguage(account.id, "kk")).resolves.toMatchObject({
+      languageCode: "kk",
+      languageConfigured: true,
+    });
+    await expect(auth.setLanguage(account.id, "de")).rejects.toThrow("Unsupported language");
   });
 
   it("uses a password reset code once and revokes existing sessions", async () => {

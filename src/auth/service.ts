@@ -1,5 +1,7 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 
+import { isSupportedLanguage, type SupportedLanguageCode } from "../i18n/languages.js";
+
 export type AccountRole = "owner" | "user";
 
 export interface UserAccount {
@@ -8,6 +10,8 @@ export interface UserAccount {
   displayName: string;
   role: AccountRole;
   active: boolean;
+  languageCode: SupportedLanguageCode | null;
+  languageConfigured: boolean;
   createdAt: string;
 }
 
@@ -18,14 +22,17 @@ export interface StoredAccount extends UserAccount {
 
 export interface AuthStore {
   findAccountByEmail(email: string): Promise<StoredAccount | null>;
+  findAccountById(id: string): Promise<UserAccount | null>;
   createAccount(input: {
     email: string;
     displayName: string;
     role: AccountRole;
     passwordHash: string;
     passwordSalt: string;
+    languageCode?: SupportedLanguageCode;
   }): Promise<UserAccount>;
   listAccounts(): Promise<UserAccount[]>;
+  updateAccountLanguage(accountId: string, languageCode: SupportedLanguageCode): Promise<UserAccount | null>;
   createPasswordReset(input: { accountId: string; codeHash: string; expiresAt: Date }): Promise<boolean>;
   consumePasswordReset(input: {
     codeHash: string;
@@ -64,11 +71,20 @@ export class AuthService {
     private readonly sessionTtlHours = 168,
   ) {}
 
-  async bootstrapOwner(input: { email: string; displayName: string; password: string }): Promise<UserAccount> {
+  async bootstrapOwner(input: {
+    email: string;
+    displayName: string;
+    password: string;
+    languageCode?: SupportedLanguageCode;
+  }): Promise<UserAccount> {
     const email = normalizeEmail(input.email);
     const existing = await this.store.findAccountByEmail(email);
     if (existing) {
       if (existing.role !== "owner") throw new Error("Bootstrap account exists without owner role");
+      if (input.languageCode && existing.languageCode !== input.languageCode) {
+        const updated = await this.store.updateAccountLanguage(existing.id, input.languageCode);
+        if (updated) return updated;
+      }
       return publicAccount(existing);
     }
     return this.createAccount({ ...input, email, role: "owner" });
@@ -79,6 +95,7 @@ export class AuthService {
     displayName: string;
     password: string;
     role: AccountRole;
+    languageCode?: SupportedLanguageCode;
   }): Promise<UserAccount> {
     const email = normalizeEmail(input.email);
     validatePassword(input.password);
@@ -93,7 +110,19 @@ export class AuthService {
       role: input.role,
       passwordHash,
       passwordSalt,
+      ...(input.languageCode ? { languageCode: input.languageCode } : {}),
     });
+  }
+
+  getAccount(accountId: string): Promise<UserAccount | null> {
+    return this.store.findAccountById(accountId);
+  }
+
+  async setLanguage(accountId: string, languageCode: string): Promise<UserAccount> {
+    if (!isSupportedLanguage(languageCode)) throw new Error("Unsupported language");
+    const account = await this.store.updateAccountLanguage(accountId, languageCode);
+    if (!account) throw new Error("Account not found");
+    return account;
   }
 
   async login(emailInput: string, password: string): Promise<{ token: string; account: UserAccount; expiresAt: string }> {
@@ -191,6 +220,8 @@ function publicAccount(account: UserAccount): UserAccount {
     displayName: account.displayName,
     role: account.role,
     active: account.active,
+    languageCode: account.languageCode,
+    languageConfigured: account.languageConfigured,
     createdAt: account.createdAt,
   };
 }

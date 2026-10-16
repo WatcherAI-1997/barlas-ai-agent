@@ -30,6 +30,18 @@
         </details>
       </section>
 
+      <section id="language-view" class="auth-card hidden">
+        <img class="logo" src="/ui/brand/barlas-ai-agent-logo-original.png" alt="Barlas AI Agent">
+        <p class="eyebrow">Think ahead. Act beyond.</p>
+        <h1>Выберите язык / Choose your language</h1>
+        <p class="meta">На этом языке будет отвечать Barlas AI Agent. Выбор можно изменить в настройках.</p>
+        <form id="language-setup-form">
+          <label>Язык<select id="language-setup-select" required></select></label>
+          <button type="submit">Продолжить</button>
+          <p id="language-setup-error" class="error" role="alert"></p>
+        </form>
+      </section>
+
       <section id="app-view" class="app hidden">
         <header>
           <div class="brand"><span class="mark">●●●</span><strong>Barlas AI Agent</strong></div>
@@ -45,6 +57,7 @@
           <button data-panel="skills">Навыки</button>
           <button data-panel="organizations">Организации</button>
           <button data-panel="connectors">Подключения</button>
+          <button data-panel="settings">Настройки</button>
           <button id="users-tab" data-panel="users">Пользователи</button>
         </nav>
 
@@ -98,6 +111,15 @@
           <p id="connector-error" class="error" role="alert"></p>
           <div id="connectors" class="grid"></div>
         </section>
+        <section id="panel-settings" class="panel hidden">
+          <h2>Язык</h2>
+          <p class="meta">Barlas AI Agent использует этот язык для ответов в веб‑кабинете и привязанном Telegram.</p>
+          <form id="language-settings-form" class="inline-form">
+            <select id="language-settings-select" required></select>
+            <button type="submit">Сохранить</button>
+          </form>
+          <p id="language-settings-status" class="meta"></p>
+        </section>
         <section id="panel-users" class="panel hidden">
           <h2>Пользователи</h2>
           <form id="user-form" class="inline-form">
@@ -105,6 +127,7 @@
             <input id="new-email" type="email" placeholder="Email" required>
             <input id="new-password" type="password" placeholder="Пароль (12+ символов)" minlength="12" required>
             <select id="new-role"><option value="user">Пользователь</option><option value="owner">Владелец</option></select>
+            <select id="new-language" aria-label="Язык пользователя"><option value="">Выберет при первом входе</option></select>
             <button type="submit">Создать</button>
           </form>
           <p id="user-error" class="error" role="alert"></p>

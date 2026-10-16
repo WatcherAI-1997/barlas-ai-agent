@@ -39,6 +39,7 @@ if (config.OWNER_EMAIL && config.OWNER_PASSWORD) {
     email: config.OWNER_EMAIL,
     password: config.OWNER_PASSWORD,
     displayName: config.OWNER_DISPLAY_NAME,
+    ...(config.OWNER_LANGUAGE ? { languageCode: config.OWNER_LANGUAGE } : {}),
   });
 }
 const fastProvider = new OpenAIProvider({

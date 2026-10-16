@@ -14,6 +14,18 @@ label { display: grid; gap: .45rem; margin: 1rem 0; color: #babdc7; }
 input, textarea, select { width: 100%; border: 1px solid #343741; border-radius: .7rem; padding: .8rem; color: white; background: #101216; outline: none; }
 input:focus, textarea:focus, select:focus { border-color: #d82035; box-shadow: 0 0 0 3px #d8203533; }
 .hidden { display: none !important; }
+
+html[dir="rtl"] .identity,
+html[dir="rtl"] .actions,
+html[dir="rtl"] .inline-form {
+  direction: rtl;
+}
+
+html[dir="rtl"] input,
+html[dir="rtl"] textarea,
+html[dir="rtl"] select {
+  text-align: right;
+}
 header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 0; }
 .brand { display: flex; gap: .7rem; align-items: center; font-size: 1.1rem; }
 .mark { color: #e12338; letter-spacing: -.28em; padding-right: .28em; }

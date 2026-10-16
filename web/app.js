@@ -1,4 +1,4 @@
-const state = { token: sessionStorage.getItem("barlasToken"), account: null, conversationId: null };
+const state = { token: sessionStorage.getItem("barlasToken"), account: null, conversationId: null, languages: [] };
 const $ = (selector) => document.querySelector(selector);
 
 async function api(path, options = {}) {
@@ -20,10 +20,49 @@ function card(title, meta, body = "") {
   return node;
 }
 
-function showApp(account) {
+async function loadLanguages() {
+  if (state.languages.length) return state.languages;
+  const data = await api("/languages");
+  state.languages = data.languages;
+  return state.languages;
+}
+
+function fillLanguageSelect(selector, selected, includeUnset = false) {
+  const select = $(selector);
+  const unset = includeUnset ? [new Option("Выберет при первом входе", "")] : [];
+  const options = state.languages.map((language) => new Option(
+    `${language.nativeName} — ${language.name}`,
+    language.code,
+    false,
+    language.code === selected,
+  ));
+  select.replaceChildren(...unset, ...options);
+  if (selected) select.value = selected;
+}
+
+function applyLanguage(account) {
+  const language = state.languages.find((item) => item.code === account?.languageCode);
+  if (!language) return;
+  document.documentElement.lang = language.code;
+  document.documentElement.dir = language.direction;
+  localStorage.setItem("barlasLanguage", language.code);
+}
+
+async function showApp(account) {
   state.account = account;
   $("#login-view").classList.add("hidden");
+  await loadLanguages();
+  if (!account.languageConfigured) {
+    $("#app-view").classList.add("hidden");
+    $("#language-view").classList.remove("hidden");
+    fillLanguageSelect("#language-setup-select", localStorage.getItem("barlasLanguage") || "");
+    return;
+  }
+  $("#language-view").classList.add("hidden");
   $("#app-view").classList.remove("hidden");
+  applyLanguage(account);
+  fillLanguageSelect("#language-settings-select", account.languageCode);
+  fillLanguageSelect("#new-language", "", true);
   $("#identity").textContent = `${account.displayName} · ${account.role}`;
   $("#users-tab").classList.toggle("hidden", account.role !== "owner");
   newConversation();
@@ -41,7 +80,7 @@ function addMessage(kind, text) {
 
 async function restore() {
   if (!state.token) return;
-  try { const data = await api("/v1/me"); showApp(data.principal); }
+  try { const data = await api("/v1/me"); await showApp(data.principal); }
   catch { sessionStorage.removeItem("barlasToken"); state.token = null; }
 }
 
@@ -49,8 +88,19 @@ $("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault(); $("#login-error").textContent = "";
   try {
     const data = await api("/auth/login", { method: "POST", body: JSON.stringify({ email: $("#email").value, password: $("#password").value }) });
-    state.token = data.token; sessionStorage.setItem("barlasToken", data.token); showApp(data.account);
+    state.token = data.token; sessionStorage.setItem("barlasToken", data.token); await showApp(data.account);
   } catch (error) { $("#login-error").textContent = error.message; }
+});
+
+$("#language-setup-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#language-setup-error").textContent = "";
+  try {
+    const data = await api("/v1/me/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({ languageCode: $("#language-setup-select").value }),
+    });
+    await showApp(data.account);
+  } catch (error) { $("#language-setup-error").textContent = error.message; }
 });
 
 $("#password-reset-form").addEventListener("submit", async (event) => {
@@ -119,6 +169,7 @@ async function loadPanel(name) {
   if (name === "skills") renderList("#skills", (await api("/v1/skills")).skills, (item) => card(item.id, `v${item.version} · ${item.allowedTools.join(", ")}`, item.description));
   if (name === "organizations") await loadOrganizations();
   if (name === "connectors") await loadConnectors();
+  if (name === "settings") fillLanguageSelect("#language-settings-select", state.account.languageCode);
   if (name === "users") await loadUsers();
 }
 
@@ -333,12 +384,32 @@ $("#connector-form").addEventListener("submit", async (event) => {
   } catch (error) { $("#connector-error").textContent = error.message; }
 });
 
+$("#language-settings-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#language-settings-status").textContent = "";
+  try {
+    const data = await api("/v1/me/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({ languageCode: $("#language-settings-select").value }),
+    });
+    state.account = data.account;
+    applyLanguage(data.account);
+    $("#language-settings-status").textContent = "Язык сохранён.";
+  } catch (error) { $("#language-settings-status").textContent = error.message; }
+});
+
 $("#user-form").addEventListener("submit", async (event) => {
   event.preventDefault(); $("#user-error").textContent = "";
   try {
-    await api("/v1/admin/users", { method: "POST", body: JSON.stringify({ displayName: $("#new-name").value, email: $("#new-email").value, password: $("#new-password").value, role: $("#new-role").value }) });
+    const languageCode = $("#new-language").value;
+    await api("/v1/admin/users", { method: "POST", body: JSON.stringify({
+      displayName: $("#new-name").value,
+      email: $("#new-email").value,
+      password: $("#new-password").value,
+      role: $("#new-role").value,
+      ...(languageCode ? { languageCode } : {}),
+    }) });
     event.target.reset(); await loadUsers();
   } catch (error) { $("#user-error").textContent = error.message; }
 });
 
-restore();
+loadLanguages().then(() => restore()).catch((error) => { $("#login-error").textContent = error.message; });

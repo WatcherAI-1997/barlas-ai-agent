@@ -125,9 +125,24 @@ ID to chat, memory, tools, approvals, jobs, and trace endpoints. Attempts to
 substitute another ID return HTTP 403. Owners and the service API token retain
 administrative scope. Login attempts are bounded per source address.
 
-The optional initial owner is created from `OWNER_EMAIL`, `OWNER_PASSWORD`, and
-`OWNER_DISPLAY_NAME`; both email and password must be supplied together. The
+The optional initial owner is created from `OWNER_EMAIL`, `OWNER_PASSWORD`,
+`OWNER_DISPLAY_NAME`, and optional `OWNER_LANGUAGE`; both email and password
+must be supplied together. If `OWNER_LANGUAGE` is omitted, the owner must choose
+a language at first login. The
 bootstrap is idempotent and never writes credentials to source control.
+
+## Language preferences
+
+`GET /languages` returns the supported language catalogue without requiring a
+session. It includes the broad modern Turkic language family plus Russian and
+English fallbacks, along with native names and writing direction.
+
+Authenticated users set or change their preference with
+`PATCH /v1/me/preferences` and `{ "languageCode": "uz" }`. The preference is
+stored on the account and is applied to web and linked Telegram agent runs.
+Unconfigured accounts are stopped at the first-login language screen. The
+server adds the preference as a system instruction; an explicit language
+request in the user's message still takes precedence.
 
 Organizations add a separate team-membership boundary with `owner`, `admin`,
 `member`, and `viewer` roles. Only owners may change the organization plan;

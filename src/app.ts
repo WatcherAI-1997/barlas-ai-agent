@@ -21,6 +21,12 @@ import type { GoogleConnector } from "./connectors/google.js";
 import { connectorProviders, type ConnectorService } from "./connectors/vault.js";
 import type { SemanticMemory } from "./memory/semantic.js";
 import {
+  isSupportedLanguage,
+  languageInstruction,
+  supportedLanguages,
+  type SupportedLanguageCode,
+} from "./i18n/languages.js";
+import {
   OrganizationAuthorizationError,
   type OrganizationService,
 } from "./organizations/service.js";
@@ -174,6 +180,16 @@ const createUserSchema = z.object({
   displayName: z.string().min(2).max(100),
   password: z.string().min(12).max(256),
   role: z.enum(["owner", "user"]).default("user"),
+  languageCode: z.string()
+    .refine(isSupportedLanguage, "Unsupported language")
+    .transform((value) => value as SupportedLanguageCode)
+    .optional(),
+}).strict();
+
+const languagePreferenceSchema = z.object({
+  languageCode: z.string()
+    .refine(isSupportedLanguage, "Unsupported language")
+    .transform((value) => value as SupportedLanguageCode),
 }).strict();
 
 interface Principal {
@@ -194,7 +210,7 @@ export interface AppDependencies {
   skillRegistry?: Pick<SkillRegistry, "list">;
   governance?: RuntimeGovernance;
   authService?: Pick<AuthService,
-    "authenticate" | "login" | "logout" | "listAccounts" | "createAccount" | "issuePasswordReset" | "resetPassword"
+    "authenticate" | "login" | "logout" | "listAccounts" | "createAccount" | "issuePasswordReset" | "resetPassword" | "getAccount" | "setLanguage"
   >;
   telegramLinks?: Pick<TelegramLinkService, "createCode" | "claim" | "get" | "resolve" | "unlink">;
   connectors?: Pick<ConnectorService, "save" | "list" | "delete">;
@@ -219,6 +235,16 @@ function tokenMatches(expected: string, supplied: string): boolean {
   const expectedBuffer = Buffer.from(expected);
   const suppliedBuffer = Buffer.from(supplied);
   return expectedBuffer.length === suppliedBuffer.length && timingSafeEqual(expectedBuffer, suppliedBuffer);
+}
+
+async function preferredLanguageContext(
+  userId: string,
+  authService: AppDependencies["authService"],
+): Promise<Array<{ role: "system"; content: string }>> {
+  if (!authService || !z.string().uuid().safeParse(userId).success) return [];
+  const account = await authService.getAccount(userId);
+  const instruction = languageInstruction(account?.languageCode);
+  return instruction ? [{ role: "system", content: instruction }] : [];
 }
 
 export async function buildApp(dependencies: AppDependencies): Promise<FastifyInstance> {
@@ -284,6 +310,8 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       return reply.serviceUnavailable("Database is not ready");
     }
   });
+
+  app.get("/languages", async () => ({ languages: supportedLanguages }));
 
   app.addHook("preHandler", async (request, reply) => {
     if (!request.url.startsWith("/v1/")) return;
@@ -370,9 +398,30 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         displayName: "Service API",
         role: principal.role,
         active: true,
+        languageCode: null,
+        languageConfigured: false,
       },
       authType: principal.authType,
     };
+  });
+
+  app.patch("/v1/me/preferences", async (request, reply) => {
+    const principal = principalFor(request);
+    if (!principal.account || !dependencies.authService) return reply.notFound();
+    const parsed = languagePreferenceSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid language preference");
+    const account = await dependencies.authService.setLanguage(
+      principal.account.id,
+      parsed.data.languageCode,
+    );
+    await dependencies.database.appendAudit({
+      userId: account.id,
+      eventType: "account.language.changed",
+      resourceType: "account",
+      resourceId: account.id,
+      details: { languageCode: account.languageCode },
+    });
+    return { account };
   });
 
   app.post("/v1/auth/logout", async (request, reply) => {
@@ -413,7 +462,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (principal.role !== "owner" || !dependencies.authService) return reply.forbidden();
     const parsed = createUserSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid user request");
-    const user = await dependencies.authService.createAccount(parsed.data);
+    const user = await dependencies.authService.createAccount({
+      email: parsed.data.email,
+      displayName: parsed.data.displayName,
+      password: parsed.data.password,
+      role: parsed.data.role,
+      ...(parsed.data.languageCode ? { languageCode: parsed.data.languageCode } : {}),
+    });
     await dependencies.database.appendAudit({
       userId: principal.userId,
       eventType: "account.created",
@@ -634,11 +689,12 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           ].join("\n"),
         }]
       : [];
+    const languageContext = await preferredLanguageContext(input.userId, dependencies.authService);
     try {
       const result = await dependencies.modelProvider.generate({
         userId: input.userId,
         conversationId,
-        messages: [...memoryContext, ...input.messages],
+        messages: [...languageContext, ...memoryContext, ...input.messages],
         taskClass: input.taskClass,
       });
 
@@ -716,6 +772,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           ].join("\n"),
         }]
       : [];
+    const languageContext = await preferredLanguageContext(userId, dependencies.authService);
     const traceId = dependencies.governance?.newTraceId();
     if (traceId) {
       await dependencies.governance?.trace({
@@ -730,7 +787,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const loopInput = {
         userId,
         conversationId,
-        messages: [...memoryContext, ...parsed.data.messages],
+        messages: [...languageContext, ...memoryContext, ...parsed.data.messages],
         taskClass: parsed.data.taskClass,
         maxSteps: parsed.data.maxSteps,
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
@@ -1153,10 +1210,11 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         role: "system" as const,
         content: ["Use these Barlas AI Agent user memories only when relevant:", ...memories.map((item) => `- [${item.category}] ${item.content}`)].join("\n"),
       }] : [];
+      const languageContext = await preferredLanguageContext(userId, dependencies.authService);
       const run = await dependencies.agentRuntime.enqueue({
         userId,
         conversationId: randomUUID(),
-        messages: [...memoryContext, { role: "user", content: message.text }],
+        messages: [...languageContext, ...memoryContext, { role: "user", content: message.text }],
         conversationMessages: [{ role: "user", content: message.text }],
         delivery: { channel: "telegram", chatId: message.chat.id },
         taskClass: "fast",

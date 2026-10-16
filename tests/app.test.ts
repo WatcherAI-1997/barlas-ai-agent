@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { buildApp } from "../src/app.js";
 import type { ModelProvider } from "../src/core/models.js";
 import { RuntimeGovernance } from "../src/governance/runtime.js";
+import type { SupportedLanguageCode } from "../src/i18n/languages.js";
 
 const apiToken = "a".repeat(32);
 
@@ -101,6 +102,58 @@ describe("Barlas AI Agent API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ name: "Barlas AI Agent", status: "ok" });
+    await app.close();
+  });
+
+  it("lists languages and persists the authenticated user's choice", async () => {
+    const deps = dependencies();
+    let currentLanguage: SupportedLanguageCode | null = null;
+    const account = {
+      id: "00000000-0000-4000-8000-000000000099",
+      email: "user@example.com",
+      displayName: "User",
+      role: "user" as const,
+      active: true,
+      languageCode: currentLanguage,
+      languageConfigured: currentLanguage !== null,
+      createdAt: "2026-10-16T00:00:00.000Z",
+    };
+    const authService = {
+      authenticate: vi.fn(async () => ({
+        ...account, languageCode: currentLanguage, languageConfigured: currentLanguage !== null,
+      })),
+      login: vi.fn(), logout: vi.fn(), listAccounts: vi.fn(), createAccount: vi.fn(),
+      issuePasswordReset: vi.fn(), resetPassword: vi.fn(), getAccount: vi.fn(async () => ({
+        ...account, languageCode: currentLanguage, languageConfigured: currentLanguage !== null,
+      })),
+      setLanguage: vi.fn(async (_id: string, languageCode: SupportedLanguageCode) => {
+        currentLanguage = languageCode;
+        return { ...account, languageCode, languageConfigured: true };
+      }),
+    };
+    const app = await buildApp({ apiToken, ...deps, authService });
+    const catalogue = await app.inject({ method: "GET", url: "/languages" });
+    expect(catalogue.statusCode).toBe(200);
+    expect(catalogue.json().languages.length).toBeGreaterThanOrEqual(35);
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/me/preferences",
+      headers: { authorization: "Bearer user-session-token-which-is-long-enough" },
+      payload: { languageCode: "uz" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().account).toMatchObject({ languageCode: "uz", languageConfigured: true });
+    expect(authService.setLanguage).toHaveBeenCalledWith(account.id, "uz");
+
+    const chat = await app.inject({
+      method: "POST",
+      url: "/v1/chat",
+      headers: { authorization: "Bearer user-session-token-which-is-long-enough" },
+      payload: { userId: account.id, messages: [{ role: "user", content: "Salom" }] },
+    });
+    expect(chat.statusCode).toBe(200);
+    expect(vi.mocked(deps.modelProvider.generate).mock.calls[0]?.[0].messages[0]?.content).toContain("Uzbek");
     await app.close();
   });
 
@@ -396,6 +449,8 @@ describe("Barlas AI Agent API", () => {
         displayName: "User",
         role: "user" as const,
         active: true,
+        languageCode: null,
+        languageConfigured: false,
         createdAt: "2026-10-16T00:00:00.000Z",
       })),
       login: vi.fn(),
@@ -404,6 +459,8 @@ describe("Barlas AI Agent API", () => {
       createAccount: vi.fn(),
       issuePasswordReset: vi.fn(),
       resetPassword: vi.fn(async () => undefined),
+      getAccount: vi.fn(async () => null),
+      setLanguage: vi.fn(),
     };
     const app = await buildApp({ apiToken, ...deps, authService });
     const response = await app.inject({

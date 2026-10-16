@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { isSupportedLanguage, type SupportedLanguageCode } from "./i18n/languages.js";
+
 const configSchema = z.object({
   APP_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_NAME: z.literal("Barlas AI Agent").default("Barlas AI Agent"),
@@ -40,6 +42,13 @@ const configSchema = z.object({
   OWNER_EMAIL: z.string().email().optional(),
   OWNER_PASSWORD: z.string().min(12).max(256).optional(),
   OWNER_DISPLAY_NAME: z.string().min(2).max(100).default("Barlas Owner"),
+  OWNER_LANGUAGE: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string()
+      .refine(isSupportedLanguage, "OWNER_LANGUAGE is not supported")
+      .transform((value) => value as SupportedLanguageCode)
+      .optional(),
+  ),
   WEB_ROOT: z.string().min(1).default("/app/web"),
   MODEL_INPUT_USD_PER_MILLION: z.coerce.number().min(0).default(0),
   MODEL_OUTPUT_USD_PER_MILLION: z.coerce.number().min(0).default(0),

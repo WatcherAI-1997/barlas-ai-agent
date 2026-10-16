@@ -1,6 +1,7 @@
 import { Pool } from "pg";
 
 import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth/service.js";
+import type { SupportedLanguageCode } from "../i18n/languages.js";
 import type { TelegramLink, TelegramLinkStore } from "../auth/telegram-link.js";
 import type { SemanticMemoryStore } from "../memory/semantic.js";
 import type {
@@ -1060,12 +1061,22 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async findAccountByEmail(email: string): Promise<StoredAccount | null> {
     const result = await this.pool.query<AccountRow>(
-      `select id, email, display_name, role, password_hash, password_salt, active, created_at
+      `select id, email, display_name, role, password_hash, password_salt, active, language_code, created_at
        from user_accounts where email = $1`,
       [email],
     );
     const row = result.rows[0];
     return row ? this.mapStoredAccount(row) : null;
+  }
+
+  async findAccountById(id: string): Promise<UserAccount | null> {
+    const result = await this.pool.query<AccountRow>(
+      `select id, email, display_name, role, password_hash, password_salt, active, language_code, created_at
+       from user_accounts where id = $1 and active = true`,
+      [id],
+    );
+    const row = result.rows[0];
+    return row ? this.mapAccount(row) : null;
   }
 
   async createAccount(input: {
@@ -1074,12 +1085,13 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     role: AccountRole;
     passwordHash: string;
     passwordSalt: string;
+    languageCode?: SupportedLanguageCode;
   }): Promise<UserAccount> {
     const result = await this.pool.query<AccountRow>(
-      `insert into user_accounts (email, display_name, role, password_hash, password_salt)
-       values ($1, $2, $3, $4, $5)
-       returning id, email, display_name, role, password_hash, password_salt, active, created_at`,
-      [input.email, input.displayName, input.role, input.passwordHash, input.passwordSalt],
+      `insert into user_accounts (email, display_name, role, password_hash, password_salt, language_code)
+       values ($1, $2, $3, $4, $5, $6)
+       returning id, email, display_name, role, password_hash, password_salt, active, language_code, created_at`,
+      [input.email, input.displayName, input.role, input.passwordHash, input.passwordSalt, input.languageCode ?? null],
     );
     const row = result.rows[0];
     if (!row) throw new Error("Account insert returned no row");
@@ -1088,10 +1100,21 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async listAccounts(): Promise<UserAccount[]> {
     const result = await this.pool.query<AccountRow>(
-      `select id, email, display_name, role, password_hash, password_salt, active, created_at
+      `select id, email, display_name, role, password_hash, password_salt, active, language_code, created_at
        from user_accounts order by created_at`,
     );
     return result.rows.map((row) => this.mapAccount(row));
+  }
+
+  async updateAccountLanguage(accountId: string, languageCode: SupportedLanguageCode): Promise<UserAccount | null> {
+    const result = await this.pool.query<AccountRow>(
+      `update user_accounts set language_code = $2, updated_at = now()
+       where id = $1 and active = true
+       returning id, email, display_name, role, password_hash, password_salt, active, language_code, created_at`,
+      [accountId, languageCode],
+    );
+    const row = result.rows[0];
+    return row ? this.mapAccount(row) : null;
   }
 
   async createPasswordReset(input: { accountId: string; codeHash: string; expiresAt: Date }): Promise<boolean> {
@@ -1158,7 +1181,8 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
          returning account_id
        )
        select account.id, account.email, account.display_name, account.role,
-              account.password_hash, account.password_salt, account.active, account.created_at
+              account.password_hash, account.password_salt, account.active,
+              account.language_code, account.created_at
        from touched
        join user_accounts account on account.id = touched.account_id
        where account.active = true`,
@@ -1334,6 +1358,8 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       displayName: row.display_name,
       role: row.role,
       active: row.active,
+      languageCode: row.language_code,
+      languageConfigured: row.language_code !== null,
       createdAt: row.created_at.toISOString(),
     };
   }
@@ -1523,5 +1549,6 @@ interface AccountRow {
   password_hash: string;
   password_salt: string;
   active: boolean;
+  language_code: SupportedLanguageCode | null;
   created_at: Date;
 }
