@@ -58,6 +58,9 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `DELETE /v1/connectors/:id` — delete an owned connector.
 - `GET /v1/integrations/github/profile` — load the connected GitHub profile.
 - `GET /v1/integrations/github/repositories` — list accessible GitHub repositories.
+- `GET /v1/integrations/google-drive/files` — list recent Drive file metadata.
+- `GET /v1/integrations/gmail/messages` — list recent Gmail message/thread IDs.
+- `GET /v1/integrations/google-calendar/events` — list upcoming primary-calendar events.
 
 An isolated background run uses `jobType: "agent.run"` and accepts an `input`
 with `objective`, optional bounded `context`, and `taskClass` (`fast`, `deep`,
@@ -160,6 +163,14 @@ connected profile and repository metadata. Requests go only to the fixed
 `https://api.github.com` origin, reject redirects, time out after ten seconds,
 and cap responses at 2 MB. Use a fine-grained token with metadata-only access
 where possible. Repository mutation, webhooks, and GitHub Actions are not enabled.
+
+Google Drive, Gmail, and Calendar connectors are also read-only. They expose
+bounded normalized metadata through fixed official Google API origins, reject
+redirects, time out after ten seconds, and cap responses at 2 MB. Connector
+tokens are retrieved from the encrypted vault only inside the server process.
+The current private-alpha accepts an already issued access token; production
+OAuth authorization/refresh requires dedicated Google client credentials and
+redirect URIs for the final domain.
 
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.

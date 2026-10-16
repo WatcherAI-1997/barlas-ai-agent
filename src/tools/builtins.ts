@@ -6,10 +6,14 @@ import { RestrictedTerminal } from "./terminal.js";
 import { SearxngSearchClient } from "./web-search.js";
 import { SafeWebReader } from "./safe-web.js";
 import { DocumentWriter } from "./documents.js";
+import type { GitHubConnector } from "../connectors/github.js";
+import type { GoogleConnector } from "../connectors/google.js";
 
 export function createBuiltinToolRegistry(options: {
   workspaceRoot?: string;
   searxngBaseUrl?: string;
+  githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
+  googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
@@ -122,6 +126,53 @@ export function createBuiltinToolRegistry(options: {
     inputSchema: z.object({ url: z.string().url().max(2_000) }).strict(),
     execute: async (input) => webReader.open((input as { url: string }).url),
   });
+
+  if (options.githubConnector) {
+    registry.register({
+      name: "github.repositories",
+      description: "List repository metadata from one of the current user's encrypted GitHub connections.",
+      risk: "external",
+      inputSchema: z.object({ connectorId: z.string().uuid(), limit: z.number().int().min(1).max(100).default(30) }).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; limit: number };
+        return options.githubConnector!.repositories(context.userId, value.connectorId, value.limit);
+      },
+    });
+  }
+
+  if (options.googleConnector) {
+    const schema = z.object({ connectorId: z.string().uuid(), limit: z.number().int().min(1).max(100).default(30) }).strict();
+    registry.register({
+      name: "google_drive.files",
+      description: "List recent file metadata from one of the current user's encrypted Google Drive connections.",
+      risk: "external",
+      inputSchema: schema,
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; limit: number };
+        return options.googleConnector!.driveFiles(context.userId, value.connectorId, value.limit);
+      },
+    });
+    registry.register({
+      name: "gmail.messages",
+      description: "List recent message IDs from one of the current user's encrypted Gmail connections.",
+      risk: "external",
+      inputSchema: schema,
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; limit: number };
+        return options.googleConnector!.gmailMessages(context.userId, value.connectorId, value.limit);
+      },
+    });
+    registry.register({
+      name: "google_calendar.events",
+      description: "List upcoming events from one of the current user's encrypted Google Calendar connections.",
+      risk: "external",
+      inputSchema: schema,
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; limit: number };
+        return options.googleConnector!.calendarEvents(context.userId, value.connectorId, value.limit);
+      },
+    });
+  }
 
   if (options.searxngBaseUrl) {
     const search = new SearxngSearchClient(options.searxngBaseUrl);

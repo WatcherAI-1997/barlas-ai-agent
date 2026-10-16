@@ -3,6 +3,7 @@ import { AuthService } from "./auth/service.js";
 import { TelegramLinkService } from "./auth/telegram-link.js";
 import { TelegramClient } from "./channels/telegram.js";
 import { GitHubConnector } from "./connectors/github.js";
+import { GoogleConnector } from "./connectors/google.js";
 import { ConnectorService, ConnectorVault } from "./connectors/vault.js";
 import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
@@ -32,6 +33,7 @@ const connectors = config.CONNECTOR_VAULT_KEY
     )
   : undefined;
 const githubConnector = connectors ? new GitHubConnector(connectors) : undefined;
+const googleConnector = connectors ? new GoogleConnector(connectors) : undefined;
 if (config.OWNER_EMAIL && config.OWNER_PASSWORD) {
   await authService.bootstrapOwner({
     email: config.OWNER_EMAIL,
@@ -84,6 +86,8 @@ const governance = new RuntimeGovernance(database, {
 const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   workspaceRoot: config.WORKSPACE_ROOT,
   ...(config.SEARXNG_BASE_URL ? { searxngBaseUrl: config.SEARXNG_BASE_URL } : {}),
+  ...(githubConnector ? { githubConnector } : {}),
+  ...(googleConnector ? { googleConnector } : {}),
 }), database, governance);
 const agentLoop = new AgentLoop(
   modelProvider,
@@ -157,7 +161,7 @@ const app = await buildApp({
   telegramLinks,
   memory,
   organizations,
-  ...(connectors && githubConnector ? { connectors, githubConnector } : {}),
+  ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
   ...(telegram ? { telegram } : {}),

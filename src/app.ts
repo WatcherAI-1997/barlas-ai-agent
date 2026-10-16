@@ -17,6 +17,7 @@ import type { ModelProvider } from "./core/models.js";
 import type { AgentLoop } from "./core/agent-loop.js";
 import type { TelegramLinkService } from "./auth/telegram-link.js";
 import type { GitHubConnector } from "./connectors/github.js";
+import type { GoogleConnector } from "./connectors/google.js";
 import { connectorProviders, type ConnectorService } from "./connectors/vault.js";
 import type { SemanticMemory } from "./memory/semantic.js";
 import {
@@ -143,6 +144,7 @@ const githubRepositoriesSchema = z.object({
   connectorId: z.string().uuid(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
 });
+const googleListSchema = githubRepositoriesSchema;
 const organizationParamsSchema = z.object({ id: z.string().uuid() });
 const organizationCreateSchema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -197,6 +199,7 @@ export interface AppDependencies {
   telegramLinks?: Pick<TelegramLinkService, "createCode" | "claim" | "get" | "resolve" | "unlink">;
   connectors?: Pick<ConnectorService, "save" | "list" | "delete">;
   githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
+  googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
   memory?: Pick<SemanticMemory, "remember" | "recall">;
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
   webRoot?: string;
@@ -579,6 +582,30 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         parsed.data.limit,
       ),
     };
+  });
+
+  app.get("/v1/integrations/google-drive/files", async (request, reply) => {
+    if (!dependencies.googleConnector) return reply.notFound();
+    const parsed = googleListSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid Google Drive request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    return { files: await dependencies.googleConnector.driveFiles(userId, parsed.data.connectorId, parsed.data.limit) };
+  });
+
+  app.get("/v1/integrations/gmail/messages", async (request, reply) => {
+    if (!dependencies.googleConnector) return reply.notFound();
+    const parsed = googleListSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid Gmail request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    return { messages: await dependencies.googleConnector.gmailMessages(userId, parsed.data.connectorId, parsed.data.limit) };
+  });
+
+  app.get("/v1/integrations/google-calendar/events", async (request, reply) => {
+    if (!dependencies.googleConnector) return reply.notFound();
+    const parsed = googleListSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid Google Calendar request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    return { events: await dependencies.googleConnector.calendarEvents(userId, parsed.data.connectorId, parsed.data.limit) };
   });
 
   const runChat = async (input: z.infer<typeof chatBodySchema>) => {

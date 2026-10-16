@@ -118,6 +118,7 @@ async function loadPanel(name) {
   if (name === "traces") renderList("#traces", (await api(`/v1/traces?userId=${encodeURIComponent(state.account.id)}`)).traces, (item) => card(item.operation, `${item.status} · ${new Date(item.createdAt).toLocaleString()}`, item.traceId));
   if (name === "skills") renderList("#skills", (await api("/v1/skills")).skills, (item) => card(item.id, `v${item.version} · ${item.allowedTools.join(", ")}`, item.description));
   if (name === "organizations") await loadOrganizations();
+  if (name === "connectors") await loadConnectors();
   if (name === "users") await loadUsers();
 }
 
@@ -304,6 +305,32 @@ $("#organization-form").addEventListener("submit", async (event) => {
     }) });
     event.target.reset(); await loadOrganizations();
   } catch (error) { $("#organization-error").textContent = error.message; }
+});
+
+async function loadConnectors() {
+  const data = await api(`/v1/connectors?userId=${encodeURIComponent(state.account.id)}`);
+  renderList("#connectors", data.connectors, (connector) => {
+    const node = card(connector.label, `${connector.provider} · key v${connector.keyVersion}`, `Обновлено ${new Date(connector.updatedAt).toLocaleString()}`);
+    const remove = document.createElement("button"); remove.textContent = "Удалить"; remove.className = "reject";
+    remove.addEventListener("click", async () => {
+      await api(`/v1/connectors/${connector.id}`, { method: "DELETE", body: JSON.stringify({ userId: state.account.id }) });
+      await loadConnectors();
+    });
+    node.append(remove); return node;
+  });
+}
+
+$("#connector-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#connector-error").textContent = "";
+  try {
+    await api("/v1/connectors", { method: "POST", body: JSON.stringify({
+      userId: state.account.id,
+      provider: $("#connector-provider").value,
+      label: $("#connector-label").value,
+      secret: $("#connector-secret").value,
+    }) });
+    event.target.reset(); await loadConnectors();
+  } catch (error) { $("#connector-error").textContent = error.message; }
 });
 
 $("#user-form").addEventListener("submit", async (event) => {

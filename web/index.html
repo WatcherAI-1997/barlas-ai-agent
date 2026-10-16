@@ -44,6 +44,7 @@
           <button data-panel="traces">Трассировка</button>
           <button data-panel="skills">Навыки</button>
           <button data-panel="organizations">Организации</button>
+          <button data-panel="connectors">Подключения</button>
           <button id="users-tab" data-panel="users">Пользователи</button>
         </nav>
 
@@ -84,6 +85,18 @@
           </form>
           <p id="organization-error" class="error" role="alert"></p>
           <div id="organizations" class="grid"></div>
+        </section>
+        <section id="panel-connectors" class="panel hidden">
+          <h2>Подключения</h2>
+          <p class="meta">Токен шифруется на сервере и больше не показывается. Используйте минимальные read-only права.</p>
+          <form id="connector-form" class="inline-form">
+            <select id="connector-provider"><option value="github">GitHub</option><option value="google_drive">Google Drive</option><option value="gmail">Gmail</option><option value="google_calendar">Google Calendar</option></select>
+            <input id="connector-label" placeholder="Название" minlength="1" required>
+            <input id="connector-secret" type="password" placeholder="Access token" autocomplete="off" required>
+            <button type="submit">Сохранить</button>
+          </form>
+          <p id="connector-error" class="error" role="alert"></p>
+          <div id="connectors" class="grid"></div>
         </section>
         <section id="panel-users" class="panel hidden">
           <h2>Пользователи</h2>
