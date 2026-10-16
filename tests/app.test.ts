@@ -256,6 +256,40 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("runs an owned agent profile with its workspace and model class", async () => {
+    const deps = dependencies();
+    const profileId = "00000000-0000-4000-8000-000000000071";
+    const projectId = "00000000-0000-4000-8000-000000000072";
+    const profile = {
+      id: profileId, userId: "user-1", slug: "research", name: "Researcher", style: "analytical" as const,
+      instructions: "Use primary evidence.", defaultTaskClass: "deep" as const, projectId,
+      createdAt: "2026-10-17T00:00:00.000Z", updatedAt: "2026-10-17T00:00:00.000Z",
+    };
+    const agentProfiles = {
+      create: vi.fn(), list: vi.fn(), get: vi.fn(), delete: vi.fn(), resolve: vi.fn(async () => profile),
+    };
+    const projects = {
+      create: vi.fn(), list: vi.fn(), detail: vi.fn(), context: vi.fn(async () => "Workspace: research-only"),
+      attach: vi.fn(), snapshot: vi.fn(), restore: vi.fn(), createGoal: vi.fn(), updateGoal: vi.fn(),
+      createStep: vi.fn(), updateStep: vi.fn(), checkpoint: vi.fn(), recordRunResult: vi.fn(),
+    };
+    const app = await buildApp({ apiToken, ...deps, agentProfiles, projects });
+    const response = await app.inject({
+      method: "POST", url: "/v1/chat", headers: { authorization: `Bearer ${apiToken}` },
+      payload: { userId: "user-1", agentId: profileId, messages: [{ role: "user", content: "Investigate" }] },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().agent).toMatchObject({ id: profileId, slug: "research", name: "Researcher" });
+    expect(deps.modelProvider.generate).toHaveBeenCalledWith(expect.objectContaining({
+      taskClass: "deep",
+      messages: expect.arrayContaining([
+        expect.objectContaining({ content: expect.stringContaining("Use primary evidence.") }),
+        expect.objectContaining({ content: "Workspace: research-only" }),
+      ]),
+    }));
+    await app.close();
+  });
+
   it("continues a saved conversation without duplicating client-supplied history", async () => {
     const deps = dependencies();
     const conversationId = "00000000-0000-4000-8000-000000000099";

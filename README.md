@@ -122,6 +122,20 @@ context until `/new` is used. `/sessions` lists earlier conversations and
 `/nodes`, `/approvals`, `/approve ID`, `/reject ID`, and `/cancel RUN_ID`, so
 routine operation does not require leaving the chat.
 
+Create independent agent profiles with their own identity, model-routing class,
+and optional project workspace:
+
+```powershell
+barlas projects
+barlas agents create research "Researcher" --style analytical --task deep --project PROJECT_ID --instructions "Use primary evidence"
+barlas agents
+barlas agent "Investigate this topic" --profile AGENT_ID
+```
+
+Inside interactive chat, `/agents` lists profiles and `/agent ID` starts a new
+conversation with one. Each conversation is permanently bound to its selected
+profile; attempts to reuse it with a different or foreign profile are rejected.
+
 ### Linux
 
 For a local installation without a domain, DNS, Caddy, or public web exposure,

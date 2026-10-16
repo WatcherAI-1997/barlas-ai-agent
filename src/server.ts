@@ -40,6 +40,7 @@ import { createBuiltinExtensionCatalog } from "./extensions/catalog.js";
 import { DeviceNodeService } from "./nodes/service.js";
 import { createModelProvider } from "./providers/factory.js";
 import { runRuntimeShutdownHook } from "./runtime-lifecycle.js";
+import { AgentProfileService } from "./agents/profiles.js";
 
 const config = loadConfig();
 const openAIServiceApiKey = config.MEDIA_API_KEY ?? (config.MODEL_PROVIDER === "openai" ? config.MODEL_API_KEY : undefined);
@@ -123,6 +124,7 @@ const extensionCatalog = createBuiltinExtensionCatalog({
 });
 const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
 const projects = new ProjectService(database, workspace);
+const agentProfiles = new AgentProfileService(database);
 const mediaService = openAIServiceApiKey ? new MediaService(
   workspace,
   new OpenAIMediaModel({
@@ -328,6 +330,7 @@ const app = await buildApp({
   workspace,
   maxWorkspaceFileBytes: config.MAX_WORKSPACE_FILE_BYTES,
   projects,
+  agentProfiles,
   schedules,
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),
   webRoot: config.WEB_ROOT,

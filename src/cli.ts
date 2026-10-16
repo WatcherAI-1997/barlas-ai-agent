@@ -417,7 +417,7 @@ async function decide(ctx: CliContext, id: string, approved: boolean): Promise<v
   output.write(`${approved ? "Разрешено" : "Отклонено"}: ${id}\n${JSON.stringify(result, null, 2)}\n`);
 }
 
-async function ask(ctx: CliContext, prompt: string, conversationId?: string): Promise<string | undefined> {
+async function ask(ctx: CliContext, prompt: string, conversationId?: string, agentId?: string): Promise<string | undefined> {
   const accepted = await ctx.api.request<{
     runId?: string;
     conversationId?: string;
@@ -428,8 +428,9 @@ async function ask(ctx: CliContext, prompt: string, conversationId?: string): Pr
     body: JSON.stringify({
       userId: ctx.userId,
       ...(conversationId ? { conversationId } : {}),
+      ...(agentId ? { agentId } : {}),
       messages: [{ role: "user", content: prompt }],
-      taskClass: "fast",
+      ...(!agentId ? { taskClass: "fast" } : {}),
       maxSteps: 8,
     }),
   });
@@ -459,6 +460,36 @@ async function ask(ctx: CliContext, prompt: string, conversationId?: string): Pr
   }
 }
 
+async function agents(ctx: CliContext): Promise<void> {
+  const result = await ctx.api.request<{ profiles: JsonObject[] }>(`/v1/agents?userId=${encodeURIComponent(ctx.userId)}`);
+  output.write(`${renderRows(result.profiles, ["id", "slug", "name", "style", "defaultTaskClass", "projectId"])}\n`);
+}
+
+async function createAgentProfile(ctx: CliContext, args: string[]): Promise<void> {
+  const slug = args[2] ?? "";
+  const name = args[3] ?? "";
+  if (!slug || !name) throw new Error("Использование: agents create SLUG NAME [--style STYLE] [--task CLASS] [--project ID] [--instructions TEXT]");
+  const result = await ctx.api.request<{ profile: JsonObject }>("/v1/agents", {
+    method: "POST",
+    body: JSON.stringify({
+      userId: ctx.userId,
+      slug,
+      name,
+      style: option(args, "--style") ?? "balanced",
+      defaultTaskClass: option(args, "--task") ?? "fast",
+      ...(option(args, "--project") ? { projectId: option(args, "--project") } : {}),
+      instructions: option(args, "--instructions") ?? "",
+    }),
+  });
+  output.write(`Агент создан: ${value(result.profile.name)} (${value(result.profile.id)})\n`);
+}
+
+async function deleteAgentProfile(ctx: CliContext, id: string): Promise<void> {
+  if (!id) throw new Error("Укажите ID агента");
+  await ctx.api.request(`/v1/agents/${encodeURIComponent(id)}?userId=${encodeURIComponent(ctx.userId)}`, { method: "DELETE" });
+  output.write(`Агент удалён: ${id}\n`);
+}
+
 async function conversation(ctx: CliContext, id: string): Promise<JsonObject> {
   if (!id) throw new Error("Укажите ID диалога");
   const result = await ctx.api.request<{ conversation: JsonObject }>(
@@ -476,6 +507,8 @@ function tuiHelp(): void {
   /status                      состояние Barlas
   /runs | /jobs | /tasks       выполняемая работа
   /cron | /projects            расписания и проекты
+  /agents                      отдельные агенты
+  /agent <id|none>             выбрать агента для нового диалога
   /memory <запрос>             поиск памяти
   /skills | /plugins           навыки и расширения
   /models | /channels          модели и каналы
@@ -504,6 +537,10 @@ function help(): void {
 Агент:
   chat | tui | terminal             интерактивный чат
   agent <запрос> | ask <запрос>     автономная задача
+  agent <запрос> --profile <id>     задача отдельному агенту
+  agents                            список отдельных агентов
+  agents create SLUG NAME [...]     создать агента и привязать workspace
+  agents delete <id>                удалить агента
   status | health | doctor          состояние и диагностика
   dashboard                         открыть кабинет (Windows)
 
@@ -565,6 +602,7 @@ function help(): void {
 async function tui(ctx: CliContext): Promise<void> {
   const readline = createInterface({ input, output, terminal: true });
   let conversationId: string | undefined;
+  let agentId: string | undefined;
   output.write("\n⬤  ⬤  Barlas\n  ⬤   живой диалог · /help · /quit\n\n");
   try {
     while (true) {
@@ -597,6 +635,14 @@ async function tui(ctx: CliContext): Promise<void> {
         if (line === "/tasks") { await list(ctx, "agent-runs"); await list(ctx, "jobs"); continue; }
         if (line === "/cron") { await list(ctx, "schedules"); continue; }
         if (line === "/projects") { await list(ctx, "projects"); continue; }
+        if (line === "/agents") { await agents(ctx); continue; }
+        if (line.startsWith("/agent ")) {
+          const selected = line.slice(7).trim();
+          agentId = selected === "none" ? undefined : selected;
+          conversationId = undefined;
+          output.write(agentId ? `Выбран агент ${agentId}. Начнётся новый диалог.\n` : "Выбран основной агент. Начнётся новый диалог.\n");
+          continue;
+        }
         if (line.startsWith("/memory ")) { await memorySearch(ctx, line.slice(8).trim()); continue; }
         if (line === "/skills") { await skills(ctx); continue; }
         if (["/plugins", "/extensions"].includes(line)) { await extensionsCatalog(ctx); continue; }
@@ -614,7 +660,7 @@ async function tui(ctx: CliContext): Promise<void> {
           output.write("Неизвестная команда. Введите /help.\n");
           continue;
         }
-        conversationId = await ask(ctx, line, conversationId);
+        conversationId = await ask(ctx, line, conversationId, agentId);
       } catch (error) {
         output.write(`Ошибка: ${error instanceof Error ? error.message : String(error)}\n`);
       }
@@ -642,9 +688,18 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   const ctx = await context();
   if (["tui", "chat", "terminal"].includes(command)) return tui(ctx);
   if (["ask", "agent"].includes(command)) {
-    await ask(ctx, args.slice(1).join(" ").trim() || (() => { throw new Error("Укажите запрос"); })());
+    const profileId = option(args, "--profile");
+    const promptParts: string[] = [];
+    for (let index = 1; index < args.length; index++) {
+      if (args[index] === "--profile") { index += 1; continue; }
+      promptParts.push(args[index]!);
+    }
+    await ask(ctx, promptParts.join(" ").trim() || (() => { throw new Error("Укажите запрос"); })(), undefined, profileId);
     return;
   }
+  if (command === "agents" && args[1] === "create") return createAgentProfile(ctx, args);
+  if (command === "agents" && args[1] === "delete") return deleteAgentProfile(ctx, args[2] ?? "");
+  if (command === "agents") return agents(ctx);
   if (command === "status") return status(ctx);
   if (["health", "doctor"].includes(command)) return doctor(ctx);
   if (command === "extensions") return extensions(ctx);

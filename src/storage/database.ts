@@ -38,8 +38,9 @@ import type {
 import type { AgentSchedule } from "../schedules/types.js";
 import type { ArtifactVersion, GoalStatus, PlanStepStatus, Project, ProjectCheckpoint, ProjectGoal, ProjectPlanStep, ProjectResource, ProjectResourceType, ProjectStore } from "../projects/service.js";
 import type { DeviceCommand, DeviceNode, DeviceNodeStore, NodePlatform } from "../nodes/service.js";
+import type { AgentProfile, AgentProfileStore } from "../agents/profiles.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore, DeviceNodeStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore, DeviceNodeStore, AgentProfileStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -52,6 +53,64 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async ping(): Promise<void> {
     await this.pool.query("select 1");
+  }
+
+  async createAgentProfile(input: Omit<AgentProfile, "id" | "createdAt" | "updatedAt">): Promise<AgentProfile> {
+    const result = await this.pool.query<AgentProfileRow>(
+      `insert into agent_profiles (user_id, slug, name, style, instructions, default_task_class, project_id)
+       select $1, $2, $3, $4, $5, $6, $7
+       where $7::uuid is null or exists (select 1 from projects where id = $7 and user_id = $1)
+       returning id, user_id, slug, name, style, instructions, default_task_class, project_id, created_at, updated_at`,
+      [input.userId, input.slug, input.name, input.style, input.instructions, input.defaultTaskClass, input.projectId ?? null],
+    );
+    if (!result.rows[0]) throw new Error("Agent workspace project not found");
+    return mapAgentProfile(result.rows[0]);
+  }
+
+  async listAgentProfiles(userId: string): Promise<AgentProfile[]> {
+    const result = await this.pool.query<AgentProfileRow>(
+      `select id, user_id, slug, name, style, instructions, default_task_class, project_id, created_at, updated_at
+       from agent_profiles where user_id = $1 order by created_at, id`, [userId],
+    );
+    return result.rows.map(mapAgentProfile);
+  }
+
+  async getAgentProfile(userId: string, id: string): Promise<AgentProfile | null> {
+    const result = await this.pool.query<AgentProfileRow>(
+      `select id, user_id, slug, name, style, instructions, default_task_class, project_id, created_at, updated_at
+       from agent_profiles where user_id = $1 and id = $2`, [userId, id],
+    );
+    return result.rows[0] ? mapAgentProfile(result.rows[0]) : null;
+  }
+
+  async deleteAgentProfile(userId: string, id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `delete from agent_profiles profile where profile.user_id = $1 and profile.id = $2
+       and not exists (select 1 from conversation_agent_profiles binding where binding.agent_profile_id = profile.id)`,
+      [userId, id],
+    );
+    return result.rowCount === 1;
+  }
+
+  async bindConversationAgentProfile(input: { userId: string; conversationId: string; profileId: string }): Promise<boolean> {
+    const result = await this.pool.query<{ agent_profile_id: string }>(
+      `insert into conversation_agent_profiles (conversation_id, user_id, agent_profile_id)
+       select $2, user_id, id from agent_profiles where user_id = $1 and id = $3
+       on conflict (conversation_id) do update set agent_profile_id = conversation_agent_profiles.agent_profile_id
+       returning agent_profile_id`, [input.userId, input.conversationId, input.profileId],
+    );
+    return result.rows[0]?.agent_profile_id === input.profileId;
+  }
+
+  async getConversationAgentProfile(userId: string, conversationId: string): Promise<AgentProfile | null> {
+    const result = await this.pool.query<AgentProfileRow>(
+      `select profile.id, profile.user_id, profile.slug, profile.name, profile.style, profile.instructions,
+              profile.default_task_class, profile.project_id, profile.created_at, profile.updated_at
+       from conversation_agent_profiles binding
+       join agent_profiles profile on profile.id = binding.agent_profile_id and profile.user_id = binding.user_id
+       where binding.user_id = $1 and binding.conversation_id = $2`, [userId, conversationId],
+    );
+    return result.rows[0] ? mapAgentProfile(result.rows[0]) : null;
   }
 
   async createProject(input: { userId: string; name: string; description: string }): Promise<Project> {
@@ -1978,6 +2037,7 @@ interface SkillEvaluationRow {
 }
 
 interface ProjectRow { id: string; user_id: string; name: string; description: string; status: Project["status"]; created_at: Date; updated_at: Date }
+interface AgentProfileRow { id: string; user_id: string; slug: string; name: string; style: AgentProfile["style"]; instructions: string; default_task_class: AgentProfile["defaultTaskClass"]; project_id: string | null; created_at: Date; updated_at: Date }
 interface ProjectResourceRow { project_id: string; resource_type: ProjectResourceType; resource_id: string; label: string; created_at: Date }
 interface ArtifactRow { id: string; project_id: string; path: string; version: number; sha256: string; size_bytes: number; created_at: Date }
 interface ProjectGoalRow { id: string; project_id: string; title: string; description: string; status: GoalStatus; priority: number; created_at: Date; updated_at: Date }
@@ -1988,6 +2048,15 @@ interface DeviceCommandRow { id: string; node_id: string; kind: "notify"; payloa
 
 function mapProject(row: ProjectRow): Project {
   return { id: row.id, userId: row.user_id, name: row.name, description: row.description, status: row.status, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
+}
+
+function mapAgentProfile(row: AgentProfileRow): AgentProfile {
+  return {
+    id: row.id, userId: row.user_id, slug: row.slug, name: row.name, style: row.style,
+    instructions: row.instructions, defaultTaskClass: row.default_task_class,
+    ...(row.project_id ? { projectId: row.project_id } : {}),
+    createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
+  };
 }
 
 function mapProjectResource(row: ProjectResourceRow): ProjectResource {

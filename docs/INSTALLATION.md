@@ -57,6 +57,9 @@ barlas models status
 barlas models configure
 barlas channels status
 barlas channels add telegram
+barlas agents
+barlas agents create research "Researcher" --style analytical --task deep --project PROJECT_ID
+barlas agent "Research this" --profile AGENT_ID
 barlas security audit
 barlas gateway restart
 barlas update check

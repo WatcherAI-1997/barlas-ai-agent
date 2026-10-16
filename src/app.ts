@@ -51,6 +51,11 @@ import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } 
 import { renderPrometheusMetrics } from "./operations/metrics.js";
 import type { ExtensionCatalog } from "./extensions/catalog.js";
 import type { DeviceNodeService } from "./nodes/service.js";
+import {
+  AgentProfileConflictError,
+  agentProfileInstruction,
+  type AgentProfileService,
+} from "./agents/profiles.js";
 
 const chatBodySchema = z.object({
   userId: z.string().min(1).max(128),
@@ -64,7 +69,8 @@ const chatBodySchema = z.object({
     )
     .min(1)
     .max(100),
-  taskClass: z.enum(["fast", "deep", "private"]).default("fast"),
+  taskClass: z.enum(["fast", "deep", "private"]).optional(),
+  agentId: z.string().uuid().optional(),
 });
 
 const agentRunBodySchema = chatBodySchema.extend({
@@ -158,7 +164,8 @@ const mediaUploadQuerySchema = z.object({
 const voiceTurnQuerySchema = z.object({
   userId: z.string().min(1).max(128),
   conversationId: z.string().uuid().optional(),
-  taskClass: z.enum(["fast", "deep", "private"]).default("fast"),
+  taskClass: z.enum(["fast", "deep", "private"]).optional(),
+  agentId: z.string().uuid().optional(),
   voice: z.enum(speechVoices).optional(),
   language: z.string().regex(/^[a-z]{2,3}(?:-[A-Z]{2})?$/u).optional(),
   consent: z.literal("true"),
@@ -168,8 +175,18 @@ const fileQuerySchema = z.object({
 }).strict();
 const fileUploadQuerySchema = fileQuerySchema.extend({ overwrite: z.enum(["true", "false"]).default("false") });
 const projectBodySchema = z.object({ userId: z.string().min(1).max(128), name: z.string().min(1).max(120), description: z.string().max(4_000).default("") }).strict();
+const agentProfileBodySchema = z.object({
+  userId: z.string().min(1).max(128),
+  slug: z.string().regex(/^[a-z][a-z0-9-]{1,31}$/u),
+  name: z.string().min(1).max(80),
+  style: z.enum(["balanced", "concise", "warm", "analytical", "creative"]).default("balanced"),
+  instructions: z.string().max(4_000).default(""),
+  defaultTaskClass: z.enum(["fast", "deep", "private"]).default("fast"),
+  projectId: z.string().uuid().optional(),
+}).strict();
 const projectQuerySchema = z.object({ userId: z.string().min(1).max(128) }).strict();
 const projectParamsSchema = z.object({ id: z.string().uuid() });
+const agentProfileParamsSchema = z.object({ id: z.string().uuid() });
 const projectResourceSchema = z.object({
   userId: z.string().min(1).max(128), type: z.enum(["conversation", "agent_run", "memory", "file"]),
   resourceId: z.string().min(1).max(1_000), label: z.string().max(200).default(""),
@@ -370,6 +387,7 @@ export interface AppDependencies {
   workspace?: Pick<FileWorkspace, "list" | "readBuffer" | "writeUpload"> & Partial<Pick<FileWorkspace, "streamForRead" | "writeUploadStream">>;
   maxWorkspaceFileBytes?: number;
   projects?: Pick<ProjectService, "create" | "list" | "detail" | "context" | "attach" | "snapshot" | "restore" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "recordRunResult">;
+  agentProfiles?: Pick<AgentProfileService, "create" | "list" | "get" | "delete" | "resolve">;
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
@@ -480,6 +498,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     }
     if (error instanceof AuthorizationError) {
       return reply.code(403).send({ error: error.message });
+    }
+    if (error instanceof AgentProfileConflictError) {
+      return reply.code(409).send({ error: error.message });
     }
     if (error instanceof AccountConflictError) {
       return reply.code(409).send({ error: error.message });
@@ -752,6 +773,54 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const project = await dependencies.projects.create(userId, parsed.data.name, parsed.data.description);
     await dependencies.database.appendAudit({ userId, eventType: "project.created", resourceType: "project", resourceId: project.id, details: { name: project.name } });
     return reply.code(201).send({ project });
+  });
+
+  app.post("/v1/agents", async (request, reply) => {
+    if (!dependencies.agentProfiles) return reply.notFound();
+    const parsed = agentProfileBodySchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid agent profile request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    try {
+      const profile = await dependencies.agentProfiles.create({
+        userId,
+        slug: parsed.data.slug,
+        name: parsed.data.name,
+        style: parsed.data.style,
+        instructions: parsed.data.instructions,
+        defaultTaskClass: parsed.data.defaultTaskClass,
+        ...(parsed.data.projectId ? { projectId: parsed.data.projectId } : {}),
+      });
+      await dependencies.database.appendAudit({
+        userId, eventType: "agent_profile.created", resourceType: "agent_profile", resourceId: profile.id,
+        details: { slug: profile.slug, style: profile.style, defaultTaskClass: profile.defaultTaskClass, projectId: profile.projectId },
+      });
+      return reply.code(201).send({ profile });
+    } catch (error) {
+      if (error instanceof Error && error.message === "Agent workspace project not found") return reply.notFound(error.message);
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+        return reply.conflict("Agent slug already exists");
+      }
+      throw error;
+    }
+  });
+
+  app.get("/v1/agents", async (request, reply) => {
+    if (!dependencies.agentProfiles) return reply.notFound();
+    const parsed = projectQuerySchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid agent profiles query");
+    return { profiles: await dependencies.agentProfiles.list(authorizeUser(request, parsed.data.userId)) };
+  });
+
+  app.delete("/v1/agents/:id", async (request, reply) => {
+    if (!dependencies.agentProfiles) return reply.notFound();
+    const params = agentProfileParamsSchema.safeParse(request.params);
+    const query = projectQuerySchema.safeParse(request.query);
+    if (!params.success || !query.success) return reply.badRequest("Invalid agent profile request");
+    const userId = authorizeUser(request, query.data.userId);
+    if (!(await dependencies.agentProfiles.get(userId, params.data.id))) return reply.notFound("Agent profile not found");
+    if (!(await dependencies.agentProfiles.delete(userId, params.data.id))) return reply.conflict("Agent profile has bound conversations and cannot be deleted");
+    await dependencies.database.appendAudit({ userId, eventType: "agent_profile.deleted", resourceType: "agent_profile", resourceId: params.data.id });
+    return reply.code(204).send();
   });
 
   app.get("/v1/projects", async (request, reply) => {
@@ -1110,6 +1179,11 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
 
   const runChat = async (input: z.infer<typeof chatBodySchema>) => {
     await dependencies.governance?.consume(input.userId, "chat");
+    const conversationId = input.conversationId ?? randomUUID();
+    const selectedProfile = dependencies.agentProfiles
+      ? await dependencies.agentProfiles.resolve(input.userId, conversationId, input.agentId)
+      : null;
+    const effectiveTaskClass = input.taskClass ?? selectedProfile?.defaultTaskClass ?? "fast";
     const traceId = dependencies.governance?.newTraceId();
     if (traceId) {
       await dependencies.governance?.trace({
@@ -1117,10 +1191,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         userId: input.userId,
         operation: "chat.generate",
         status: "started",
-        details: { taskClass: input.taskClass },
+        details: { taskClass: effectiveTaskClass, agentProfileId: selectedProfile?.id },
       });
     }
-    const conversationId = input.conversationId ?? randomUUID();
     const existingConversation = input.conversationId
       ? await dependencies.database.getConversation(input.userId, input.conversationId)
       : null;
@@ -1141,14 +1214,23 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           ].join("\n"),
         }]
       : [];
-    const identityContext = agentIdentityContext(dependencies.agentIdentity);
+    const identityContext = selectedProfile
+      ? [{ role: "system" as const, content: agentProfileInstruction(selectedProfile) }]
+      : agentIdentityContext(dependencies.agentIdentity);
     const languageContext = await preferredLanguageContext(input.userId, dependencies.authService);
+    let projectContext: Array<{ role: "system"; content: string }> = [];
+    if (selectedProfile?.projectId) {
+      if (!dependencies.projects) throw new AgentProfileConflictError("Agent workspace is unavailable");
+      const context = await dependencies.projects.context(input.userId, selectedProfile.projectId);
+      if (!context) throw new AgentProfileConflictError("Agent workspace project not found");
+      projectContext = [{ role: "system", content: context }];
+    }
     try {
       const result = await dependencies.modelProvider.generate({
         userId: input.userId,
         conversationId,
-        messages: [...identityContext, ...languageContext, ...memoryContext, ...conversation.modelMessages],
-        taskClass: input.taskClass,
+        messages: [...identityContext, ...languageContext, ...projectContext, ...memoryContext, ...conversation.modelMessages],
+        taskClass: effectiveTaskClass,
       });
 
       await dependencies.database.saveTurn({
@@ -1166,7 +1248,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           details: { provider: result.provider, model: result.model, memoriesUsed: memories.length },
         });
       }
-      return { conversationId, result, memoriesUsed: memories.length, traceId };
+      return { conversationId, result, memoriesUsed: memories.length, traceId, selectedProfile };
     } catch (error) {
       if (traceId) {
         await dependencies.governance?.trace({
@@ -1188,7 +1270,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     }
 
     const userId = authorizeUser(request, parsed.data.userId);
-    const { conversationId, result, memoriesUsed, traceId } = await runChat({ ...parsed.data, userId });
+    const { conversationId, result, memoriesUsed, traceId, selectedProfile } = await runChat({ ...parsed.data, userId });
 
     return {
       conversationId,
@@ -1201,6 +1283,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         name: result.model,
       },
       memoriesUsed,
+      agent: selectedProfile ? { id: selectedProfile.id, slug: selectedProfile.slug, name: selectedProfile.name } : null,
       traceId,
     };
   });
@@ -1236,6 +1319,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const chat = await runChat({
       userId,
       ...(query.data.conversationId ? { conversationId: query.data.conversationId } : {}),
+      ...(query.data.agentId ? { agentId: query.data.agentId } : {}),
       messages: [{ role: "user", content: text }],
       taskClass: query.data.taskClass,
     });
@@ -1277,6 +1361,10 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const userId = authorizeUser(request, parsed.data.userId);
     await dependencies.governance?.consume(userId, "chat");
     const conversationId = parsed.data.conversationId ?? randomUUID();
+    const selectedProfile = dependencies.agentProfiles
+      ? await dependencies.agentProfiles.resolve(userId, conversationId, parsed.data.agentId)
+      : null;
+    const effectiveTaskClass = parsed.data.taskClass ?? selectedProfile?.defaultTaskClass ?? "fast";
     const existingConversation = parsed.data.conversationId
       ? await dependencies.database.getConversation(userId, parsed.data.conversationId)
       : null;
@@ -1297,12 +1385,18 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           ].join("\n"),
         }]
       : [];
-    const identityContext = agentIdentityContext(dependencies.agentIdentity);
+    const identityContext = selectedProfile
+      ? [{ role: "system" as const, content: agentProfileInstruction(selectedProfile) }]
+      : agentIdentityContext(dependencies.agentIdentity);
     const languageContext = await preferredLanguageContext(userId, dependencies.authService);
     let projectContext: Array<{ role: "system"; content: string }> = [];
-    if (parsed.data.projectId) {
+    if (selectedProfile?.projectId && parsed.data.projectId && selectedProfile.projectId !== parsed.data.projectId) {
+      return reply.conflict("Agent profile is bound to a different workspace project");
+    }
+    const effectiveProjectId = selectedProfile?.projectId ?? parsed.data.projectId;
+    if (effectiveProjectId) {
       if (!dependencies.projects) return reply.badRequest("Projects are not available");
-      const context = await dependencies.projects.context(userId, parsed.data.projectId);
+      const context = await dependencies.projects.context(userId, effectiveProjectId);
       if (!context) return reply.notFound("Project not found");
       projectContext = [{ role: "system", content: context }];
     }
@@ -1342,7 +1436,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         userId,
         operation: "agent.loop",
         status: "started",
-        details: { taskClass: parsed.data.taskClass, maxSteps: parsed.data.maxSteps, selectedSkill },
+        details: { taskClass: effectiveTaskClass, maxSteps: parsed.data.maxSteps, selectedSkill, agentProfileId: selectedProfile?.id },
       });
     }
     try {
@@ -1350,7 +1444,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         userId,
         conversationId,
         messages: [...identityContext, ...languageContext, ...projectContext, ...skillContext, ...memoryContext, ...conversation.modelMessages],
-        taskClass: parsed.data.taskClass,
+        taskClass: effectiveTaskClass,
         maxSteps: parsed.data.maxSteps,
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
         ...(allowedTools ? { allowedTools } : {}),
@@ -1360,8 +1454,8 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           ...loopInput,
           conversationMessages: conversation.newMessages,
         });
-        if (parsed.data.projectId && dependencies.projects) {
-          await dependencies.projects.attach(userId, parsed.data.projectId, "agent_run", run.id, latestUserMessage?.content.slice(0, 200) ?? "Agent run");
+        if (effectiveProjectId && dependencies.projects) {
+          await dependencies.projects.attach(userId, effectiveProjectId, "agent_run", run.id, latestUserMessage?.content.slice(0, 200) ?? "Agent run");
         }
         if (traceId) {
           await dependencies.governance?.trace({
@@ -1378,6 +1472,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           status: run.status,
           message: { role: "assistant", content: "Задача принята и выполняется в фоне." },
           memoriesUsed: memories.length,
+          agent: selectedProfile ? { id: selectedProfile.id, slug: selectedProfile.slug, name: selectedProfile.name } : null,
           traceId,
         });
       }
@@ -1388,8 +1483,8 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         messages: conversation.newMessages,
         result: result.result,
       });
-      if (parsed.data.projectId && dependencies.projects) {
-        await dependencies.projects.attach(userId, parsed.data.projectId, "conversation", conversationId, latestUserMessage?.content.slice(0, 200) ?? "Conversation");
+      if (effectiveProjectId && dependencies.projects) {
+        await dependencies.projects.attach(userId, effectiveProjectId, "conversation", conversationId, latestUserMessage?.content.slice(0, 200) ?? "Conversation");
       }
       if (traceId) {
         await dependencies.governance?.trace({
