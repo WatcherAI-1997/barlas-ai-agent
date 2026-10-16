@@ -685,6 +685,7 @@ describe("Barlas AI Agent API", () => {
   it("queues Telegram messages in the durable autonomous runtime", async () => {
     const deps = dependencies();
     const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
     const queued = {
       id: "00000000-0000-4000-8000-000000000010",
       userId: "telegram:7",
@@ -715,7 +716,7 @@ describe("Barlas AI Agent API", () => {
       apiToken,
       ...deps,
       agentRuntime,
-      telegram: { webhookSecret: "t".repeat(32), client: { sendMessage } },
+      telegram: { webhookSecret: "t".repeat(32), client: { sendMessage, sendChatAction } },
     });
     const response = await app.inject({
       method: "POST",
@@ -733,13 +734,15 @@ describe("Barlas AI Agent API", () => {
       userId: "telegram:7",
       delivery: { channel: "telegram", chatId: 42 },
     }));
-    expect(sendMessage).toHaveBeenCalledWith(42, expect.stringContaining("Задача принята"));
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(sendChatAction).toHaveBeenCalledWith(42, "typing");
     await app.close();
   });
 
   it("turns explicit Telegram call commands into voice-delivered agent runs", async () => {
     const deps = dependencies();
     const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
     const queued = {
       id: "00000000-0000-4000-8000-000000000010",
       userId: "telegram:7",
@@ -764,7 +767,7 @@ describe("Barlas AI Agent API", () => {
       apiToken,
       ...deps,
       agentRuntime,
-      telegram: { webhookSecret: "t".repeat(32), client: { sendMessage } },
+      telegram: { webhookSecret: "t".repeat(32), client: { sendMessage, sendChatAction } },
     });
 
     const response = await app.inject({
@@ -780,7 +783,8 @@ describe("Barlas AI Agent API", () => {
       conversationMessages: [{ role: "user", content: "Explain the release" }],
       delivery: { channel: "telegram", chatId: 42, voice: true },
     }));
-    expect(sendMessage).toHaveBeenCalledWith(42, expect.stringContaining("Голосовой ответ готовится"));
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(sendChatAction).toHaveBeenCalledWith(42, "record_voice");
     await app.close();
   });
 

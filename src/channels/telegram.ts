@@ -46,6 +46,16 @@ export class TelegramClient {
     }
   }
 
+  async sendChatAction(chatId: number, action: "typing" | "record_voice" = "typing"): Promise<void> {
+    const response = await fetch(this.endpoint("sendChatAction"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, action }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) throw new Error(`Telegram sendChatAction failed with status ${response.status}`);
+  }
+
   sendApproval(chatId: number, text: string, approvalId: string): Promise<void> {
     return this.sendMessage(chatId, text, {
       inline_keyboard: [[

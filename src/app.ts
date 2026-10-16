@@ -404,6 +404,7 @@ export interface AppDependencies {
     client: {
       maxUploadBytes?: number;
       sendMessage(chatId: number, text: string): Promise<void>;
+      sendChatAction?(chatId: number, action?: "typing" | "record_voice"): Promise<void>;
       sendVoice?(chatId: number, content: Buffer, caption?: string): Promise<void>;
       sendApproval?(chatId: number, text: string, approvalId: string): Promise<void>;
       answerCallbackQuery?(callbackQueryId: string, text: string): Promise<void>;
@@ -2165,11 +2166,11 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         taskClass: "fast",
         maxSteps: 8,
       });
-      await dependencies.telegram.client.sendMessage(
+      // Keep ordinary conversation natural: the durable run ID remains available
+      // through run/status commands instead of appearing before every answer.
+      await dependencies.telegram.client.sendChatAction?.(
         message.chat.id,
-        voiceCommand.requested
-          ? `Голосовой ответ готовится. Запуск ${run.id.slice(0, 8)}.`
-          : `Задача принята. Запуск ${run.id.slice(0, 8)}.`,
+        voiceCommand.requested ? "record_voice" : "typing",
       );
       return { ok: true, runId: run.id };
     }
