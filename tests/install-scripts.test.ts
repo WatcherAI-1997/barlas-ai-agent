@@ -106,8 +106,8 @@ describe("production installer", () => {
       '"█▀▀▄ ▄▀▀▄ █▀▀▄ █    ▄▀▀▄ ▄▀▀▀"',
       '"              A I   A G E N T"',
       '"{0:D2}/05" -f $Number',
-      "PERSONAL AI INSTALLER",
-      "Local/private  |  No Docker/WSL  |  No admin",
+      '"              THINK AHEAD."',
+      '" ACT BEYOND."',
       "install.log",
       '"ci", "--include=dev", "--ignore-scripts"',
       'node_modules\\typescript\\bin\\tsc',
@@ -132,6 +132,8 @@ describe("production installer", () => {
     ]) expect(bootstrap).toContain(required);
     expect(bootstrap).not.toContain("docker info");
     expect(bootstrap).not.toContain("Docker.DockerDesktop");
+    expect(bootstrap).not.toContain("PERSONAL AI INSTALLER");
+    expect(bootstrap).not.toContain("Local/private");
     expect(bootstrap).not.toContain('"BARLAS".ToCharArray()');
     expect(bootstrap).not.toContain("gh auth");
     expect(bootstrap).toContain('$ErrorActionPreference = "Continue"');

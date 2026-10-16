@@ -74,10 +74,8 @@ function Show-PixelBanner {
     }
     Write-Host "              A I   A G E N T" -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  WINDOWS 10/11" -ForegroundColor Red -NoNewline
-    Write-Host "  /  PERSONAL AI INSTALLER" -ForegroundColor White
-    Write-Host "  Local/private  |  No Docker/WSL  |  No admin" -ForegroundColor DarkGray
-    Write-Host "  ───────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host "              THINK AHEAD." -ForegroundColor Red -NoNewline
+    Write-Host " ACT BEYOND." -ForegroundColor White
 }
 
 Show-PixelBanner
