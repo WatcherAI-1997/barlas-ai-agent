@@ -25,6 +25,7 @@ describe("Barlas web interface", () => {
       'id="voice-diagnostic"',
       'id="microphone-test-start"',
       'aria-pressed="false"',
+      "barlas-ai-agent-github-hero.png",
     ]) expect(html).toContain(marker);
     expect(html).not.toMatch(/<script[^>]*>[^<]+<\/script>/u);
 
@@ -49,6 +50,7 @@ describe("Barlas web interface", () => {
       "Запись осталась только в браузере",
       "5_000",
       'consent: "true"',
+      '"ArrowUp", "ArrowDown", "Home", "End"',
     ]) expect(script).toContain(marker);
     expect(script).not.toContain("alert(");
   });

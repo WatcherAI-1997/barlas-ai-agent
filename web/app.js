@@ -49,6 +49,20 @@ $("#dialog-copy").addEventListener("click", async () => {
   } catch { notify("Не удалось скопировать", "error"); }
 });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeNavigation(); });
+$("#primary-nav").addEventListener("keydown", (event) => {
+  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  const buttons = [...document.querySelectorAll("#primary-nav button[data-panel]")]
+    .filter((button) => !button.hidden && !button.classList.contains("hidden") && !button.disabled);
+  if (!buttons.length) return;
+  const current = Math.max(0, buttons.indexOf(document.activeElement));
+  const next = event.key === "Home" ? 0
+    : event.key === "End" ? buttons.length - 1
+      : event.key === "ArrowUp" ? (current - 1 + buttons.length) % buttons.length
+        : (current + 1) % buttons.length;
+  event.preventDefault();
+  buttons[next].focus();
+  buttons[next].scrollIntoView({ block: "nearest" });
+});
 
 async function api(path, options = {}) {
   const headers = { "content-type": "application/json", ...(options.headers || {}) };

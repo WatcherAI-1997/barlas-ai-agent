@@ -21,7 +21,8 @@
 
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--bg); }
-body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 52% -18rem, #3a1017 0, var(--bg) 42rem); }
+body { position: relative; margin: 0; min-height: 100vh; background: radial-gradient(circle at 72% -12rem, #4b0a14 0, transparent 34rem), radial-gradient(circle at 18% 105%, #26060b 0, transparent 36rem), var(--bg); }
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .22; background: repeating-linear-gradient(128deg, transparent 0 86px, rgb(226 31 61 / 12%) 87px, transparent 88px 172px); mask-image: linear-gradient(to bottom, black, transparent 72%); }
 button, input, textarea, select { font: inherit; }
 button { border: 0; border-radius: 10px; padding: .72rem .95rem; color: white; background: var(--accent); cursor: pointer; font-weight: 700; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
 button:hover { background: var(--accent-bright); }
@@ -32,8 +33,9 @@ button.secondary:hover { background: #29292f; }
 .shell { width: min(1500px, 100%); min-height: 100vh; margin: 0 auto; padding: 0 1.25rem 1.25rem; }
 .hidden { display: none !important; }
 
-.auth-card { width: min(450px, calc(100% - 2rem)); margin: 8vh auto; padding: 2rem; border: 1px solid var(--border); border-radius: 22px; background: rgb(15 15 17 / 94%); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
-.logo { display: block; max-width: 230px; max-height: 112px; object-fit: contain; margin-bottom: 1.2rem; }
+.auth-card { width: min(560px, calc(100% - 2rem)); margin: 6vh auto; padding: 1.15rem 1.35rem 1.6rem; border: 1px solid #35141a; border-radius: 22px; background: rgb(9 9 10 / 96%); box-shadow: 0 24px 90px rgb(0 0 0 / 58%), 0 0 70px rgb(226 31 61 / 8%); backdrop-filter: blur(18px); }
+.logo { display: block; max-width: 100%; object-fit: contain; margin-bottom: 1.2rem; }
+.brand-hero { width: 100%; aspect-ratio: 3 / 1; border-radius: 14px; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 5%); }
 .eyebrow { color: #ff6177; letter-spacing: .12em; text-transform: uppercase; font-size: .75rem; font-weight: 800; }
 h1, h2 { letter-spacing: -.025em; }
 h1 { margin: .55rem 0 1rem; font-size: clamp(1.8rem, 5vw, 2.35rem); }

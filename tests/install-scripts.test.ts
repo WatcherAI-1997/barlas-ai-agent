@@ -24,6 +24,7 @@ describe("production installer", () => {
     const nativeUpdater = await readFile(join(root, "scripts", "update-native.ps1"), "utf8");
     const nativeUninstaller = await readFile(join(root, "scripts", "uninstall-native.ps1"), "utf8");
     const modelAuth = await readFile(join(root, "scripts", "model-auth-native.ps1"), "utf8");
+    const windowsNode = await readFile(join(root, "scripts", "windows-node.ps1"), "utf8");
     const installerMenuTest = await readFile(join(root, "tests", "powershell-installer-menu.ps1"), "utf8");
     const configureMenuTest = await readFile(join(root, "tests", "powershell-configure-menu.ps1"), "utf8");
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
@@ -35,12 +36,16 @@ describe("production installer", () => {
       "RandomNumberGenerator",
       "BROWSER_WS_ENDPOINT = $BrowserEndpoint",
       "scripts\\start-native.ps1",
-      "BARLAS · PERSONAL SETUP",
+      'Write-Host "BARLAS" -ForegroundColor White',
+      'Write-Host "AI AGENT" -ForegroundColor DarkGray',
+      'Write-Host "  THINK AHEAD. "',
       "Read-MenuChoice",
       "Read-ArrowMenu",
       "Read-ValidatedValue",
       "[int]::TryParse",
-      "Use Up/Down and Enter. Number keys also work.",
+      "Use arrows to move, type to filter, and press Enter to select.",
+      "PageDown",
+      "Type to filter",
       '"openai codex" = "codex_cli"',
       "OpenAI account - browser sign-in, no API key",
       "Ollama - local and private",
@@ -59,6 +64,8 @@ describe("production installer", () => {
     expect(configure).toContain("icacls.exe");
     expect(configure).not.toContain("Set-Acl");
     expect(configure).toContain("Read-ArrowChoice");
+    expect(configure).toContain("PageDown");
+    expect(configure).toContain("Type to filter");
     expect(configure).toContain("Read-MappedChoice");
     expect(configure).toContain("Read-ModelSelection");
     expect(configure).toContain("Any other current, future, or installed model ID");
@@ -78,6 +85,9 @@ describe("production installer", () => {
     expect(cli).toContain('$RequiresStoppedGateway');
     expect(cli).toContain('$env:BARLAS_NATIVE_DATA');
     expect(cli).toContain("Open the private microphone and voice check now?");
+    expect(windowsNode).toContain("barlas-ai-agent-logo-original.png");
+    expect(windowsNode).toContain("barlas-icon.png");
+    expect(windowsNode).toContain("BarlasNativeIcon");
     expect(nativeUpdater).toContain('ValidateSet("check", "update", "rollback", "repair")');
     expect(nativeUpdater).toContain("Rollback failed; restoring the current version");
     expect(nativeUpdater).toContain("Protect-File");

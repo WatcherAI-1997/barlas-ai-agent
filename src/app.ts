@@ -1,5 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { basename } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
 
 import sensible from "@fastify/sensible";
@@ -504,6 +505,12 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     done(null, payload.pipe(collector));
   });
   if (dependencies.webRoot) {
+    const packagedBrandRoot = resolve(dependencies.webRoot, "brand");
+    const sourceBrandRoot = resolve(dependencies.webRoot, "..", "assets", "brand");
+    const brandRoot = existsSync(packagedBrandRoot) ? packagedBrandRoot : sourceBrandRoot;
+    if (existsSync(brandRoot)) {
+      await app.register(fastifyStatic, { root: brandRoot, prefix: "/ui/brand/", decorateReply: false });
+    }
     await app.register(fastifyStatic, { root: dependencies.webRoot, prefix: "/ui/" });
     app.get("/", async (_request, reply) => reply.redirect("/ui/index.html"));
   }

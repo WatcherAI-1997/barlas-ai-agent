@@ -122,6 +122,19 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("serves the same Barlas brand hero in native and packaged web layouts", async () => {
+    const deps = dependencies();
+    const app = await buildApp({ apiToken, ...deps, webRoot: resolve(import.meta.dirname, "..", "web") });
+    const page = await app.inject({ method: "GET", url: "/ui/index.html" });
+    const brand = await app.inject({ method: "GET", url: "/ui/brand/barlas-ai-agent-github-hero.png" });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain("barlas-ai-agent-github-hero.png");
+    expect(brand.statusCode).toBe(200);
+    expect(brand.headers["content-type"]).toContain("image/png");
+    expect(brand.rawPayload.byteLength).toBeGreaterThan(10_000);
+    await app.close();
+  });
+
   it("persists owner-controlled emergency pause and rejects new turns while paused", async () => {
     const deps = dependencies();
     let paused = false;

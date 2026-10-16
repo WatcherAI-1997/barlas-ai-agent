@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$AppRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $NodeRoot = Join-Path $env:LOCALAPPDATA "Barlas\desktop-node"
 $ConfigPath = Join-Path $NodeRoot "node.json"
 $RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
@@ -118,7 +119,29 @@ if ($Once) { Poll-Once; exit 0 }
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 $Tray = New-Object Windows.Forms.NotifyIcon
-$Tray.Icon = [Drawing.SystemIcons]::Information
+$InstalledBrandIconPath = Join-Path $PSScriptRoot "barlas-icon.png"
+$SourceBrandIconPath = Join-Path $AppRoot "assets\brand\barlas-ai-agent-logo-original.png"
+$BrandIconPath = if (Test-Path -LiteralPath $InstalledBrandIconPath -PathType Leaf) { $InstalledBrandIconPath } else { $SourceBrandIconPath }
+$BrandBitmap = $null
+$IconHandle = [IntPtr]::Zero
+try {
+    if (-not (Test-Path -LiteralPath $BrandIconPath -PathType Leaf)) { throw "Brand icon is unavailable" }
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class BarlasNativeIcon {
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    public static extern bool DestroyIcon(IntPtr handle);
+}
+"@
+    $BrandBitmap = [Drawing.Bitmap]::new($BrandIconPath)
+    $IconHandle = $BrandBitmap.GetHicon()
+    $Tray.Icon = ([Drawing.Icon]::FromHandle($IconHandle)).Clone()
+} catch { $Tray.Icon = [Drawing.SystemIcons]::Information }
+finally {
+    if ($IconHandle -ne [IntPtr]::Zero) { [BarlasNativeIcon]::DestroyIcon($IconHandle) | Out-Null }
+    if ($null -ne $BrandBitmap) { $BrandBitmap.Dispose() }
+}
 $Tray.Text = "Barlas Desktop Node"
 $Tray.Visible = $true
 $Menu = New-Object Windows.Forms.ContextMenuStrip

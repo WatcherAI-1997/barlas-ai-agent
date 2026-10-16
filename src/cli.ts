@@ -745,13 +745,17 @@ async function tui(ctx: CliContext): Promise<void> {
   const readline = createInterface({ input, output, terminal: true });
   let conversationId: string | undefined;
   let agentId: string | undefined;
+  const red = "\x1b[38;2;226;31;61m";
+  const white = "\x1b[97m";
+  const dim = "\x1b[90m";
+  const reset = "\x1b[0m";
   output.write(`
- ▄██▄  ▄██▄
- ▀██▀  ▀██▀   █▀▀▄ ▄▀▀▄ █▀▀▄ █    ▄▀▀▄ ▄▀▀▀
-              █▀▀▄ █▀▀█ █▀█  █    █▀▀█  ▀▀▄
-    ▄██▄      ▀▀▀  ▀  ▀ ▀  ▀ ▀▀▀▀ ▀  ▀ ▀▀▀
-    ▀██▀                A I   A G E N T
-              THINK AHEAD. ACT BEYOND.
+${red} ▄██▄  ▄██▄${reset}
+${red} ▀██▀  ▀██▀${reset}   ${white}█▀▀▄ ▄▀▀▄ █▀▀▄ █    ▄▀▀▄ ▄▀▀▀${reset}
+              ${white}█▀▀▄ █▀▀█ █▀█  █    █▀▀█  ▀▀▄${reset}
+${red}    ▄██▄${reset}      ${white}▀▀▀  ▀  ▀ ▀  ▀ ▀▀▀▀ ▀  ▀ ▀▀▀${reset}
+${red}    ▀██▀${reset}                ${dim}A I   A G E N T${reset}
+              ${red}THINK AHEAD.${reset} ${white}ACT BEYOND.${reset}
 
 Живой диалог · /help · /quit
 

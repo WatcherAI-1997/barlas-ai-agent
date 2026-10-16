@@ -61,9 +61,13 @@ function Read-ArrowMenu([string[]]$Values, [string[]]$Labels, [string]$Default) 
         if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { return $null }
         $Width = [Console]::WindowWidth - 1
         if ($Width -lt 20) { return $null }
-        $Selected = [Array]::IndexOf($Values, $Default)
-        if ($Selected -lt 0) { $Selected = 0 }
-        $ReservedLines = $Values.Count + 1
+        $DefaultIndex = [Array]::IndexOf($Values, $Default)
+        if ($DefaultIndex -lt 0) { $DefaultIndex = 0 }
+        $Filtered = @(0..($Values.Count - 1))
+        $Selected = $DefaultIndex
+        $Filter = ""
+        $PageSize = [Math]::Min(10, [Math]::Max(3, [Console]::WindowHeight - 8))
+        $ReservedLines = $PageSize + 2
         for ($Line = 0; $Line -lt $ReservedLines; $Line++) { Write-Host "" }
         $Top = [Console]::CursorTop - $ReservedLines
         $PreviousCursor = [Console]::CursorVisible
@@ -73,24 +77,45 @@ function Read-ArrowMenu([string[]]$Values, [string[]]$Labels, [string]$Default) 
             [Console]::SetCursorPosition(0, $Top)
             $Width = [Console]::WindowWidth - 1
             if ($Width -lt 20) { return $null }
-            for ($Index = 0; $Index -lt $Values.Count; $Index++) {
-                $Prefix = if ($Index -eq $Selected) { "  > " } else { "    " }
-                $DefaultMarker = if ($Values[$Index] -eq $Default) { "  default" } else { "" }
-                $Text = "$Prefix$($Labels[$Index])$DefaultMarker"
+            $SelectedPosition = [Array]::IndexOf($Filtered, $Selected)
+            if ($SelectedPosition -lt 0) { $SelectedPosition = 0; if ($Filtered.Count) { $Selected = $Filtered[0] } }
+            $WindowStart = if ($Filtered.Count -le $PageSize) { 0 } else { [Math]::Min([Math]::Max(0, $SelectedPosition - [Math]::Floor($PageSize / 2)), $Filtered.Count - $PageSize) }
+            for ($Row = 0; $Row -lt $PageSize; $Row++) {
+                $Position = $WindowStart + $Row
+                if ($Position -lt $Filtered.Count) {
+                    $Index = $Filtered[$Position]
+                    $Prefix = if ($Index -eq $Selected) { "  > " } else { "    " }
+                    $DefaultMarker = if ($Values[$Index] -eq $Default) { "  default" } else { "" }
+                    $Text = "$Prefix$($Labels[$Index])$DefaultMarker"
+                } else { $Text = "" }
                 if ($Text.Length -gt $Width) { $Text = $Text.Substring(0, $Width) }
-                if ($Index -eq $Selected) { Write-Host $Text.PadRight($Width) -ForegroundColor Cyan }
+                if ($Position -lt $Filtered.Count -and $Filtered[$Position] -eq $Selected) { Write-Host $Text.PadRight($Width) -ForegroundColor Red }
                 else { Write-Host $Text.PadRight($Width) }
             }
-            $Help = "  Up/Down or number; Enter selects; Esc keeps default"
+            $FilterLabel = if ($Filter) { "  Filter: $Filter  [$($Filtered.Count)/$($Values.Count)]" } else { "  Type to filter  [$($Filtered.Count) options]" }
+            if ($FilterLabel.Length -gt $Width) { $FilterLabel = $FilterLabel.Substring(0, $Width) }
+            Write-Host $FilterLabel.PadRight($Width) -ForegroundColor DarkGray
+            $Help = "  ↑/↓ move · PgUp/PgDn · Home/End · Enter select · Esc default"
             if ($Help.Length -gt $Width) { $Help = $Help.Substring(0, $Width) }
             Write-Host $Help.PadRight($Width) -ForegroundColor DarkGray
             $Key = [Console]::ReadKey($true)
-            if ($Key.Key -eq [ConsoleKey]::UpArrow) { $Selected = ($Selected - 1 + $Values.Count) % $Values.Count; continue }
-            if ($Key.Key -eq [ConsoleKey]::DownArrow) { $Selected = ($Selected + 1) % $Values.Count; continue }
-            if ($Key.Key -eq [ConsoleKey]::Enter) { return $Values[$Selected] }
+            if ($Key.Key -eq [ConsoleKey]::UpArrow -and $Filtered.Count) { $Selected = $Filtered[($SelectedPosition - 1 + $Filtered.Count) % $Filtered.Count]; continue }
+            if ($Key.Key -eq [ConsoleKey]::DownArrow -and $Filtered.Count) { $Selected = $Filtered[($SelectedPosition + 1) % $Filtered.Count]; continue }
+            if ($Key.Key -eq [ConsoleKey]::PageUp -and $Filtered.Count) { $Selected = $Filtered[[Math]::Max(0, $SelectedPosition - $PageSize)]; continue }
+            if ($Key.Key -eq [ConsoleKey]::PageDown -and $Filtered.Count) { $Selected = $Filtered[[Math]::Min($Filtered.Count - 1, $SelectedPosition + $PageSize)]; continue }
+            if ($Key.Key -eq [ConsoleKey]::Home -and $Filtered.Count) { $Selected = $Filtered[0]; continue }
+            if ($Key.Key -eq [ConsoleKey]::End -and $Filtered.Count) { $Selected = $Filtered[$Filtered.Count - 1]; continue }
+            if ($Key.Key -eq [ConsoleKey]::Enter -and $Filtered.Count) { return $Values[$Selected] }
             if ($Key.Key -eq [ConsoleKey]::Escape) { return $Default }
-            $Number = 0
-            if ([int]::TryParse([string]$Key.KeyChar, [ref]$Number) -and $Number -ge 1 -and $Number -le $Values.Count) { return $Values[$Number - 1] }
+            if ($Key.Key -eq [ConsoleKey]::Backspace) {
+                if ($Filter.Length) { $Filter = $Filter.Substring(0, $Filter.Length - 1) }
+            } elseif (-not [char]::IsControl($Key.KeyChar)) { $Filter += $Key.KeyChar }
+            else { continue }
+            $Filtered = @()
+            for ($Index = 0; $Index -lt $Values.Count; $Index++) {
+                if (-not $Filter -or $Labels[$Index].IndexOf($Filter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $Values[$Index].IndexOf($Filter, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $Filtered += $Index }
+            }
+            if ($Filtered.Count -and $Selected -notin $Filtered) { $Selected = $Filtered[0] }
         }
     }
     catch { return $null }
@@ -216,10 +241,13 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     Write-Host "[OK] Using existing protected native configuration" -ForegroundColor Green
 } else {
     Write-Host ""
-    Write-Host "BARLAS · PERSONAL SETUP" -ForegroundColor White
-    Write-Host "THINK AHEAD. " -ForegroundColor Red -NoNewline
+    Write-Host "  ●  ●  " -ForegroundColor Red -NoNewline
+    Write-Host "BARLAS" -ForegroundColor White
+    Write-Host "    ●    " -ForegroundColor Red -NoNewline
+    Write-Host "AI AGENT" -ForegroundColor DarkGray
+    Write-Host "  THINK AHEAD. " -ForegroundColor Red -NoNewline
     Write-Host "ACT BEYOND." -ForegroundColor White
-    Write-Host "Use Up/Down and Enter. Number keys also work." -ForegroundColor DarkGray
+    Write-Host "  Use arrows to move, type to filter, and press Enter to select." -ForegroundColor DarkGray
     $SetupMode = Read-MenuChoice "BARLAS_SETUP_MODE" "Setup experience" @("complete", "quick") @("Complete - configure the full agent now", "Quick - essential settings with safe defaults") "complete"
     $Port = Read-ValidatedValue "BARLAS_HTTP_PORT" "Local web port" "17840" {
         param($Value)
