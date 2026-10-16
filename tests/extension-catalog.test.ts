@@ -14,6 +14,7 @@ describe("Barlas extension catalog", () => {
     expect(catalog.get("connector.github")).toMatchObject({ configured: false });
     expect(catalog.get("provider.anthropic")).toMatchObject({ configured: false });
     expect(catalog.get("provider.ollama")).toMatchObject({ configured: false, risks: ["none"] });
+    expect(catalog.get("skills.signed-catalog")).toMatchObject({ configured: true, kind: "skill-source" });
     expect(catalog.list().map((item) => item.id)).toEqual([...catalog.list().map((item) => item.id)].sort());
     expect(JSON.stringify(catalog.list())).not.toContain("token-value");
   });

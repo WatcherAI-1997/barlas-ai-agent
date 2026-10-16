@@ -3,7 +3,7 @@
 ## Verified on 2026-10-17
 
 - TypeScript typecheck and production build pass.
-- 175 automated tests across 51 files pass.
+- 178 automated tests across 52 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -53,6 +53,10 @@
   ephemeral transcription without workspace persistence, contextual chat,
   bounded speech output, immediate browser track shutdown, and metadata-only
   audit events.
+- Signed-catalog tests cover Ed25519 tamper detection, expiry, duplicate
+  identities, signed publisher/version revocation, stale-sequence rollback
+  detection, HTTPS-only package locations, bounded downloads, exact SHA-256
+  byte pinning, independent publisher trust, and package identity binding.
 - An isolated live load smoke completed 1,000 `/health` and `/ready` requests at
   concurrency 50 with zero failures and 37.7 ms p95 latency on the test host.
 - A PostgreSQL custom dump restored into a separate disposable PostgreSQL 17

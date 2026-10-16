@@ -2,8 +2,9 @@
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { generateKeyPairSync } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
 
 import {
@@ -14,6 +15,15 @@ import {
   skillPublisherFingerprint,
   verifySkillPackage,
 } from "./skills/package.js";
+import {
+  availableCatalogEntries,
+  createSignedSkillCatalog,
+  fetchCatalogPackage,
+  parseSignedSkillCatalog,
+  parseSkillCatalogTemplate,
+  selectCatalogEntry,
+  verifySkillCatalog,
+} from "./skills/catalog.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -114,10 +124,133 @@ async function nodes(ctx: CliContext): Promise<void> {
   output.write(`${renderRows(result.nodes, ["id", "name", "platform", "capabilities", "lastSeenAt", "revokedAt"])}\n`);
 }
 
-async function catalog(ctx: CliContext, kind?: string): Promise<void> {
+async function extensionsCatalog(ctx: CliContext, kind?: string): Promise<void> {
   const result = await ctx.api.request<{ extensions: JsonObject[] }>("/v1/extensions");
   const rows = kind ? result.extensions.filter((item) => value(item.kind) === kind) : result.extensions;
   output.write(`${renderRows(rows, ["id", "kind", "configured", "capabilities"])}\n`);
+}
+
+async function readTextSource(source: string, maxBytes: number): Promise<string> {
+  if (!source) throw new Error("Укажите HTTPS URL или путь к файлу каталога");
+  if (!/^https?:/iu.test(source)) {
+    const raw = await readFile(resolve(source), "utf8");
+    if (Buffer.byteLength(raw, "utf8") > maxBytes) throw new Error("Файл превышает допустимый размер");
+    return raw;
+  }
+  const url = new URL(source);
+  if (url.protocol !== "https:") throw new Error("Удалённый каталог должен использовать HTTPS");
+  const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error(`Не удалось скачать каталог: HTTP ${response.status}`);
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) throw new Error("Каталог превышает допустимый размер");
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > maxBytes) {
+      await reader.cancel();
+      throw new Error("Каталог превышает допустимый размер");
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), bytes).toString("utf8");
+}
+
+async function loadTrustedCatalog(source: string, fingerprint: string) {
+  if (!fingerprint) throw new Error("Сверьте ключ каталога и укажите --trust-catalog sha256:<отпечаток>");
+  const catalog = parseSignedSkillCatalog(await readTextSource(source, 1_000_000));
+  const statePath = process.env.BARLAS_STATE_DIR
+    ? join(process.env.BARLAS_STATE_DIR, "skill-catalog-sequences.json")
+    : process.env.LOCALAPPDATA
+      ? join(process.env.LOCALAPPDATA, "Barlas", "data", "skill-catalog-sequences.json")
+      : join(homedir(), ".barlas", "skill-catalog-sequences.json");
+  let state: Record<string, number> = {};
+  try {
+    const value = JSON.parse(await readFile(statePath, "utf8")) as unknown;
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) state = value as Record<string, number>;
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw new Error("Не удалось прочитать состояние каталога");
+  }
+  const minimumSequence = Number.isSafeInteger(state[fingerprint.toLowerCase()]) ? state[fingerprint.toLowerCase()]! : 0;
+  verifySkillCatalog(catalog, fingerprint, new Date(), minimumSequence);
+  if (catalog.sequence > minimumSequence) {
+    state[catalog.signer.fingerprint] = catalog.sequence;
+    await mkdir(dirname(statePath), { recursive: true, mode: 0o700 });
+    await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  }
+  return catalog;
+}
+
+async function verifyCatalogFile(source: string, fingerprint: string): Promise<void> {
+  const skillCatalog = await loadTrustedCatalog(source, fingerprint);
+  output.write([
+    `Каталог проверен: ${skillCatalog.name}`,
+    `Подписант: ${skillCatalog.signer.name}`,
+    `Отпечаток: ${skillCatalog.signer.fingerprint}`,
+    `Последовательность: ${skillCatalog.sequence}`,
+    `Действует до: ${skillCatalog.expiresAt}`,
+    `Доступно пакетов: ${availableCatalogEntries(skillCatalog).length}`,
+    `Отозвано записей: ${skillCatalog.revocations.length}`,
+  ].join("\n") + "\n");
+}
+
+async function listSkillCatalog(source: string, fingerprint: string, query = ""): Promise<void> {
+  const skillCatalog = await loadTrustedCatalog(source, fingerprint);
+  const normalized = query.toLocaleLowerCase();
+  const rows = availableCatalogEntries(skillCatalog)
+    .filter((entry) => !normalized || `${entry.skillId} ${entry.description}`.toLocaleLowerCase().includes(normalized));
+  output.write(`${renderRows(rows as unknown as JsonObject[], ["skillId", "version", "description", "publisherFingerprint"])}\n`);
+}
+
+async function signSkillCatalogFile(templatePath: string, keyPath: string, outputPath: string, signerName: string): Promise<void> {
+  if (!templatePath || !keyPath || !outputPath || !signerName) {
+    throw new Error("Использование: skills catalog sign TEMPLATE PRIVATE_KEY OUTPUT --name NAME");
+  }
+  const template = parseSkillCatalogTemplate(await readFile(resolve(templatePath), "utf8"));
+  const privateKey = await readFile(resolve(keyPath), "utf8");
+  const skillCatalog = createSignedSkillCatalog(template, signerName, privateKey);
+  await writeFile(resolve(outputPath), `${JSON.stringify(skillCatalog, null, 2)}\n`, { encoding: "utf8", mode: 0o644, flag: "wx" });
+  output.write(`Каталог подписан: ${skillCatalog.name}, sequence ${skillCatalog.sequence}\nОтпечаток: ${skillCatalog.signer.fingerprint}\n`);
+}
+
+async function installSkillFromCatalog(
+  ctx: CliContext,
+  source: string,
+  id: string,
+  version: string | undefined,
+  catalogFingerprint: string,
+  publisherFingerprint: string,
+): Promise<void> {
+  if (!id) throw new Error("Укажите ID навыка из каталога");
+  const skillCatalog = await loadTrustedCatalog(source, catalogFingerprint);
+  const entry = selectCatalogEntry(skillCatalog, id, version);
+  if (!publisherFingerprint) {
+    throw new Error(`Сверьте издателя и повторите с --trust-publisher ${entry.publisherFingerprint}`);
+  }
+  if (publisherFingerprint.toLowerCase() !== entry.publisherFingerprint) throw new Error("Отпечаток издателя не совпадает с каталогом");
+  const skillPackage = await fetchCatalogPackage(entry);
+  const { skill } = await ctx.api.request<{ skill: JsonObject }>("/v1/skills/packages", {
+    method: "POST",
+    body: JSON.stringify({ package: skillPackage, trustedFingerprint: entry.publisherFingerprint }),
+  });
+  output.write(`Установлен кандидат ${value(skill.id)}@${value(skill.version)} из ${skillCatalog.name} (не активен).\n`);
+  if (!skillPackage.evaluation) {
+    output.write("В пакете нет evaluation-кейсов; активация заблокирована до отдельной проверки.\n");
+    return;
+  }
+  const evaluated = await ctx.api.request<{ evaluation: JsonObject }>(
+    `/v1/skills/${encodeURIComponent(entry.skillId)}/${encodeURIComponent(entry.version)}/evaluate`,
+    { method: "POST", body: JSON.stringify(skillPackage.evaluation) },
+  );
+  if (evaluated.evaluation.passed !== true) {
+    output.write(`Evaluation не пройден (${value(evaluated.evaluation.passedCases)}/${value(evaluated.evaluation.totalCases)}); навык не активирован.\n`);
+    return;
+  }
+  await activateSkill(ctx, entry.skillId, entry.version);
 }
 
 async function skills(ctx: CliContext): Promise<void> {
@@ -394,6 +527,14 @@ function help(): void {
   skills install <json> --trust FP  установить, проверить и активировать пакет
   skills keygen <prefix>            создать Ed25519-ключ издателя
   skills sign <tpl> <key> <output>  подписать пакет навыка
+  skills catalog verify <src> --trust-catalog FP
+                                    проверить подпись, срок и отозванные пакеты
+  skills catalog list <src> --trust-catalog FP [--query TEXT]
+                                    найти неотозванные навыки
+  skills catalog install <src> <id> [version] --trust-catalog FP --trust-publisher FP
+                                    скачать по HTTPS, сверить хеш и установить
+  skills catalog sign <tpl> <key> <output> --name NAME
+                                    подписать декларативный каталог
   skills evaluate <id> <ver> <json> прогнать acceptance cases
   skills activate <id> <version>    активировать прошедшую проверку версию
   skills rollback <id> <version>    откатить на проверенную версию
@@ -458,9 +599,9 @@ async function tui(ctx: CliContext): Promise<void> {
         if (line === "/projects") { await list(ctx, "projects"); continue; }
         if (line.startsWith("/memory ")) { await memorySearch(ctx, line.slice(8).trim()); continue; }
         if (line === "/skills") { await skills(ctx); continue; }
-        if (["/plugins", "/extensions"].includes(line)) { await catalog(ctx); continue; }
-        if (line === "/models") { await catalog(ctx, "provider"); continue; }
-        if (line === "/channels") { await catalog(ctx, "channel"); continue; }
+        if (["/plugins", "/extensions"].includes(line)) { await extensionsCatalog(ctx); continue; }
+        if (line === "/models") { await extensionsCatalog(ctx, "provider"); continue; }
+        if (line === "/channels") { await extensionsCatalog(ctx, "channel"); continue; }
         if (line === "/tools") { await tools(ctx); continue; }
         if (line === "/approvals") { await list(ctx, "approvals"); continue; }
         if (line === "/audit") { await audit(ctx); continue; }
@@ -489,6 +630,15 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (command === "skills" && args[1] === "verify") return verifySkillPackageFile(args[2] ?? "");
   if (command === "skills" && args[1] === "keygen") return createSkillSigningKey(args[2] ?? "");
   if (command === "skills" && args[1] === "sign") return signSkillPackageFile(args[2] ?? "", args[3] ?? "", args[4] ?? "");
+  if (command === "skills" && args[1] === "catalog" && args[2] === "verify") {
+    return verifyCatalogFile(args[3] ?? "", option(args, "--trust-catalog") ?? "");
+  }
+  if (command === "skills" && args[1] === "catalog" && args[2] === "list") {
+    return listSkillCatalog(args[3] ?? "", option(args, "--trust-catalog") ?? "", option(args, "--query") ?? "");
+  }
+  if (command === "skills" && args[1] === "catalog" && args[2] === "sign") {
+    return signSkillCatalogFile(args[3] ?? "", args[4] ?? "", args[5] ?? "", option(args, "--name") ?? "");
+  }
   const ctx = await context();
   if (["tui", "chat", "terminal"].includes(command)) return tui(ctx);
   if (["ask", "agent"].includes(command)) {
@@ -498,9 +648,20 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (command === "status") return status(ctx);
   if (["health", "doctor"].includes(command)) return doctor(ctx);
   if (command === "extensions") return extensions(ctx);
-  if (["plugins"].includes(command)) return catalog(ctx);
-  if (command === "models") return catalog(ctx, "provider");
-  if (command === "channels") return catalog(ctx, "channel");
+  if (["plugins"].includes(command)) return extensionsCatalog(ctx);
+  if (command === "models") return extensionsCatalog(ctx, "provider");
+  if (command === "channels") return extensionsCatalog(ctx, "channel");
+  if (command === "skills" && args[1] === "catalog" && args[2] === "install") {
+    const candidateVersion = args[5] && !args[5]!.startsWith("--") ? args[5] : undefined;
+    return installSkillFromCatalog(
+      ctx,
+      args[3] ?? "",
+      args[4] ?? "",
+      candidateVersion,
+      option(args, "--trust-catalog") ?? "",
+      option(args, "--trust-publisher") ?? "",
+    );
+  }
   if (command === "skills" && args[1] === "install") {
     return installSkillPackage(ctx, args[2] ?? "", option(args, "--trust") ?? "");
   }

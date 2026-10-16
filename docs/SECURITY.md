@@ -45,6 +45,16 @@ log. Installation creates an inactive candidate; activation requires a passing
 bounded evaluation, and a skill cannot enlarge the runtime tool registry.
 Private publisher keys remain local and are created with mode `0600`.
 
+Catalogs are a separate trust layer, not a substitute for publisher trust. The
+CLI verifies an explicitly trusted Ed25519 catalog key, expiry, monotonic
+sequence number, duplicate identities, and signed publisher/version revocations.
+It then downloads only an HTTPS package with redirects disabled, verifies the
+catalog-pinned SHA-256 bytes, and independently verifies the exact publisher
+fingerprint and package signature. The highest accepted sequence is stored
+locally so an older still-valid catalog cannot silently roll back revocations.
+Installation still uses the server-side signed-package verification and bounded
+evaluation gate; catalogs never execute installer scripts.
+
 Discord local mode uses an outbound official Gateway connection and a dedicated
 bot token. Guild traffic is ignored unless the Barlas bot is explicitly
 mentioned; direct messages are accepted, bot-authored events are discarded,

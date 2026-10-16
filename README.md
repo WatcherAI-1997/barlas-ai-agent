@@ -197,6 +197,13 @@ must target an already evaluated exact version. Publisher keys can be created
 with `barlas skills keygen NAME`, and package templates signed with
 `barlas skills sign TEMPLATE PRIVATE_KEY OUTPUT`.
 
+Signed catalogs add discovery without weakening that boundary. `barlas skills
+catalog list` accepts only an explicitly trusted, unexpired Ed25519 index;
+package URLs must use HTTPS with redirects disabled, package bytes are pinned
+by SHA-256, publisher signatures are checked independently, signed revocations
+are enforced, and cached sequence numbers detect catalog rollback. Catalog
+trust never silently becomes publisher trust.
+
 The extension catalog declares each built-in channel, connector, provider,
 runtime, skill source, and device bridge together with its capabilities, risk
 classes, and required setting names. It never returns secret values.

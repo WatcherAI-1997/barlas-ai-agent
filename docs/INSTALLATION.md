@@ -282,6 +282,20 @@ Third-party skill packages use the signed lifecycle:
 Never trust a fingerprint copied only from the package itself. Compare it with
 the publisher's independently authenticated release page or direct contact.
 
+For a signed catalog, first verify the catalog key through an independent
+maintainer channel, then inspect or install only non-revoked entries:
+
+```powershell
+barlas skills catalog verify CATALOG_URL --trust-catalog sha256:CATALOG_FINGERPRINT
+barlas skills catalog list CATALOG_URL --trust-catalog sha256:CATALOG_FINGERPRINT --query research
+barlas skills catalog install CATALOG_URL SKILL_ID --trust-catalog sha256:CATALOG_FINGERPRINT --trust-publisher sha256:PUBLISHER_FINGERPRINT
+```
+
+Catalog trust never automatically grants publisher trust. Barlas pins the
+downloaded package bytes, rechecks its publisher signature, blocks signed
+revocations and stale catalog sequences, evaluates the candidate without tools,
+and activates it only after all acceptance cases pass.
+
 ## Discord without a domain
 
 Create a dedicated Discord application and bot, enable the Message Content

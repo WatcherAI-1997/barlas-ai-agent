@@ -27,6 +27,10 @@
   and web/Telegram delivery implemented)*
 - Isolated subagents and resumable workflows. *(bounded dependency workflows plus model-initiated delegation to up to three parallel, tool-free, non-recursive subagents implemented)*
 - Versioned skills with evaluation and rollback. *(persistent owner-installed candidates, Ed25519-signed third-party packages with explicit fingerprint trust, bounded automated acceptance evaluation, activation gate, exact selection, tool-permission enforcement, and rollback implemented)*
+- Signed skill catalog. *(expiring Ed25519 index, HTTPS-only package URLs,
+  SHA-256 byte pinning, independent publisher trust, publisher/version
+  revocation, duplicate rejection, and cached sequence rollback detection
+  implemented; public reputation service pending)*
 - Approval queue and audit trail. *(foundation implemented)*
 - Multimodal image, document, and audio understanding. *(magic-byte-validated
   uploads, approval-gated image/PDF analysis, audio transcription, and MP3

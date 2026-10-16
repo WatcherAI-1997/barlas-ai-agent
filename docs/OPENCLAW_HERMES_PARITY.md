@@ -23,7 +23,7 @@ free, Windows-first agent rather than copied as incompatible subsystems.
 | Wider channel ecosystem | Additional adapters such as Slack/Matrix/WhatsApp where official APIs allow safe local operation | Planned |
 | Desktop/mobile control | Windows tray node with DPAPI token, current-user autostart, notifications only, and no remote shell | Implemented foundation; Authenticode/mobile/camera/screen pending |
 | Voice conversation | Explicit-consent web push-to-talk with ephemeral recordings and spoken contextual replies | Implemented; full-duplex interruption planned |
-| Marketplace | Signed declarative index with publisher reputation and revocation | Planned |
+| Marketplace | Expiring Ed25519 catalog, HTTPS package hashes, exact publisher trust, revocation and sequence rollback detection | Implemented foundation; reputation UI pending |
 
 ## Selection rules
 
