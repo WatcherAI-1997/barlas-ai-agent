@@ -17,6 +17,7 @@ describe("production installer", () => {
   });
 
   it("ships a native Windows local installer and companion commands", async () => {
+    const bootstrap = await readFile(join(root, "install-windows.ps1"), "utf8");
     const installer = await readFile(join(root, "install.ps1"), "utf8");
     const doctor = await readFile(join(root, "scripts", "doctor.ps1"), "utf8");
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
@@ -36,6 +37,14 @@ describe("production installer", () => {
     expect(doctor).toContain("Docker Desktop engine is unavailable");
     expect(dashboard).toContain("#token=$Token");
     expect(cli).toContain("dist/src/cli.js");
+    for (const required of [
+      "archive/refs/heads/main.zip",
+      'Join-Path $env:LOCALAPPDATA "Barlas"',
+      "local.env",
+      "barlas.cmd",
+      'Start-Process ([string]$DashboardUrl).Trim()',
+    ]) expect(bootstrap).toContain(required);
+    expect(bootstrap).not.toContain("gh auth");
   });
 
   it("prepares a protected config without printing supplied secrets", async () => {

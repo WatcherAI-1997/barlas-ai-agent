@@ -83,36 +83,33 @@ erase the task or silently convert an unfinished action into success.
 ### Windows 10/11
 
 Install and start Docker Desktop once, make sure it uses the WSL 2 engine and
-Linux containers, then run PowerShell:
+Linux containers, then run one PowerShell command:
 
 ```powershell
-gh auth login
-gh repo clone WatcherAI-1997/barlas-ai-agent
-Set-Location barlas-ai-agent
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-windows.ps1 | iex
 ```
 
-This native Windows installer does not ask for a domain and does not require a
-Bash shell. It checks Docker Desktop and Compose, creates a local configuration
-protected by a Windows ACL, builds the containers, runs diagnostics, and binds
-the cabinet only to `http://127.0.0.1:17840`. Telegram uses long polling.
+No GitHub login, Git, manual clone, domain, or Bash shell is required. The
+bootstrap downloads the public source to `%LOCALAPPDATA%\Barlas\app`, checks
+Docker Desktop and Compose, starts the guided installer, creates a local
+configuration protected by a Windows ACL, adds the `barlas` command to the user
+PATH, runs diagnostics, and opens the cabinet. The service binds only to
+`http://127.0.0.1:17840`; Telegram uses long polling.
 
-After installation:
+After installation, open a new PowerShell window:
 
 ```powershell
-.\barlas.ps1
-.\barlas.ps1 ask "Проверь проект и составь план"
-.\scripts\dashboard-url.ps1
+barlas
+barlas ask "Проверь проект и составь план"
 ```
 
 ### Linux
 
-For a private local installation without a domain, DNS, Caddy, or public web
-exposure, authenticate with GitHub and run:
+For a local installation without a domain, DNS, Caddy, or public web exposure,
+run:
 
 ```bash
-gh auth login
-gh repo clone WatcherAI-1997/barlas-ai-agent
+git clone https://github.com/WatcherAI-1997/barlas-ai-agent.git
 cd barlas-ai-agent
 ./install.sh --local
 ```
@@ -185,6 +182,8 @@ it for the current tab.
 
 Read the full [installation guide](docs/INSTALLATION.md) for non-interactive
 setup, port strategy, updates, troubleshooting, and the exact data layout.
+
+Barlas AI Agent is free and open source under the [MIT License](LICENSE).
 
 ## Security by design
 

@@ -110,7 +110,6 @@ function Invoke-Logged([string]$Label, [string[]]$Arguments) {
 Show-Banner
 if ($env:OS -ne "Windows_NT") { Stop-Install "This installer is for Windows 10/11. Use ./install.sh --local on Linux." }
 if (-not (Test-Command "docker")) { Stop-Install "Docker Desktop is missing. Install Docker Desktop with WSL 2, start it, then run this installer again." }
-if (-not (Test-Command "git")) { Stop-Install "Git for Windows is missing. Install Git, then run this installer again." }
 & docker compose version *> $null
 if ($LASTEXITCODE -ne 0) { Stop-Install "Docker Compose v2 is required. Update Docker Desktop and enable WSL 2 based Linux containers." }
 & docker info *> $null

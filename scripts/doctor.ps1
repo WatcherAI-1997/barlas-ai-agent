@@ -29,7 +29,6 @@ elseif (-not [IO.Path]::IsPathRooted($EnvFile)) { $EnvFile = Join-Path $RootDir 
 $EnvFile = [IO.Path]::GetFullPath($EnvFile)
 
 if (Get-Command docker -ErrorAction SilentlyContinue) { Pass "Docker is available" } else { Fail "Docker Desktop is missing" }
-if (Get-Command git -ErrorAction SilentlyContinue) { Pass "Git is available" } else { Fail "Git is missing" }
 & docker compose version *> $null
 if ($LASTEXITCODE -eq 0) { Pass "Docker Compose v2 is available" } else { Fail "Docker Compose v2 is unavailable" }
 

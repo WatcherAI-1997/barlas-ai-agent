@@ -8,17 +8,17 @@ workspace, backup storage, encryption keys, and owner account.
 
 ## Windows laptop
 
-Install Docker Desktop with the WSL 2 engine and Linux containers. Install
-GitHub CLI if it is not already available, then open PowerShell:
+Install Docker Desktop with the WSL 2 engine and Linux containers, start it,
+then open PowerShell and run:
 
 ```powershell
-gh auth login
-gh repo clone WatcherAI-1997/barlas-ai-agent
-Set-Location barlas-ai-agent
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-windows.ps1 | iex
 ```
 
-No domain, DNS, Caddy, Bash shell, or public port is required. The Windows
+No GitHub account, Git, domain, DNS, Caddy, Bash shell, or public port is
+required. The bootstrap downloads source into `%LOCALAPPDATA%\Barlas\app`,
+preserves existing local configuration during updates, installs a global
+`barlas` launcher for the current user, and runs the guided installer. The
 installer stores configuration in `deploy\local.env`, restricts its ACL to the
 current Windows account and `SYSTEM`, and exposes the cabinet only on loopback.
 Docker Desktop must be running and configured for Linux containers.
@@ -26,10 +26,10 @@ Docker Desktop must be running and configured for Linux containers.
 Useful commands after installation:
 
 ```powershell
-.\barlas.ps1
-.\barlas.ps1 status
-.\scripts\dashboard-url.ps1
-.\scripts\doctor.ps1 -RequireRunning
+barlas
+barlas status
+& "$env:LOCALAPPDATA\Barlas\app\scripts\dashboard-url.ps1"
+& "$env:LOCALAPPDATA\Barlas\app\scripts\doctor.ps1" -RequireRunning
 ```
 
 To prepare and validate configuration without starting containers:
@@ -42,13 +42,12 @@ An existing `deploy\local.env` is reused and never silently overwritten.
 Windows installation is local-only; public HTTPS deployment remains the Linux
 server path.
 
-## Linux quick install from the private repository
+## Linux quick install
 
-Authenticate GitHub CLI with an account that can read the repository:
+Clone the public repository:
 
 ```bash
-gh auth login
-gh repo clone WatcherAI-1997/barlas-ai-agent
+git clone https://github.com/WatcherAI-1997/barlas-ai-agent.git
 cd barlas-ai-agent
 ./install.sh --local
 ```
@@ -61,10 +60,8 @@ uses Bot API long polling rather than a public webhook.
 Run `./install.sh` without `--local` only for a public HTTPS server deployment;
 that mode asks for a domain and starts Caddy.
 
-Do not place a GitHub personal access token in a `curl` URL or shell history.
-A public one-line bootstrap can be published later with signed release artifacts;
-while the repository is private, cloning through authenticated GitHub tooling is
-the safer and more honest installation path.
+Do not place GitHub personal access tokens or model credentials in a command URL
+or shell history. The public repository does not require GitHub authentication.
 
 The interactive wizard asks for:
 
@@ -148,9 +145,10 @@ link private; anyone holding it has owner access.
 
 The supported public production path requires Linux, Git, curl, OpenSSL, Docker
 Engine, and Docker Compose v2. The Windows local path requires Windows 10/11,
-PowerShell 5.1 or newer, Git, Docker Desktop with the WSL 2 engine, and Docker
-Compose v2. Neither installer requires Node.js on the host or silently installs
-or upgrades system packages.
+PowerShell 5.1 or newer, Docker Desktop with the WSL 2 engine, and Docker
+Compose v2. Git and GitHub authentication are not required on Windows. Neither
+installer requires Node.js on the host or silently installs or upgrades system
+packages.
 
 On Kitty, iTerm2, and WezTerm, the installer renders a tightly cropped installer
 variant containing only the original Barlas mark and wordmark. The canonical
