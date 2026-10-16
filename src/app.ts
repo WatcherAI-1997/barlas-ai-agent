@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { Readable, Transform } from "node:stream";
@@ -119,6 +119,14 @@ function mergeConversationMessages(history: ChatMessage[], incoming: ChatMessage
   }
   const newMessages = incoming.slice(overlap);
   return { modelMessages: [...boundedHistory, ...newMessages], newMessages };
+}
+
+function channelConversationId(channel: string, userId: string, chatId: string): string {
+  const bytes = createHash("sha256").update(`${channel}\0${userId}\0${chatId}`).digest().subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 const rememberBodySchema = z.object({
@@ -2299,17 +2307,31 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (dependencies.agentRuntime) {
       const telegramUserId = message.from?.id ?? message.chat.id;
       const userId = await dependencies.telegramLinks?.resolve(telegramUserId) ?? `telegram:${telegramUserId}`;
+      const conversationId = channelConversationId("telegram", userId, String(message.chat.id));
+      const existingConversation = await dependencies.database.getConversation(userId, conversationId);
+      const incomingMessages = [{ role: "user" as const, content: prompt }];
+      const conversation = mergeConversationMessages(
+        existingConversation?.messages.map(({ role, content }) => ({ role, content })) ?? [],
+        incomingMessages,
+      );
       const memories = await memory.recall(userId, prompt, 5);
       const memoryContext = memories.length > 0 ? [{
         role: "system" as const,
         content: ["Use these Barlas AI Agent user memories only when relevant:", ...memories.map((item) => `- [${item.category}] ${item.content}`)].join("\n"),
       }] : [];
       const languageContext = await preferredLanguageContext(userId, dependencies.authService);
+      const identityContext = agentIdentityContext(dependencies.agentIdentity);
+      const persistedImmediately = dependencies.database.appendConversationMessages
+        ? await dependencies.database.appendConversationMessages({
+            userId,
+            conversationId,
+            messages: conversation.newMessages,
+          }).then(() => true)
+        : false;
       const run = await dependencies.agentRuntime.enqueue({
-        userId,
-        conversationId: randomUUID(),
-        messages: [...languageContext, ...memoryContext, { role: "user", content: prompt }],
-        conversationMessages: [{ role: "user", content: prompt }],
+        userId, conversationId,
+        messages: [...identityContext, ...languageContext, ...memoryContext, ...conversation.modelMessages],
+        conversationMessages: persistedImmediately ? [] : conversation.newMessages,
         delivery: { channel: "telegram", chatId: message.chat.id, ...(voiceCommand.requested ? { voice: true } : {}) },
         taskClass: "fast",
         maxSteps: 8,

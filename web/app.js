@@ -4,7 +4,7 @@ if (fragmentToken) {
   sessionStorage.setItem("barlasToken", fragmentToken);
   history.replaceState(null, "", `${location.pathname}${location.search}`);
 }
-const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [], agents: [], voiceRecorder: null, voiceStream: null, voiceChunks: [], voiceTimer: null, microphoneRecorder: null, microphoneStream: null, microphoneChunks: [], microphoneTimer: null, microphoneUrl: null };
+const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, conversationUpdatedAt: null, manualNewConversation: false, projectId: null, languages: [], skills: [], projects: [], agents: [], voiceRecorder: null, voiceStream: null, voiceChunks: [], voiceTimer: null, microphoneRecorder: null, microphoneStream: null, microphoneChunks: [], microphoneTimer: null, microphoneUrl: null };
 const $ = (selector) => document.querySelector(selector);
 const panelTitles = {
   overview: "Обзор", chat: "Чат", approvals: "Подтверждения", runs: "Запуски",
@@ -226,6 +226,7 @@ $("#chat-form").addEventListener("submit", async (event) => {
     const agentId = $("#chat-agent").value || undefined;
     const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, agentId, ...(!agentId ? { projectId: $("#chat-project").value || undefined, taskClass: $("#task-class").value } : {}), messages: [{ role: "user", content: text }], ...skill }) });
     state.conversationId = data.conversationId;
+    state.manualNewConversation = false;
     const statusNode = addMessage("agent", data.message.content);
     if (data.status === "queued" && data.runId) void watchAgentRun(data.runId, statusNode);
     else await loadConversations();
@@ -695,13 +696,15 @@ async function restoreArtifact(versionId) {
   $("#project-status").textContent = "Версия восстановлена."; await openProject(state.projectId);
 }
 
-function newConversation() {
+function newConversation(manual = false) {
   state.conversationId = null;
+  state.conversationUpdatedAt = null;
+  state.manualNewConversation = manual;
   $("#messages").replaceChildren();
   addMessage("agent", "Готов к работе. Чем займёмся?");
 }
 
-$("#new-chat").addEventListener("click", newConversation);
+$("#new-chat").addEventListener("click", () => newConversation(true));
 
 async function loadConversations() {
   const root = $("#conversations");
@@ -716,15 +719,35 @@ async function loadConversations() {
     button.addEventListener("click", () => openConversation(item.id));
     return button;
   }));
+  return items;
 }
 
 async function openConversation(id) {
   const data = await api(`/v1/conversations/${id}?userId=${encodeURIComponent(state.account.id)}`);
   state.conversationId = id;
+  state.conversationUpdatedAt = data.conversation.updatedAt;
+  state.manualNewConversation = false;
   document.querySelectorAll(".conversation").forEach((button) => button.classList.toggle("active", button.dataset.conversationId === id));
   $("#messages").replaceChildren();
   data.conversation.messages.filter((item) => item.role !== "system").forEach((item) => addMessage(item.role === "assistant" ? "agent" : "user", item.content));
 }
+
+let conversationSyncing = false;
+async function syncConversations() {
+  if (conversationSyncing || !state.account || $("#panel-chat").classList.contains("hidden")) return;
+  conversationSyncing = true;
+  try {
+    const items = await loadConversations();
+    const current = items.find((item) => item.id === state.conversationId);
+    if (current && current.updatedAt !== state.conversationUpdatedAt) await openConversation(current.id);
+    else if (!state.conversationId && !state.manualNewConversation && items[0]) await openConversation(items[0].id);
+  } catch (error) {
+    console.debug("Conversation sync delayed", error);
+  } finally {
+    conversationSyncing = false;
+  }
+}
+setInterval(() => { void syncConversations(); }, 1_500);
 
 function stat(label, value) {
   const node = document.createElement("div"); node.className = "stat";

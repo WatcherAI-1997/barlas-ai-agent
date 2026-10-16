@@ -51,6 +51,8 @@ describe("Barlas web interface", () => {
       "5_000",
       'consent: "true"',
       '"ArrowUp", "ArrowDown", "Home", "End"',
+      "async function syncConversations()",
+      "setInterval(() => { void syncConversations(); }, 1_500)",
     ]) expect(script).toContain(marker);
     expect(script).not.toContain("alert(");
   });

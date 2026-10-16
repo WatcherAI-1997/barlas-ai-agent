@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolve } from "node:path";
-import { createHmac, generateKeyPairSync } from "node:crypto";
+import { createHmac, generateKeyPairSync, randomUUID } from "node:crypto";
 
 import { buildApp } from "../src/app.js";
 import type { ModelProvider } from "../src/core/models.js";
@@ -771,6 +771,60 @@ describe("Barlas AI Agent API", () => {
     }));
     expect(sendMessage).not.toHaveBeenCalled();
     expect(sendChatAction).toHaveBeenCalledWith(42, "typing");
+    await app.close();
+  });
+
+  it("keeps a linked Telegram chat in one visible conversation and stores inbound text immediately", async () => {
+    const deps = dependencies();
+    const accountId = "00000000-0000-4000-8000-000000000077";
+    const appendConversationMessages = vi.fn(async () => undefined);
+    const getConversation = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "unused",
+        title: "First",
+        messageCount: 1,
+        lastMessage: "First",
+        createdAt: "2026-10-16T00:00:00.000Z",
+        updatedAt: "2026-10-16T00:00:00.000Z",
+        messages: [{ id: "m1", role: "user", content: "First", createdAt: "2026-10-16T00:00:00.000Z" }],
+      });
+    const enqueue = vi.fn(async (input) => ({
+      id: randomUUID(), ...input, status: "queued" as const,
+      scheduledFor: "2026-10-16T00:00:00.000Z", attempts: 0, maxAttempts: 3,
+      createdAt: "2026-10-16T00:00:00.000Z", updatedAt: "2026-10-16T00:00:00.000Z",
+    }));
+    const app = await buildApp({
+      apiToken,
+      ...deps,
+      database: { ...deps.database, getConversation, appendConversationMessages },
+      agentRuntime: { start: vi.fn(), enqueue, resume: vi.fn(), resumeByApproval: vi.fn(), get: vi.fn(), list: vi.fn(), events: vi.fn(), cancel: vi.fn() },
+      telegramLinks: {
+        resolve: vi.fn(async () => accountId), createCode: vi.fn(), claim: vi.fn(), get: vi.fn(), unlink: vi.fn(),
+      },
+      telegram: { webhookSecret: "t".repeat(32), client: { sendMessage: vi.fn(async () => undefined) } },
+    });
+    const send = (updateId: number, text: string) => app.inject({
+      method: "POST", url: "/channels/telegram/webhook",
+      headers: { "x-telegram-bot-api-secret-token": "t".repeat(32) },
+      payload: { update_id: updateId, message: { message_id: updateId, text, chat: { id: 42 }, from: { id: 7 } } },
+    });
+
+    expect((await send(10, "First")).statusCode).toBe(200);
+    expect((await send(11, "Second")).statusCode).toBe(200);
+    const first = enqueue.mock.calls[0]![0];
+    const second = enqueue.mock.calls[1]![0];
+    expect(first.conversationId).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(second.conversationId).toBe(first.conversationId);
+    expect(second.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "user", content: "First" }),
+      expect.objectContaining({ role: "user", content: "Second" }),
+    ]));
+    expect(appendConversationMessages).toHaveBeenCalledTimes(2);
+    expect(appendConversationMessages).toHaveBeenLastCalledWith(expect.objectContaining({
+      userId: accountId, conversationId: first.conversationId,
+      messages: [{ role: "user", content: "Second" }],
+    }));
     await app.close();
   });
 

@@ -610,6 +610,46 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     }
   }
 
+  async appendConversationMessages(input: {
+    conversationId: string;
+    userId: string;
+    messages: AgentMessage[];
+  }): Promise<void> {
+    if (input.messages.length === 0) return;
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(
+        `insert into conversations (id, user_id, title)
+         values ($1, $2, $3)
+         on conflict (id) do update set updated_at = now()
+           where conversations.user_id = excluded.user_id`,
+        [
+          input.conversationId,
+          input.userId,
+          input.messages.find((message) => message.role === "user")?.content.slice(0, 120) ?? "New conversation",
+        ],
+      );
+      const ownership = await client.query(
+        `select 1 from conversations where id = $1 and user_id = $2`,
+        [input.conversationId, input.userId],
+      );
+      if (ownership.rowCount !== 1) throw new Error("Conversation belongs to another user");
+      for (const message of input.messages) {
+        await client.query(
+          `insert into messages (conversation_id, role, content) values ($1, $2, $3)`,
+          [input.conversationId, message.role, message.content],
+        );
+      }
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async close(): Promise<void> {
     await this.pool.end();
   }

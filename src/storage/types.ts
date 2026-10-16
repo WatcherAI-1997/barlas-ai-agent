@@ -75,6 +75,11 @@ export interface AgentStore {
     messages: AgentMessage[];
     result: GenerateResult;
   }): Promise<void>;
+  appendConversationMessages?(input: {
+    conversationId: string;
+    userId: string;
+    messages: AgentMessage[];
+  }): Promise<void>;
   remember(input: {
     userId: string;
     content: string;
