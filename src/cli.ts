@@ -1,6 +1,19 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { generateKeyPairSync } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { z } from "zod";
+
+import {
+  createSignedSkillPackage,
+  parseSignedSkillPackage,
+  parseSkillPackageTemplate,
+  skillEvaluationCasesSchema,
+  skillPublisherFingerprint,
+  verifySkillPackage,
+} from "./skills/package.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -110,6 +123,107 @@ async function catalog(ctx: CliContext, kind?: string): Promise<void> {
 async function skills(ctx: CliContext): Promise<void> {
   const result = await ctx.api.request<{ skills: JsonObject[] }>("/v1/skills");
   output.write(`${renderRows(result.skills, ["id", "version", "name", "active", "allowedTools"])}\n`);
+}
+
+function option(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : undefined;
+}
+
+async function verifySkillPackageFile(path: string): Promise<void> {
+  if (!path) throw new Error("Укажите путь к подписанному JSON-пакету навыка");
+  const skillPackage = parseSignedSkillPackage(await readFile(resolve(path), "utf8"));
+  const fingerprint = verifySkillPackage(skillPackage);
+  output.write([
+    `Подпись верна: ${skillPackage.skill.id}@${skillPackage.skill.version}`,
+    `Издатель: ${skillPackage.publisher.name}`,
+    `Отпечаток: ${fingerprint}`,
+    "Перед установкой сверьте отпечаток с независимым источником издателя.",
+  ].join("\n") + "\n");
+}
+
+async function createSkillSigningKey(prefix: string): Promise<void> {
+  if (!prefix) throw new Error("Укажите префикс файлов ключа");
+  const privatePath = resolve(`${prefix}.private.pem`);
+  const publicPath = resolve(`${prefix}.public.pem`);
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519", {
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+  await writeFile(privatePath, privateKey, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  try {
+    await writeFile(publicPath, publicKey, { encoding: "utf8", mode: 0o644, flag: "wx" });
+  } catch (error) {
+    // Keep the private key safe and surface the collision instead of overwriting either file.
+    throw error;
+  }
+  output.write(`Ключ создан: ${privatePath}\nПубличный ключ: ${publicPath}\nОтпечаток: ${skillPublisherFingerprint(publicKey)}\n`);
+}
+
+async function signSkillPackageFile(templatePath: string, keyPath: string, outputPath: string): Promise<void> {
+  if (!templatePath || !keyPath || !outputPath) throw new Error("Использование: skills sign TEMPLATE PRIVATE_KEY OUTPUT");
+  const template = parseSkillPackageTemplate(await readFile(resolve(templatePath), "utf8"));
+  const privateKey = await readFile(resolve(keyPath), "utf8");
+  const skillPackage = createSignedSkillPackage(template, privateKey);
+  await writeFile(resolve(outputPath), `${JSON.stringify(skillPackage, null, 2)}\n`, { encoding: "utf8", mode: 0o644, flag: "wx" });
+  output.write(`Подписан ${skillPackage.skill.id}@${skillPackage.skill.version}\nОтпечаток: ${skillPackage.publisher.fingerprint}\n`);
+}
+
+async function installSkillPackage(ctx: CliContext, path: string, trustedFingerprint: string): Promise<void> {
+  if (!path) throw new Error("Укажите путь к JSON-пакету навыка");
+  if (!trustedFingerprint) throw new Error("Сначала сверьте издателя, затем укажите --trust sha256:<отпечаток>");
+  const packagePath = resolve(path);
+  const skillPackage = parseSignedSkillPackage(await readFile(packagePath, "utf8"));
+  const fingerprint = verifySkillPackage(skillPackage, trustedFingerprint);
+  const { skill } = await ctx.api.request<{ skill: JsonObject }>("/v1/skills/packages", {
+    method: "POST",
+    body: JSON.stringify({ package: skillPackage, trustedFingerprint: fingerprint }),
+  });
+  output.write(`Установлен кандидат ${value(skill.id)}@${value(skill.version)} (не активен).\n`);
+  if (!skillPackage.evaluation) {
+    output.write("В пакете нет evaluation-кейсов. Добавьте их и выполните skills evaluate перед активацией.\n");
+    return;
+  }
+  const id = skillPackage.skill.id;
+  const version = skillPackage.skill.version;
+  const evaluated = await ctx.api.request<{ evaluation: JsonObject }>(
+    `/v1/skills/${encodeURIComponent(id)}/${encodeURIComponent(version)}/evaluate`,
+    { method: "POST", body: JSON.stringify(skillPackage.evaluation) },
+  );
+  const passed = evaluated.evaluation.passed === true;
+  output.write(`Evaluation: ${passed ? "пройден" : "не пройден"} (${value(evaluated.evaluation.passedCases)}/${value(evaluated.evaluation.totalCases)}).\n`);
+  if (!passed) {
+    output.write("Навык оставлен неактивным. Исправьте пакет и выпустите новую версию.\n");
+    return;
+  }
+  await activateSkill(ctx, id, version);
+}
+
+async function evaluateSkill(ctx: CliContext, id: string, version: string, path: string): Promise<void> {
+  if (!id || !version || !path) throw new Error("Использование: skills evaluate ID VERSION cases.json");
+  const raw = await readFile(resolve(path), "utf8");
+  if (Buffer.byteLength(raw, "utf8") > 128_000) throw new Error("Evaluation file exceeds 128 KB");
+  let valueFromFile: unknown;
+  try { valueFromFile = JSON.parse(raw) as unknown; } catch { throw new Error("Evaluation file is not valid JSON"); }
+  const source = typeof valueFromFile === "object" && valueFromFile !== null && "evaluation" in valueFromFile
+    ? (valueFromFile as { evaluation: unknown }).evaluation
+    : valueFromFile;
+  const parsed = skillEvaluationCasesSchema.safeParse(source);
+  if (!parsed.success) throw new Error(`Invalid evaluation cases: ${z.prettifyError(parsed.error)}`);
+  const result = await ctx.api.request<{ evaluation: JsonObject }>(
+    `/v1/skills/${encodeURIComponent(id)}/${encodeURIComponent(version)}/evaluate`,
+    { method: "POST", body: JSON.stringify(parsed.data) },
+  );
+  output.write(`${JSON.stringify(result.evaluation, null, 2)}\n`);
+}
+
+async function activateSkill(ctx: CliContext, id: string, version: string): Promise<void> {
+  if (!id || !version) throw new Error("Использование: skills activate ID VERSION");
+  const result = await ctx.api.request<{ skill: JsonObject }>(
+    `/v1/skills/${encodeURIComponent(id)}/${encodeURIComponent(version)}/activate`,
+    { method: "POST" },
+  );
+  output.write(`Активен ${value(result.skill.id)}@${value(result.skill.version)}.\n`);
 }
 
 async function tools(ctx: CliContext): Promise<void> {
@@ -276,6 +390,13 @@ function help(): void {
   memory search <запрос>            поиск памяти
   sessions | transcripts            диалоги
   skills                            установленные навыки
+  skills verify <package.json>      проверить подпись и отпечаток издателя
+  skills install <json> --trust FP  установить, проверить и активировать пакет
+  skills keygen <prefix>            создать Ed25519-ключ издателя
+  skills sign <tpl> <key> <output>  подписать пакет навыка
+  skills evaluate <id> <ver> <json> прогнать acceptance cases
+  skills activate <id> <version>    активировать прошедшую проверку версию
+  skills rollback <id> <version>    откатить на проверенную версию
   plugins | extensions              расширения
   models                            провайдеры моделей
   channels                          каналы связи
@@ -364,6 +485,9 @@ async function tui(ctx: CliContext): Promise<void> {
 export async function main(args = process.argv.slice(2)): Promise<void> {
   const command = args[0] ?? (process.stdin.isTTY ? "tui" : "help");
   if (["help", "--help", "-h"].includes(command)) { help(); return; }
+  if (command === "skills" && args[1] === "verify") return verifySkillPackageFile(args[2] ?? "");
+  if (command === "skills" && args[1] === "keygen") return createSkillSigningKey(args[2] ?? "");
+  if (command === "skills" && args[1] === "sign") return signSkillPackageFile(args[2] ?? "", args[3] ?? "", args[4] ?? "");
   const ctx = await context();
   if (["tui", "chat", "terminal"].includes(command)) return tui(ctx);
   if (["ask", "agent"].includes(command)) {
@@ -376,6 +500,11 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (["plugins"].includes(command)) return catalog(ctx);
   if (command === "models") return catalog(ctx, "provider");
   if (command === "channels") return catalog(ctx, "channel");
+  if (command === "skills" && args[1] === "install") {
+    return installSkillPackage(ctx, args[2] ?? "", option(args, "--trust") ?? "");
+  }
+  if (command === "skills" && args[1] === "evaluate") return evaluateSkill(ctx, args[2] ?? "", args[3] ?? "", args[4] ?? "");
+  if (command === "skills" && ["activate", "rollback"].includes(args[1] ?? "")) return activateSkill(ctx, args[2] ?? "", args[3] ?? "");
   if (command === "skills") return skills(ctx);
   if (command === "tools") return tools(ctx);
   if (["sessions", "transcripts"].includes(command)) return sessions(ctx);

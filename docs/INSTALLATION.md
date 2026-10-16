@@ -270,6 +270,18 @@ container and reads authentication from the protected container environment;
 the gateway token is never placed on the command line. It supports interactive
 chat, status, autonomous runs, approvals, jobs, projects, and schedules.
 
+Third-party skill packages use the signed lifecycle:
+
+```bash
+./barlas skills verify publisher-skill.json
+./barlas skills install publisher-skill.json --trust sha256:VERIFIED_FINGERPRINT
+./barlas skills evaluate SKILL_ID VERSION acceptance-cases.json
+./barlas skills rollback SKILL_ID PREVIOUS_VERSION
+```
+
+Never trust a fingerprint copied only from the package itself. Compare it with
+the publisher's independently authenticated release page or direct contact.
+
 ## After installation
 
 Open the printed web address, sign in as the first owner, verify the selected

@@ -35,3 +35,12 @@ from a fixed magic-byte allowlist rather than filename or browser MIME alone;
 SVG and unknown formats are rejected. Any vision, PDF, transcription, or speech
 model call is an external action and requires explicit approval before bytes
 are transmitted to the configured provider.
+
+Third-party skill packages are declarative data, never executable installers.
+The default CLI accepts only Ed25519-signed packages and requires the owner to
+provide the exact SHA-256 publisher-key fingerprint after verifying it through
+an independent channel. The API repeats signature, fingerprint, schema, size,
+and tool-allowlist validation and records publisher provenance in the audit
+log. Installation creates an inactive candidate; activation requires a passing
+bounded evaluation, and a skill cannot enlarge the runtime tool registry.
+Private publisher keys remain local and are created with mode `0600`.

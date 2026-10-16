@@ -157,6 +157,17 @@ image: the installer does not download or execute third-party scripts at
 runtime. Skills that need an optional connector simply expose those actions
 when the connector is configured.
 
+Third-party skills use signed JSON packages instead of installer scripts. An
+owner first runs `barlas skills verify package.json`, compares the displayed
+Ed25519 SHA-256 fingerprint with an independent publisher source, and then
+installs with `barlas skills install package.json --trust sha256:...`. The
+signature covers the publisher identity, complete skill instructions, tool
+allowlist, version, and acceptance cases. A candidate remains inactive until
+its bounded, tool-free evaluation passes; every later activation or rollback
+must target an already evaluated exact version. Publisher keys can be created
+with `barlas skills keygen NAME`, and package templates signed with
+`barlas skills sign TEMPLATE PRIVATE_KEY OUTPUT`.
+
 The extension catalog declares each built-in channel, connector, provider,
 runtime, skill source, and device bridge together with its capabilities, risk
 classes, and required setting names. It never returns secret values.

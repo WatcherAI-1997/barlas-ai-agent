@@ -41,6 +41,7 @@ import { agentJobSchema } from "./jobs/agent-handler.js";
 import { workflowJobSchema } from "./jobs/workflow-handler.js";
 import type { SkillRegistry } from "./skills/registry.js";
 import type { SkillManager } from "./skills/manager.js";
+import { parseSignedSkillPackageValue, verifySkillPackage } from "./skills/package.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
 import { MAX_MEDIA_BYTES, type MediaService } from "./tools/media.js";
@@ -278,6 +279,10 @@ const skillEvaluationSchema = z.object({
     requiredStrings: z.array(z.string().min(1).max(500)).min(1).max(10),
     forbiddenStrings: z.array(z.string().min(1).max(500)).max(10).default([]),
   }).strict()).min(1).max(5),
+}).strict();
+const signedSkillInstallSchema = z.object({
+  package: z.unknown(),
+  trustedFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/u),
 }).strict();
 const scheduleParamsSchema = z.object({ id: z.string().uuid() });
 const scheduleCreateSchema = z.object({
@@ -1476,6 +1481,39 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       details: { allowedTools: skill.allowedTools },
     });
     return reply.code(201).send({ skill });
+  });
+
+  app.post("/v1/skills/packages", async (request, reply) => {
+    if (!dependencies.skillManager) return reply.notFound();
+    const principal = requireOwner(request);
+    const body = signedSkillInstallSchema.safeParse(request.body);
+    if (!body.success) return reply.badRequest("Invalid signed skill package request");
+    let skillPackage;
+    let fingerprint: string;
+    try {
+      skillPackage = parseSignedSkillPackageValue(body.data.package);
+      fingerprint = verifySkillPackage(skillPackage, body.data.trustedFingerprint);
+    } catch (error) {
+      return reply.badRequest(error instanceof Error ? error.message : "Invalid signed skill package");
+    }
+    const skill = await dependencies.skillManager.install(skillPackage.skill, principal.account?.id ?? null);
+    await dependencies.database.appendAudit({
+      userId: principal.userId,
+      eventType: "skill.package.installed",
+      resourceType: "skill",
+      resourceId: `${skill.id}@${skill.version}`,
+      details: {
+        allowedTools: skill.allowedTools,
+        publisher: skillPackage.publisher.name,
+        publisherFingerprint: fingerprint,
+        signed: true,
+      },
+    });
+    return reply.code(201).send({
+      skill,
+      publisher: { name: skillPackage.publisher.name, fingerprint },
+      evaluation: skillPackage.evaluation ?? null,
+    });
   });
 
   app.post("/v1/skills/:id/:version/evaluate", async (request, reply) => {

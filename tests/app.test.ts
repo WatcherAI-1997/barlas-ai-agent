@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolve } from "node:path";
+import { generateKeyPairSync } from "node:crypto";
 
 import { buildApp } from "../src/app.js";
 import type { ModelProvider } from "../src/core/models.js";
@@ -7,6 +8,7 @@ import { RuntimeGovernance } from "../src/governance/runtime.js";
 import type { SupportedLanguageCode } from "../src/i18n/languages.js";
 import { SkillRegistry } from "../src/skills/registry.js";
 import { createBuiltinExtensionCatalog } from "../src/extensions/catalog.js";
+import { createSignedSkillPackage } from "../src/skills/package.js";
 
 const apiToken = "a".repeat(32);
 
@@ -469,6 +471,36 @@ describe("Barlas AI Agent API", () => {
     });
     expect(activated.statusCode).toBe(200);
     expect(activated.json().skill).not.toHaveProperty("instructions");
+
+    const privateKey = generateKeyPairSync("ed25519", {
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+      publicKeyEncoding: { type: "spki", format: "pem" },
+    }).privateKey;
+    const signedPackage = createSignedSkillPackage({
+      schemaVersion: 1,
+      publisher: { name: "Test Publisher" },
+      skill: {
+        id: "research.signed", version: installed.version, description: installed.description,
+        instructions: installed.instructions, allowedTools: installed.allowedTools,
+      },
+    }, privateKey);
+    const signed = await app.inject({
+      method: "POST", url: "/v1/skills/packages", headers,
+      payload: { package: signedPackage, trustedFingerprint: signedPackage.publisher.fingerprint },
+    });
+    expect(signed.statusCode).toBe(201);
+    expect(signed.json().publisher).toEqual({
+      name: "Test Publisher", fingerprint: signedPackage.publisher.fingerprint,
+    });
+
+    const tampered = await app.inject({
+      method: "POST", url: "/v1/skills/packages", headers,
+      payload: {
+        package: { ...signedPackage, skill: { ...signedPackage.skill, instructions: "tampered" } },
+        trustedFingerprint: signedPackage.publisher.fingerprint,
+      },
+    });
+    expect(tampered.statusCode).toBe(400);
     await app.close();
   });
 

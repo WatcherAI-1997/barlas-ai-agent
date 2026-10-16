@@ -53,6 +53,7 @@ server-side; each plaintext token is shown only once.
 - `POST /nodes/commands/:id/result` — acknowledge success or failure. The initial protocol only accepts `notify` commands.
 - `GET /v1/skills` — list installed skill IDs, versions, descriptions, activation state, and tool permissions.
 - `POST /v1/skills` — owner-only installation of an inactive candidate skill version.
+- `POST /v1/skills/packages` — owner-only installation of an Ed25519-signed package after exact publisher-fingerprint confirmation; signature and trust binding are rechecked server-side and written to audit metadata.
 - `POST /v1/skills/:id/:version/evaluate` — run 1–5 bounded, tool-free acceptance cases.
 - `POST /v1/skills/:id/:version/activate` — activate a custom version only after its latest evaluation passed.
 - `GET /v1/traces` — list recent execution trace events for one user.

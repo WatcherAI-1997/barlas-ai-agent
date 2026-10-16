@@ -26,7 +26,7 @@
   timezone-aware recurring cron schedules, idempotent dispatch, pause/resume,
   and web/Telegram delivery implemented)*
 - Isolated subagents and resumable workflows. *(bounded dependency workflows plus model-initiated delegation to up to three parallel, tool-free, non-recursive subagents implemented)*
-- Versioned skills with evaluation and rollback. *(persistent owner-installed candidates, bounded automated acceptance evaluation, activation gate, exact selection, tool-permission enforcement, and rollback implemented)*
+- Versioned skills with evaluation and rollback. *(persistent owner-installed candidates, Ed25519-signed third-party packages with explicit fingerprint trust, bounded automated acceptance evaluation, activation gate, exact selection, tool-permission enforcement, and rollback implemented)*
 - Approval queue and audit trail. *(foundation implemented)*
 - Multimodal image, document, and audio understanding. *(magic-byte-validated
   uploads, approval-gated image/PDF analysis, audio transcription, and MP3
@@ -47,7 +47,8 @@
   commit enforcement. *(implemented)*
 - Typed extension catalog with stable manifests, capability/risk metadata,
   configuration-state API, and CLI discovery. *(built-in catalog implemented;
-  signed third-party package lifecycle pending)*
+  signed third-party skill package verification, installation, evaluation,
+  activation, and rollback implemented; executable plugin runtimes remain pending)*
 - Desktop/mobile node protocol foundation with one-time pairing, hashed and
   independently revocable device tokens, heartbeat/capability discovery, and
   approval-gated notification delivery. *(implemented; signed native clients,
