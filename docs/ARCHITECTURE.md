@@ -43,6 +43,13 @@ autonomy.
   files with bounded input/output and no macros or active content execution.
 - The terminal surface has no arbitrary command or shell entry point. It exposes
   only bounded read-only file inspection operations.
+- Approved code execution is delegated to a separate read-only container over
+  an authenticated Unix socket. It has no network namespace, Docker socket,
+  published port, host mount, or shell expansion; only the user's workspace is
+  shared, with process, memory, CPU, time, concurrency, and output limits. Each
+  invocation receives a fresh high-numbered Linux UID; the runner restores the
+  workspace to the API UID afterward, so code cannot read another user's
+  directory or the root-owned runner token.
 - Per-user UTC-day counters and execution traces live in the isolated PostgreSQL
   database. Quota consumption is atomic under concurrent requests.
 - Human authentication uses scrypt password hashes and opaque, expiring,

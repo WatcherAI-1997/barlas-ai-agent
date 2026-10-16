@@ -8,6 +8,7 @@ import { SafeWebReader } from "./safe-web.js";
 import { DocumentReader, DocumentWriter } from "./documents.js";
 import type { ManagedBrowser } from "./managed-browser.js";
 import type { SubagentCoordinator } from "../core/subagents.js";
+import type { CodeSandboxClient } from "./code-sandbox.js";
 import type { GitHubConnector } from "../connectors/github.js";
 import type { GoogleConnector } from "../connectors/google.js";
 
@@ -18,6 +19,7 @@ export function createBuiltinToolRegistry(options: {
   googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
   managedBrowser?: Pick<ManagedBrowser, "run">;
   subagentCoordinator?: Pick<SubagentCoordinator, "delegate">;
+  codeSandbox?: Pick<CodeSandboxClient, "run">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
@@ -164,6 +166,29 @@ export function createBuiltinToolRegistry(options: {
           objective: string;
           taskClass: "fast" | "deep" | "private";
           tasks: Array<{ name: string; instruction: string; context?: string }>;
+        }),
+      }),
+    });
+  }
+
+  if (options.codeSandbox) {
+    registry.register({
+      name: "code.run",
+      description: "Run Python, Node.js, Git, or npm inside the user's isolated workspace sandbox. The sandbox has no network, host mounts, Docker socket, or shell expansion.",
+      risk: "write",
+      inputSchema: z.object({
+        command: z.enum(["python", "node", "git", "npm"]),
+        args: z.array(z.string().max(500)).max(64).default([]),
+        cwd: z.string().min(1).max(1_000).default("."),
+        timeoutSeconds: z.number().int().min(1).max(60).default(30),
+      }).strict(),
+      execute: async (input, context) => options.codeSandbox!.run({
+        userId: context.userId,
+        ...(input as {
+          command: "python" | "node" | "git" | "npm";
+          args: string[];
+          cwd: string;
+          timeoutSeconds: number;
         }),
       }),
     });

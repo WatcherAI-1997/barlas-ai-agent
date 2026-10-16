@@ -26,3 +26,18 @@ describe("subagent tool registration", () => {
     expect(registry.list()).toContainEqual(expect.objectContaining({ name: "agent.delegate", risk: "read" }));
   });
 });
+
+describe("sandbox tool registration", () => {
+  it("requires approval and is absent unless the isolated runner is configured", () => {
+    expect(createBuiltinToolRegistry().list().some((tool) => tool.name === "code.run")).toBe(false);
+    const registry = createBuiltinToolRegistry({
+      codeSandbox: {
+        run: async () => ({
+          command: "node", exitCode: 0, signal: null, stdout: "", stderr: "",
+          timedOut: false, outputTruncated: false, durationMs: 1,
+        }),
+      },
+    });
+    expect(registry.list()).toContainEqual(expect.objectContaining({ name: "code.run", risk: "write" }));
+  });
+});

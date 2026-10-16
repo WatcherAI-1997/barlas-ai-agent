@@ -32,6 +32,14 @@ const configSchema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(1).optional(),
   ),
+  SANDBOX_SOCKET_PATH: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(1).optional(),
+  ),
+  SANDBOX_SHARED_TOKEN: z.preprocess(
+    (value) => value === "" ? undefined : value,
+    z.string().min(32).optional(),
+  ),
   DAILY_CHAT_QUOTA: z.coerce.number().int().min(1).max(100_000).default(500),
   DAILY_TOOL_QUOTA: z.coerce.number().int().min(1).max(100_000).default(1_000),
   DAILY_JOB_QUOTA: z.coerce.number().int().min(1).max(10_000).default(100),
@@ -85,6 +93,13 @@ const configSchema = z.object({
     context.addIssue({
       code: "custom",
       message: "OWNER_EMAIL and OWNER_PASSWORD must be configured together",
+    });
+  }
+
+  if (Boolean(config.SANDBOX_SOCKET_PATH) !== Boolean(config.SANDBOX_SHARED_TOKEN)) {
+    context.addIssue({
+      code: "custom",
+      message: "SANDBOX_SOCKET_PATH and SANDBOX_SHARED_TOKEN must be configured together",
     });
   }
 

@@ -253,6 +253,16 @@ tools, cannot recursively delegate, cannot claim external actions, and each
 response is capped at 2,048 output tokens and 30,000 characters. Usage is
 aggregated and returned to the parent with the findings.
 
+When the optional sandbox is configured, `code.run` executes only `python`,
+`node`, `git`, or `npm` with an argument array and no shell interpolation. Every
+call is a write-risk action and therefore pauses for explicit approval. The
+runner communicates through an authenticated Unix socket, has `network_mode:
+none`, no Docker socket or host directories, and sees only the hashed workspace
+of the requesting user. A call is limited to 60 seconds, 64 arguments, 100 KB
+per output stream, two concurrent processes, and the container CPU/RAM/PID
+limits. The production sandbox is enabled only when both
+`SANDBOX_SOCKET_PATH` and `SANDBOX_SHARED_TOKEN` are configured.
+
 Queued runs are leased with PostgreSQL `FOR UPDATE SKIP LOCKED`. A worker crash
 leaves a recoverable lease; after its timeout another worker may claim the run.
 Retries are bounded and use exponential delay. The original visible messages

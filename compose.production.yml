@@ -25,6 +25,8 @@ services:
         condition: service_completed_successfully
       browser:
         condition: service_healthy
+      sandbox:
+        condition: service_healthy
     networks:
       - frontend
       - backend
@@ -33,6 +35,9 @@ services:
       - /tmp:size=64m,noexec,nosuid,nodev
     volumes:
       - workspaces:/var/lib/barlas/workspaces
+      - sandbox_socket:/run/barlas-sandbox
+    group_add:
+      - "2000"
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -81,6 +86,52 @@ services:
         limits:
           memory: 2G
           cpus: "2.0"
+
+  sandbox:
+    build:
+      context: .
+      dockerfile: deploy/sandbox/Dockerfile
+    image: barlas-ai-agent-sandbox:${BARLAS_IMAGE_TAG:-production}
+    restart: unless-stopped
+    init: true
+    network_mode: none
+    env_file:
+      - path: ${BARLAS_ENV_FILE:-deploy/production.env}
+        required: true
+    environment:
+      SANDBOX_SOCKET_PATH: /run/barlas-sandbox/sandbox.sock
+      SANDBOX_SOCKET_GID: 2000
+      WORKSPACE_ROOT: /workspace
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid,nodev
+    volumes:
+      - workspaces:/workspace
+      - sandbox_socket:/run/barlas-sandbox
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - SETGID
+      - SETUID
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get({socketPath:'/run/barlas-sandbox/sandbox.sock',path:'/health'},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+          pids: 128
 
   database:
     image: postgres:17-alpine
@@ -194,3 +245,5 @@ volumes:
     name: barlas-ai-agent-production-caddy-data
   caddy_config:
     name: barlas-ai-agent-production-caddy-config
+  sandbox_socket:
+    name: barlas-ai-agent-production-sandbox-socket

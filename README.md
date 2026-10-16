@@ -46,7 +46,7 @@ recovery, cancellation, an asynchronous lease worker, live progress, Telegram
 delivery, approval buttons, and a content-safe step journal. It also includes optional SearXNG
 web search, a no-shell read-only terminal inspector,
 an isolated approval-gated JavaScript browser, PDF/DOCX extraction, Unicode
-DOCX creation,
+DOCX creation, and an approval-gated offline Python/Node/Git/npm sandbox,
 atomic per-user quotas, execution traces, secure owner/user accounts, and a
 branded web cabinet with conversation history, approvals, job controls, and
 token/cost monitoring. First-login onboarding and account settings provide a

@@ -24,6 +24,9 @@ services:
     read_only: true
     volumes:
       - barlas-ai-agent-workspaces:/var/lib/barlas/workspaces
+      - barlas-ai-agent-sandbox-socket:/run/barlas-sandbox
+    group_add:
+      - "2000"
     tmpfs:
       - /tmp:size=64m,noexec,nosuid
     security_opt:
@@ -81,6 +84,47 @@ services:
       retries: 10
       start_period: 10s
 
+  sandbox:
+    build:
+      context: .
+      dockerfile: deploy/sandbox/Dockerfile
+    image: barlas-ai-agent-sandbox:development
+    profiles: ["sandbox"]
+    restart: unless-stopped
+    init: true
+    network_mode: none
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SANDBOX_SOCKET_PATH: /run/barlas-sandbox/sandbox.sock
+      SANDBOX_SOCKET_GID: 2000
+      WORKSPACE_ROOT: /workspace
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid,nodev
+    volumes:
+      - barlas-ai-agent-workspaces:/workspace
+      - barlas-ai-agent-sandbox-socket:/run/barlas-sandbox
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - SETGID
+      - SETUID
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get({socketPath:'/run/barlas-sandbox/sandbox.sock',path:'/health'},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
 networks:
   barlas-ai-agent:
     name: barlas-ai-agent-net
@@ -92,3 +136,5 @@ volumes:
     name: barlas-ai-agent-db
   barlas-ai-agent-workspaces:
     name: barlas-ai-agent-workspaces
+  barlas-ai-agent-sandbox-socket:
+    name: barlas-ai-agent-sandbox-socket

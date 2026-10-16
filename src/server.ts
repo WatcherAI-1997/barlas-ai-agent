@@ -24,6 +24,7 @@ import { SkillManager } from "./skills/manager.js";
 import { createBuiltinToolRegistry } from "./tools/builtins.js";
 import { ToolExecutor } from "./tools/executor.js";
 import { ManagedBrowser } from "./tools/managed-browser.js";
+import { CodeSandboxClient } from "./tools/code-sandbox.js";
 
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
@@ -83,6 +84,9 @@ const memory = new SemanticMemory(
 const organizations = new OrganizationService(database);
 const skillRegistry = createBuiltinSkillRegistry();
 const subagentCoordinator = new SubagentCoordinator(modelProvider);
+const codeSandbox = config.SANDBOX_SOCKET_PATH && config.SANDBOX_SHARED_TOKEN
+  ? new CodeSandboxClient(config.SANDBOX_SOCKET_PATH, config.SANDBOX_SHARED_TOKEN)
+  : undefined;
 const governance = new RuntimeGovernance(database, {
   chat: config.DAILY_CHAT_QUOTA,
   tool: config.DAILY_TOOL_QUOTA,
@@ -93,6 +97,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   ...(config.SEARXNG_BASE_URL ? { searxngBaseUrl: config.SEARXNG_BASE_URL } : {}),
   ...(config.BROWSER_WS_ENDPOINT ? { managedBrowser: new ManagedBrowser(config.BROWSER_WS_ENDPOINT) } : {}),
   subagentCoordinator,
+  ...(codeSandbox ? { codeSandbox } : {}),
   ...(githubConnector ? { githubConnector } : {}),
   ...(googleConnector ? { googleConnector } : {}),
 }), database, governance);

@@ -48,6 +48,12 @@ Create and verify a backup first. Pull the reviewed commit, rebuild only this
 Compose project, inspect the one-shot migration result, health and logs, and
 run the smoke test. Database migrations are immutable and ordered.
 
+The production stack also builds an offline code sandbox. Generate a dedicated
+`SANDBOX_SHARED_TOKEN` with at least 32 random characters. The API and runner
+share only the `sandbox_socket` and Barlas workspace volumes; the runner uses
+`network_mode: none` and must never receive `/var/run/docker.sock` or a host
+filesystem mount.
+
 ## Rollback
 
 Keep the previous image tag and database backup. Application rollback is an

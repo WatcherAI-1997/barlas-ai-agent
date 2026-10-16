@@ -67,5 +67,24 @@ for (const required of [
 ]) {
   if (!subagents.includes(required)) throw new Error(`Subagent boundary is missing: ${required}`);
 }
+const sandboxServer = await readFile("deploy/sandbox/server.mjs", "utf8");
+for (const required of [
+  "shell: false",
+  "MAX_OUTPUT_BYTES = 100_000",
+  "MAX_CONCURRENT = 2",
+  "uid: runUid",
+  "killUidProcesses(runUid)",
+  "timeoutSeconds > 60",
+  "Path escapes the user workspace",
+]) {
+  if (!sandboxServer.includes(required)) throw new Error(`Code sandbox boundary is missing: ${required}`);
+}
+const sandboxService = productionCompose.match(/\n  sandbox:\n([\s\S]*?)\n  database:/u)?.[1] ?? "";
+for (const required of ["network_mode: none", "read_only: true", "pids_limit: 128", "cap_drop:", "cap_add:", "SANDBOX_SOCKET_GID: 2000"]) {
+  if (!sandboxService.includes(required)) throw new Error(`Production sandbox hardening is missing: ${required}`);
+}
+if (["docker.sock", "ports:", "privileged:", "SYS_ADMIN", "NET_ADMIN", "SYS_PTRACE"].some((value) => sandboxService.includes(value))) {
+  throw new Error("Production sandbox contains a prohibited privilege or exposure");
+}
 
 console.log(`Barlas AI Agent security baseline passed for ${textFiles.length} repository text files.`);
