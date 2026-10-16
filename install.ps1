@@ -19,8 +19,8 @@ function Stop-Install([string]$Message) { throw $Message }
 
 function Show-Banner {
     Write-Host ""
-    Write-Host "  O  O   Barlas" -ForegroundColor Red
-    Write-Host "    O     AI AGENT" -ForegroundColor Red
+    Write-Host "  ⬤  ⬤   Barlas" -ForegroundColor Red
+    Write-Host "    ⬤     AI AGENT" -ForegroundColor Red
     Write-Host ""
     Write-Host "Windows local installer - no domain required" -ForegroundColor DarkGray
     Write-Host ""

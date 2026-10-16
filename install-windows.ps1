@@ -19,8 +19,8 @@ function Write-Step([string]$Message) { Write-Host "-> $Message" -ForegroundColo
 function Write-Done([string]$Message) { Write-Host "[OK] $Message" -ForegroundColor Green }
 
 Write-Host ""
-Write-Host "  O  O   Barlas" -ForegroundColor Red
-Write-Host "    O     AI AGENT" -ForegroundColor Red
+Write-Host "  ⬤  ⬤   Barlas" -ForegroundColor Red
+Write-Host "    ⬤     AI AGENT" -ForegroundColor Red
 Write-Host ""
 Write-Host "One-command Windows installer" -ForegroundColor DarkGray
 Write-Host ""

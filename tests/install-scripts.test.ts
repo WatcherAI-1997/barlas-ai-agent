@@ -25,6 +25,8 @@ describe("production installer", () => {
 
     for (const required of [
       'if ($env:OS -ne "Windows_NT")',
+      '"  ⬤  ⬤   Barlas"',
+      '"    ⬤     AI AGENT"',
       'BARLAS_INSTALL_MODE = "local"',
       'http://127.0.0.1:$Port',
       "Protect-SecretFile",
