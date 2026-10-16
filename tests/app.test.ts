@@ -142,6 +142,22 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("tests an owned MCP integration without exposing its secret", async () => {
+    const deps = dependencies();
+    const connectorId = "00000000-0000-4000-8000-000000000081";
+    const mcpConnector = { listTools: vi.fn(async () => [{ name: "search", description: "Search", inputSchema: { type: "object" } }]) };
+    const app = await buildApp({ apiToken, ...deps, mcpConnector });
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/integrations/mcp/tools?userId=user-1&connectorId=${connectorId}`,
+      headers: { authorization: `Bearer ${apiToken}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().tools).toEqual([expect.objectContaining({ name: "search" })]);
+    expect(mcpConnector.listTools).toHaveBeenCalledWith("user-1", connectorId);
+    await app.close();
+  });
+
   it("lists languages and persists the authenticated user's choice", async () => {
     const deps = dependencies();
     let currentLanguage: SupportedLanguageCode | null = null;

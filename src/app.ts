@@ -51,6 +51,7 @@ import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } 
 import { renderPrometheusMetrics } from "./operations/metrics.js";
 import type { ExtensionCatalog } from "./extensions/catalog.js";
 import type { DeviceNodeService } from "./nodes/service.js";
+import type { McpConnector } from "./connectors/mcp.js";
 import {
   AgentProfileConflictError,
   agentProfileInstruction,
@@ -381,6 +382,7 @@ export interface AppDependencies {
   connectors?: Pick<ConnectorService, "save" | "list" | "delete">;
   githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
   googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
+  mcpConnector?: Pick<McpConnector, "listTools">;
   memory?: Pick<SemanticMemory, "remember" | "recall">;
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
   media?: Pick<MediaService, "saveUpload"> & Partial<Pick<MediaService, "createSpeech" | "transcribeUpload" | "createSpeechBuffer">>;
@@ -1175,6 +1177,14 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (!parsed.success) return reply.badRequest("Invalid Google Calendar request");
     const userId = authorizeUser(request, parsed.data.userId);
     return { events: await dependencies.googleConnector.calendarEvents(userId, parsed.data.connectorId, parsed.data.limit) };
+  });
+
+  app.get("/v1/integrations/mcp/tools", async (request, reply) => {
+    if (!dependencies.mcpConnector) return reply.notFound();
+    const parsed = githubRepositoriesSchema.omit({ limit: true }).safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid MCP tools request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    return { tools: await dependencies.mcpConnector.listTools(userId, parsed.data.connectorId) };
   });
 
   const runChat = async (input: z.infer<typeof chatBodySchema>) => {

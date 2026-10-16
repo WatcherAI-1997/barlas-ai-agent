@@ -333,6 +333,7 @@ const app = await buildApp({
   agentProfiles,
   schedules,
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),
+  ...(mcpConnector ? { mcpConnector } : {}),
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
   defaultSpeechVoice: config.DEFAULT_SPEECH_VOICE,

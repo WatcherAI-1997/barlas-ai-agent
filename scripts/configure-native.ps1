@@ -181,7 +181,9 @@ function Configure-Channels {
 }
 function Configure-Integrations {
     Write-Step 6 9 "Integrations and skills"
-    Write-Host "GitHub and Google connections are added from the protected dashboard after setup." -ForegroundColor DarkGray
+    Write-Host "After restart, run: barlas integrations add PROVIDER LABEL" -ForegroundColor Cyan
+    Write-Host "Supported providers: github, google_drive, gmail, google_calendar, mcp_http." -ForegroundColor DarkGray
+    Write-Host "The token is entered with hidden input, encrypted in the vault, and can be tested with: barlas integrations test ID" -ForegroundColor DarkGray
     Write-Host "Built-in skills are ready. Signed catalog skills always require explicit trust and evaluation." -ForegroundColor DarkGray
 }
 function Configure-Automations {

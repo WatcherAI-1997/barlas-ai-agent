@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline/promises";
+import { emitKeypressEvents } from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
 import { generateKeyPairSync } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -263,6 +264,40 @@ function option(args: string[], name: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined;
 }
 
+async function readHiddenSecret(prompt: string): Promise<string> {
+  const fromEnvironment = process.env.BARLAS_CONNECTOR_SECRET;
+  if (fromEnvironment) {
+    delete process.env.BARLAS_CONNECTOR_SECRET;
+    return fromEnvironment;
+  }
+  if (!process.stdin.isTTY || !process.stdin.setRawMode) {
+    throw new Error("Запустите в интерактивном терминале или передайте секрет через BARLAS_CONNECTOR_SECRET");
+  }
+  output.write(prompt);
+  emitKeypressEvents(process.stdin);
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  let secret = "";
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const onKeypress = (character: string, key: { name?: string; ctrl?: boolean }) => {
+        if (key.ctrl && key.name === "c") { cleanup(); reject(new Error("Отменено")); return; }
+        if (key.name === "return" || key.name === "enter") { cleanup(); output.write("\n"); resolve(secret); return; }
+        if (key.name === "backspace") {
+          if (secret) { secret = secret.slice(0, -1); output.write("\b \b"); }
+          return;
+        }
+        if (character && !key.ctrl && !/[\r\n]/u.test(character)) { secret += character; output.write("*"); }
+      };
+      const cleanup = () => process.stdin.off("keypress", onKeypress);
+      process.stdin.on("keypress", onKeypress);
+    });
+  } finally {
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+  }
+}
+
 async function verifySkillPackageFile(path: string): Promise<void> {
   if (!path) throw new Error("Укажите путь к подписанному JSON-пакету навыка");
   const skillPackage = parseSignedSkillPackage(await readFile(resolve(path), "utf8"));
@@ -490,6 +525,55 @@ async function deleteAgentProfile(ctx: CliContext, id: string): Promise<void> {
   output.write(`Агент удалён: ${id}\n`);
 }
 
+async function integrations(ctx: CliContext): Promise<void> {
+  const result = await ctx.api.request<{ connectors: JsonObject[] }>(`/v1/connectors?userId=${encodeURIComponent(ctx.userId)}`);
+  output.write(`${renderRows(result.connectors, ["id", "provider", "label", "updatedAt"])}\n`);
+}
+
+async function addIntegration(ctx: CliContext, args: string[]): Promise<void> {
+  const provider = args[2] ?? "";
+  const label = args[3] ?? "";
+  if (!provider || !label) throw new Error("Использование: integrations add PROVIDER LABEL [--endpoint HTTPS_URL]");
+  const allowed = ["github", "google_drive", "gmail", "google_calendar", "mcp_http"];
+  if (!allowed.includes(provider)) throw new Error(`Провайдер должен быть одним из: ${allowed.join(", ")}`);
+  const endpoint = option(args, "--endpoint");
+  if (provider === "mcp_http" && !endpoint) throw new Error("Для MCP укажите --endpoint HTTPS_URL");
+  const secret = await readHiddenSecret(provider === "mcp_http" ? "Bearer token (введите - если не нужен): " : "Access token: ");
+  if (!secret) throw new Error("Секрет не может быть пустым");
+  const result = await ctx.api.request<{ connector: JsonObject }>("/v1/connectors", {
+    method: "POST",
+    body: JSON.stringify({
+      userId: ctx.userId, provider, label, secret,
+      ...(endpoint ? { metadata: { endpoint } } : {}),
+    }),
+  });
+  output.write(`Подключение сохранено и зашифровано: ${value(result.connector.id)}\n`);
+}
+
+async function testIntegration(ctx: CliContext, id: string): Promise<void> {
+  if (!id) throw new Error("Укажите ID подключения");
+  const listed = await ctx.api.request<{ connectors: JsonObject[] }>(`/v1/connectors?userId=${encodeURIComponent(ctx.userId)}`);
+  const connector = listed.connectors.find((item) => value(item.id) === id);
+  if (!connector) throw new Error("Подключение не найдено");
+  const provider = value(connector.provider);
+  const query = `userId=${encodeURIComponent(ctx.userId)}&connectorId=${encodeURIComponent(id)}`;
+  if (provider === "github") await ctx.api.request(`/v1/integrations/github/profile?${query}`);
+  else if (provider === "google_drive") await ctx.api.request(`/v1/integrations/google-drive/files?${query}&limit=1`);
+  else if (provider === "gmail") await ctx.api.request(`/v1/integrations/gmail/messages?${query}&limit=1`);
+  else if (provider === "google_calendar") await ctx.api.request(`/v1/integrations/google-calendar/events?${query}&limit=1`);
+  else if (provider === "mcp_http") await ctx.api.request(`/v1/integrations/mcp/tools?${query}`);
+  else throw new Error("Проверка этого провайдера не поддерживается");
+  output.write(`Подключение работает: ${value(connector.label)}\n`);
+}
+
+async function deleteIntegration(ctx: CliContext, id: string): Promise<void> {
+  if (!id) throw new Error("Укажите ID подключения");
+  await ctx.api.request(`/v1/connectors/${encodeURIComponent(id)}`, {
+    method: "DELETE", body: JSON.stringify({ userId: ctx.userId }),
+  });
+  output.write(`Подключение удалено: ${id}\n`);
+}
+
 async function conversation(ctx: CliContext, id: string): Promise<JsonObject> {
   if (!id) throw new Error("Укажите ID диалога");
   const result = await ctx.api.request<{ conversation: JsonObject }>(
@@ -541,6 +625,10 @@ function help(): void {
   agents                            список отдельных агентов
   agents create SLUG NAME [...]     создать агента и привязать workspace
   agents delete <id>                удалить агента
+  integrations                      подключения без раскрытия секретов
+  integrations add PROVIDER LABEL   безопасно запросить и зашифровать токен
+  integrations test <id>            проверить реальное соединение
+  integrations delete <id>          удалить подключение
   status | health | doctor          состояние и диагностика
   dashboard                         открыть кабинет (Windows)
 
@@ -700,6 +788,10 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (command === "agents" && args[1] === "create") return createAgentProfile(ctx, args);
   if (command === "agents" && args[1] === "delete") return deleteAgentProfile(ctx, args[2] ?? "");
   if (command === "agents") return agents(ctx);
+  if (command === "integrations" && args[1] === "add") return addIntegration(ctx, args);
+  if (command === "integrations" && args[1] === "test") return testIntegration(ctx, args[2] ?? "");
+  if (command === "integrations" && args[1] === "delete") return deleteIntegration(ctx, args[2] ?? "");
+  if (command === "integrations") return integrations(ctx);
   if (command === "status") return status(ctx);
   if (["health", "doctor"].includes(command)) return doctor(ctx);
   if (command === "extensions") return extensions(ctx);

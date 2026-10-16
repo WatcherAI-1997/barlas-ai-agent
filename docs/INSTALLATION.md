@@ -60,6 +60,8 @@ barlas channels add telegram
 barlas agents
 barlas agents create research "Researcher" --style analytical --task deep --project PROJECT_ID
 barlas agent "Research this" --profile AGENT_ID
+barlas integrations add github personal
+barlas integrations test CONNECTOR_ID
 barlas security audit
 barlas gateway restart
 barlas update check
