@@ -117,6 +117,10 @@ if (evaluationRunner.includes("approved: true")) throw new Error("Agent evaluati
 for (const required of ["approved: false", "parseEvaluationScenarios", "BARLAS_EVAL_TOKEN"]) {
   if (!evaluationRunner.includes(required)) throw new Error(`Agent evaluation safety boundary is missing: ${required}`);
 }
+const scheduleWorker = await readFile("src/schedules/worker.ts", "utf8");
+for (const required of ["scheduleId: schedule.id", "scheduleOccurrence: occurrence", "governance?.consume", "Telegram account is not linked", "Math.max(occurrence.getTime(), Date.now())"]) {
+  if (!scheduleWorker.includes(required)) throw new Error(`Schedule safety boundary is missing: ${required}`);
+}
 const mcpConnector = await readFile("src/connectors/mcp.ts", "utf8");
 for (const required of ["assertPublicUrl", "publicNetworkFetch", "redirectPolicy: \"same-origin\"", "MAX_RESULT_BYTES = 1_000_000"]) {
   if (!mcpConnector.includes(required)) throw new Error(`MCP boundary is missing: ${required}`);

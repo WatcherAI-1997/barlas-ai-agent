@@ -55,6 +55,11 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `GET /v1/jobs` — list a user's durable tasks.
 - `POST /v1/jobs/:id/cancel` — cancel a queued or waiting task.
 - `POST /v1/jobs/:id/retry` — requeue a failed or cancelled task.
+- `POST /v1/schedules` — create a timezone-aware recurring autonomous task.
+- `GET /v1/schedules` — list owned recurring schedules and next-run state.
+- `POST /v1/schedules/:id/pause` — pause future occurrences.
+- `POST /v1/schedules/:id/resume` — recompute the next occurrence and resume.
+- `POST /v1/schedules/:id/disable` — permanently disable a schedule.
 - `GET /v1/dashboard` — return health, queue, token, and estimated-cost totals.
 - `GET /v1/connectors?userId=...` — list the current user's connector metadata.
 - `POST /v1/connectors` — encrypt and save a per-user connector credential.
@@ -80,6 +85,17 @@ three subagents, while dependent steps receive only the initial context and
 their named dependency outputs. Omitting `dependsOn` preserves sequential
 execution. Unknown skills, duplicate names, forward dependencies, cycles, and
 oversized workflows are rejected before execution.
+
+Recurring schedules use strict five-field cron expressions and an IANA timezone.
+Each due occurrence enqueues the normal durable autonomous runtime, so it keeps
+the same step/token/tool limits, approval policy, content-safe events, recovery,
+language preference, relevant memory context, and optional Telegram delivery as
+an interactive run. A unique schedule ID plus
+occurrence timestamp makes dispatch idempotent across worker crashes. Schedules
+can run no more frequently than once per minute, consume the daily job quota,
+and fail closed when Telegram delivery is requested after the account is
+unlinked. Missed occurrences are coalesced rather than replayed as a burst after
+downtime. Pausing or disabling a schedule never cancels an already queued run.
 
 ## Isolated file tools
 

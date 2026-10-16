@@ -20,7 +20,9 @@
 - Native autonomous tool loop with bounded steps and approval pauses. *(implemented)*
 - Durable run checkpoints, approval continuation, recovery, cancellation, and step journal. *(implemented)*
 - Asynchronous leased agent-run queue, live progress polling, and Telegram result delivery. *(implemented)*
-- Durable long-running job storage and schedules. *(worker, leases, retries implemented)*
+- Durable long-running job storage and schedules. *(job worker, leases, retries,
+  timezone-aware recurring cron schedules, idempotent dispatch, pause/resume,
+  and web/Telegram delivery implemented)*
 - Isolated subagents and resumable workflows. *(bounded dependency workflows plus model-initiated delegation to up to three parallel, tool-free, non-recursive subagents implemented)*
 - Versioned skills with evaluation and rollback. *(persistent owner-installed candidates, bounded automated acceptance evaluation, activation gate, exact selection, tool-permission enforcement, and rollback implemented)*
 - Approval queue and audit trail. *(foundation implemented)*

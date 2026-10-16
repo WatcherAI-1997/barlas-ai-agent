@@ -35,6 +35,7 @@ import type {
   DurableJob,
   MemoryEntry,
 } from "./types.js";
+import type { AgentSchedule } from "../schedules/types.js";
 
 export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore {
   private readonly pool: Pool;
@@ -805,6 +806,65 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     return result.rows[0]?.status ?? null;
   }
 
+  async createSchedule(input: Omit<AgentSchedule, "id" | "status" | "nextRunAt" | "lastRunAt" | "lastError" | "createdAt"> & { nextRunAt: Date }): Promise<AgentSchedule> {
+    const result = await this.pool.query<ScheduleRow>(
+      `insert into schedules
+        (user_id, name, objective, cron_expression, timezone, task_class, allowed_tools,
+         max_steps, max_total_tokens, delivery_channel, next_run_at)
+       values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11) returning *`,
+      [input.userId, input.name, input.objective, input.cronExpression, input.timezone, input.taskClass,
+        input.allowedTools ? JSON.stringify(input.allowedTools) : null, input.maxSteps, input.maxTotalTokens,
+        input.deliveryChannel, input.nextRunAt],
+    );
+    if (!result.rows[0]) throw new Error("Schedule insert returned no row");
+    return this.mapSchedule(result.rows[0]);
+  }
+
+  async listSchedules(userId: string, limit: number): Promise<AgentSchedule[]> {
+    const result = await this.pool.query<ScheduleRow>(
+      `select * from schedules where user_id = $1 order by created_at desc limit $2`, [userId, limit],
+    );
+    return result.rows.map((row) => this.mapSchedule(row));
+  }
+
+  async setScheduleStatus(userId: string, id: string, status: "active" | "paused" | "disabled", nextRunAt?: Date): Promise<AgentSchedule | null> {
+    const result = await this.pool.query<ScheduleRow>(
+      `update schedules set status=$3, next_run_at=coalesce($4,next_run_at), worker_id=null, locked_at=null, updated_at=now()
+       where id=$1 and user_id=$2 and status <> 'disabled' returning *`, [id, userId, status, nextRunAt ?? null],
+    );
+    return result.rows[0] ? this.mapSchedule(result.rows[0]) : null;
+  }
+
+  async claimDueSchedules(input: { workerId: string; limit: number; leaseSeconds: number }): Promise<AgentSchedule[]> {
+    const result = await this.pool.query<ScheduleRow>(
+      `with candidates as (
+         select id from schedules where status='active' and next_run_at <= now()
+           and (locked_at is null or locked_at < now() - make_interval(secs => $3))
+         order by next_run_at for update skip locked limit $2
+       )
+       update schedules s set worker_id=$1, locked_at=now(), updated_at=now()
+       from candidates where s.id=candidates.id returning s.*`, [input.workerId, input.limit, input.leaseSeconds],
+    );
+    return result.rows.map((row) => this.mapSchedule(row));
+  }
+
+  async advanceSchedule(input: { id: string; workerId: string; occurrence: Date; nextRunAt: Date }): Promise<boolean> {
+    const result = await this.pool.query(
+      `update schedules set last_run_at=$3, next_run_at=$4, worker_id=null, locked_at=null, last_error=null, updated_at=now()
+       where id=$1 and worker_id=$2 and status='active' and next_run_at=$3`,
+      [input.id, input.workerId, input.occurrence, input.nextRunAt],
+    );
+    return result.rowCount === 1;
+  }
+
+  async failSchedule(input: { id: string; workerId: string; error: string; retryAt: Date }): Promise<boolean> {
+    const result = await this.pool.query(
+      `update schedules set next_run_at=$4, worker_id=null, locked_at=null, last_error=$3, updated_at=now()
+       where id=$1 and worker_id=$2 and status='active'`, [input.id, input.workerId, input.error, input.retryAt],
+    );
+    return result.rowCount === 1;
+  }
+
   async createAgentRun(input: {
     userId: string;
     conversationId: string;
@@ -847,12 +907,16 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     maxSteps: number;
     maxTotalTokens?: number;
     scheduledFor?: Date;
+    scheduleId?: string;
+    scheduleOccurrence?: Date;
   }): Promise<AgentRunRecord> {
     const result = await this.pool.query<AgentRunRow>(
       `insert into agent_runs
         (user_id, conversation_id, status, messages, conversation_messages, delivery, task_class,
-         allowed_tools, max_steps, max_total_tokens, scheduled_for)
-       values ($1, $2, 'queued', $3::jsonb, $4::jsonb, $5::jsonb, $6, $7::jsonb, $8, $9, $10)
+         allowed_tools, max_steps, max_total_tokens, scheduled_for, schedule_id, schedule_occurrence)
+       values ($1, $2, 'queued', $3::jsonb, $4::jsonb, $5::jsonb, $6, $7::jsonb, $8, $9, $10, $11, $12)
+       on conflict (schedule_id, schedule_occurrence) where schedule_id is not null and schedule_occurrence is not null
+       do update set updated_at = agent_runs.updated_at
        returning *`,
       [
         input.userId,
@@ -865,6 +929,8 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
         input.maxSteps,
         input.maxTotalTokens ?? null,
         input.scheduledFor ?? new Date(),
+        input.scheduleId ?? null,
+        input.scheduleOccurrence ?? null,
       ],
     );
     const row = result.rows[0];
@@ -1416,7 +1482,21 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     if (row.result) run.result = row.result;
     if (row.error) run.error = row.error;
     if (row.worker_id) run.workerId = row.worker_id;
+    if (row.schedule_id) run.scheduleId = row.schedule_id;
+    if (row.schedule_occurrence) run.scheduleOccurrence = row.schedule_occurrence.toISOString();
     return run;
+  }
+
+  private mapSchedule(row: ScheduleRow): AgentSchedule {
+    return {
+      id: row.id, userId: row.user_id, name: row.name, objective: row.objective,
+      cronExpression: row.cron_expression, timezone: row.timezone, taskClass: row.task_class,
+      ...(row.allowed_tools ? { allowedTools: row.allowed_tools } : {}),
+      maxSteps: row.max_steps, maxTotalTokens: row.max_total_tokens,
+      deliveryChannel: row.delivery_channel, status: row.status,
+      nextRunAt: row.next_run_at.toISOString(), ...(row.last_run_at ? { lastRunAt: row.last_run_at.toISOString() } : {}),
+      ...(row.last_error ? { lastError: row.last_error } : {}), createdAt: row.created_at.toISOString(),
+    };
   }
 
   private mapJob(row: JobRow): DurableJob {
@@ -1601,6 +1681,8 @@ interface AgentRunRow {
   locked_at: Date | null;
   created_at: Date;
   updated_at: Date;
+  schedule_id: string | null;
+  schedule_occurrence: Date | null;
 }
 
 interface ConversationRow {
@@ -1624,6 +1706,13 @@ interface JobRow {
   result: unknown | null;
   error: string | null;
   created_at: Date;
+}
+
+interface ScheduleRow {
+  id: string; user_id: string; name: string; objective: string; cron_expression: string; timezone: string;
+  task_class: AgentSchedule["taskClass"]; allowed_tools: string[] | null; max_steps: number; max_total_tokens: number;
+  delivery_channel: AgentSchedule["deliveryChannel"]; status: AgentSchedule["status"]; next_run_at: Date;
+  last_run_at: Date | null; last_error: string | null; created_at: Date;
 }
 
 interface AccountRow {

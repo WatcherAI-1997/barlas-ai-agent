@@ -209,6 +209,7 @@ async function loadPanel(name) {
   if (name === "approvals") await loadApprovals();
   if (name === "runs") await loadRuns();
   if (name === "jobs") await loadJobs();
+  if (name === "schedules") await loadSchedules();
   if (name === "traces") renderList("#traces", (await api(`/v1/traces?userId=${encodeURIComponent(state.account.id)}`)).traces, (item) => card(item.operation, `${item.status} · ${new Date(item.createdAt).toLocaleString()}`, item.traceId));
   if (name === "skills") {
     await loadSkillOptions();
@@ -364,6 +365,42 @@ async function updateJob(id, action) {
   await api(`/v1/jobs/${id}/${action}`, { method: "POST", body: JSON.stringify({ userId: state.account.id }) });
   await loadJobs();
 }
+
+async function loadSchedules() {
+  const items = (await api(`/v1/schedules?userId=${encodeURIComponent(state.account.id)}`)).schedules;
+  renderList("#schedules", items, (item) => {
+    const node = card(item.name, `${item.status} · ${item.cronExpression} · ${item.timezone}`, `Следующий запуск: ${new Date(item.nextRunAt).toLocaleString()}${item.lastError ? ` · Ошибка: ${item.lastError}` : ""}`);
+    if (item.status !== "disabled") {
+      const actions = document.createElement("div"); actions.className = "actions";
+      const action = item.status === "active" ? "pause" : "resume";
+      const toggle = document.createElement("button"); toggle.textContent = action === "pause" ? "Пауза" : "Возобновить";
+      toggle.addEventListener("click", async () => { await updateSchedule(item.id, action); });
+      const disable = document.createElement("button"); disable.textContent = "Отключить"; disable.className = "reject";
+      disable.addEventListener("click", async () => { await updateSchedule(item.id, "disable"); });
+      actions.append(toggle, disable); node.append(actions);
+    }
+    return node;
+  });
+}
+
+async function updateSchedule(id, action) {
+  await api(`/v1/schedules/${id}/${action}`, { method: "POST", body: JSON.stringify({ userId: state.account.id }) });
+  await loadSchedules();
+}
+
+$("#schedule-timezone").value = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+$("#schedule-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#schedule-error").textContent = "";
+  try {
+    await api("/v1/schedules", { method: "POST", body: JSON.stringify({
+      userId: state.account.id, name: $("#schedule-name").value.trim(), objective: $("#schedule-objective").value.trim(),
+      cronExpression: $("#schedule-cron").value.trim(), timezone: $("#schedule-timezone").value.trim(),
+      taskClass: $("#schedule-task-class").value, deliveryChannel: $("#schedule-delivery").value,
+    }) });
+    event.target.reset(); $("#schedule-timezone").value = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    await loadSchedules();
+  } catch (error) { $("#schedule-error").textContent = error.message; }
+});
 
 async function loadUsers() {
   const users = (await api("/v1/admin/users")).users;

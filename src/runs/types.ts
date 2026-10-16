@@ -25,6 +25,8 @@ export interface AgentRunRecord {
   workerId?: string;
   createdAt: string;
   updatedAt: string;
+  scheduleId?: string;
+  scheduleOccurrence?: string;
 }
 
 export interface AgentRunEvent {
@@ -58,6 +60,8 @@ export interface AgentRunStore {
     maxSteps: number;
     maxTotalTokens?: number;
     scheduledFor?: Date;
+    scheduleId?: string;
+    scheduleOccurrence?: Date;
   }): Promise<AgentRunRecord>;
   getAgentRun(userId: string, id: string): Promise<AgentRunRecord | null>;
   findAgentRunByApproval(userId: string, approvalId: string): Promise<AgentRunRecord | null>;

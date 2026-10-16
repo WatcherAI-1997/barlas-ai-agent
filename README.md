@@ -43,7 +43,7 @@ owner-installed candidates with automated activation tests, bounded
 subagent workflows, per-user file workspaces, and a native autonomous tool loop
 with hard step limits, durable checkpoints, approval continuation, restart
 recovery, cancellation, an asynchronous lease worker, live progress, Telegram
-delivery, approval buttons, and a content-safe step journal. It also includes optional SearXNG
+delivery, timezone-aware recurring schedules, approval buttons, and a content-safe step journal. It also includes optional SearXNG
 web search, a no-shell read-only terminal inspector,
 an isolated approval-gated JavaScript browser, PDF/DOCX extraction, Unicode
 DOCX creation, secure media uploads, vision/PDF analysis, audio transcription,

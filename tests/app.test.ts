@@ -645,4 +645,25 @@ describe("Barlas AI Agent API", () => {
     }));
     await app.close();
   });
+
+  it("creates and lists an owned recurring autonomous schedule", async () => {
+    const deps = dependencies();
+    const schedule = {
+      id: "00000000-0000-4000-8000-000000000111", userId: "user-1", name: "Brief", objective: "Prepare brief",
+      cronExpression: "0 9 * * *", timezone: "Asia/Tashkent", taskClass: "deep" as const, maxSteps: 8,
+      maxTotalTokens: 50_000, deliveryChannel: "web" as const, status: "active" as const,
+      nextRunAt: "2026-10-17T04:00:00.000Z", createdAt: "2026-10-16T00:00:00.000Z",
+    };
+    const schedules = { create: vi.fn(async () => schedule), list: vi.fn(async () => [schedule]), pause: vi.fn(), resume: vi.fn(), disable: vi.fn() };
+    const app = await buildApp({ apiToken, ...deps, schedules });
+    const created = await app.inject({ method: "POST", url: "/v1/schedules", headers: { authorization: `Bearer ${apiToken}` }, payload: {
+      userId: "user-1", name: "Brief", objective: "Prepare brief", cronExpression: "0 9 * * *", timezone: "Asia/Tashkent",
+    } });
+    const listed = await app.inject({ method: "GET", url: "/v1/schedules?userId=user-1", headers: { authorization: `Bearer ${apiToken}` } });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().schedule.id).toBe(schedule.id);
+    expect(listed.json()).toEqual({ schedules: [schedule] });
+    expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "schedule.created" }));
+    await app.close();
+  });
 });

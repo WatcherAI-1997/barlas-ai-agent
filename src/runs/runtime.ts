@@ -33,6 +33,8 @@ export class PersistentAgentRuntime {
     maxTotalTokens?: number;
     allowedTools?: string[];
     scheduledFor?: Date;
+    scheduleId?: string;
+    scheduleOccurrence?: Date;
   }): Promise<AgentRunRecord> {
     const run = await this.store.enqueueAgentRun({
       userId: input.userId,
@@ -45,6 +47,8 @@ export class PersistentAgentRuntime {
       ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}),
       ...(input.maxTotalTokens ? { maxTotalTokens: input.maxTotalTokens } : {}),
       ...(input.scheduledFor ? { scheduledFor: input.scheduledFor } : {}),
+      ...(input.scheduleId ? { scheduleId: input.scheduleId } : {}),
+      ...(input.scheduleOccurrence ? { scheduleOccurrence: input.scheduleOccurrence } : {}),
     });
     await this.store.appendAgentRunEvent({ runId: run.id, step: 0, eventType: "run.queued" });
     return run;

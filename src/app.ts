@@ -40,6 +40,7 @@ import type { SkillManager } from "./skills/manager.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
 import { MAX_MEDIA_BYTES, type MediaService } from "./tools/media.js";
+import type { ScheduleService } from "./schedules/service.js";
 
 const chatBodySchema = z.object({
   userId: z.string().min(1).max(128),
@@ -214,6 +215,16 @@ const skillEvaluationSchema = z.object({
     forbiddenStrings: z.array(z.string().min(1).max(500)).max(10).default([]),
   }).strict()).min(1).max(5),
 }).strict();
+const scheduleParamsSchema = z.object({ id: z.string().uuid() });
+const scheduleCreateSchema = z.object({
+  userId: z.string().min(1).max(128), name: z.string().trim().min(1).max(100),
+  objective: z.string().min(1).max(20_000), cronExpression: z.string().min(5).max(100),
+  timezone: z.string().min(1).max(100), taskClass: z.enum(["fast", "deep", "private"]).default("deep"),
+  allowedTools: z.array(z.string().min(1).max(128)).max(32).optional(),
+  maxSteps: z.number().int().min(1).max(12).default(8),
+  maxTotalTokens: z.number().int().min(1_000).max(100_000).default(50_000),
+  deliveryChannel: z.enum(["web", "telegram"]).default("web"),
+}).strict();
 
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -265,6 +276,7 @@ export interface AppDependencies {
   memory?: Pick<SemanticMemory, "remember" | "recall">;
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
   media?: Pick<MediaService, "saveUpload">;
+  schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
   telegram?: {
@@ -1261,6 +1273,50 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     );
     return { jobs };
   });
+
+  app.post("/v1/schedules", async (request, reply) => {
+    if (!dependencies.schedules) return reply.notFound();
+    const parsed = scheduleCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid schedule request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    if (parsed.data.deliveryChannel === "telegram") {
+      const link = await dependencies.telegramLinks?.get(userId);
+      if (!link) return reply.badRequest("Link Telegram before enabling schedule delivery");
+    }
+    await dependencies.governance?.consume(userId, "job");
+    const schedule = await dependencies.schedules.create({
+      userId, name: parsed.data.name, objective: parsed.data.objective,
+      cronExpression: parsed.data.cronExpression, timezone: parsed.data.timezone,
+      taskClass: parsed.data.taskClass, maxSteps: parsed.data.maxSteps,
+      maxTotalTokens: parsed.data.maxTotalTokens, deliveryChannel: parsed.data.deliveryChannel,
+      ...(parsed.data.allowedTools ? { allowedTools: parsed.data.allowedTools } : {}),
+    });
+    await dependencies.database.appendAudit({ userId, eventType: "schedule.created", resourceType: "schedule", resourceId: schedule.id, details: { cronExpression: schedule.cronExpression, timezone: schedule.timezone, deliveryChannel: schedule.deliveryChannel } });
+    return reply.code(201).send({ schedule });
+  });
+
+  app.get("/v1/schedules", async (request, reply) => {
+    if (!dependencies.schedules) return reply.notFound();
+    const parsed = userListSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid schedules query");
+    return { schedules: await dependencies.schedules.list(authorizeUser(request, parsed.data.userId), parsed.data.limit) };
+  });
+
+  for (const [action, status] of [["pause", "paused"], ["resume", "active"], ["disable", "disabled"]] as const) {
+    app.post(`/v1/schedules/:id/${action}`, async (request, reply) => {
+      if (!dependencies.schedules) return reply.notFound();
+      const params = scheduleParamsSchema.safeParse(request.params);
+      const body = z.object({ userId: z.string().min(1).max(128) }).strict().safeParse(request.body);
+      if (!params.success || !body.success) return reply.badRequest("Invalid schedule action");
+      const userId = authorizeUser(request, body.data.userId);
+      const schedule = action === "pause" ? await dependencies.schedules.pause(userId, params.data.id)
+        : action === "resume" ? await dependencies.schedules.resume(userId, params.data.id)
+          : await dependencies.schedules.disable(userId, params.data.id);
+      if (!schedule) return reply.notFound("Schedule not found or transition is invalid");
+      await dependencies.database.appendAudit({ userId, eventType: `schedule.${status}`, resourceType: "schedule", resourceId: schedule.id });
+      return { schedule };
+    });
+  }
 
   app.post("/v1/jobs/:id/cancel", async (request, reply) => {
     const params = jobParamsSchema.safeParse(request.params);

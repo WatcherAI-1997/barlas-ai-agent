@@ -28,6 +28,9 @@ import { ManagedBrowser } from "./tools/managed-browser.js";
 import { CodeSandboxClient } from "./tools/code-sandbox.js";
 import { FileWorkspace } from "./tools/file-workspace.js";
 import { MediaService, OpenAIMediaModel } from "./tools/media.js";
+import { ScheduleService } from "./schedules/service.js";
+import { ScheduleWorker } from "./schedules/worker.js";
+import { languageInstruction } from "./i18n/languages.js";
 
 const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
@@ -131,6 +134,7 @@ const agentLoop = new AgentLoop(
   config.AGENT_MAX_OUTPUT_TOKENS_PER_STEP,
 );
 const agentRuntime = new PersistentAgentRuntime(agentLoop, database);
+const schedules = new ScheduleService(database);
 for (const recovered of await agentRuntime.recoverReady()) {
   if (recovered.result && recovered.status !== "waiting_approval") {
     await database.saveTurn({
@@ -147,6 +151,26 @@ const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
       client: new TelegramClient(config.TELEGRAM_BOT_TOKEN),
     }
   : undefined;
+const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
+  pollIntervalMs: config.JOB_WORKER_POLL_MS,
+  batchSize: config.JOB_WORKER_BATCH_SIZE,
+  leaseSeconds: config.JOB_LEASE_SECONDS,
+  telegramChatForUser: async (userId) => (await telegramLinks.get(userId))?.telegramChatId ?? null,
+  governance,
+  contextForSchedule: async (schedule) => {
+    const account = await authService.getAccount(schedule.userId);
+    const language = languageInstruction(account?.languageCode);
+    const memories = await memory.recall(schedule.userId, schedule.objective, 5);
+    return [
+      ...(language ? [{ role: "system" as const, content: language }] : []),
+      ...(memories.length ? [{ role: "system" as const, content: [
+        "Use these Barlas AI Agent user memories only when relevant:",
+        ...memories.map((item) => `- [${item.category}] ${item.content}`),
+      ].join("\n") }] : []),
+    ];
+  },
+  onError: (error) => console.error("Barlas AI Agent schedule worker error", error),
+});
 const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
   pollIntervalMs: config.AGENT_RUN_WORKER_POLL_MS,
   batchSize: config.AGENT_RUN_WORKER_BATCH_SIZE,
@@ -197,6 +221,7 @@ const app = await buildApp({
   memory,
   organizations,
   media: mediaService,
+  schedules,
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
@@ -208,6 +233,7 @@ const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   app.log.info({ signal }, "Barlas AI Agent is shutting down");
   await jobWorker.stop();
   await agentRunWorker.stop();
+  await scheduleWorker.stop();
   await app.close();
   process.exit(0);
 };
@@ -218,3 +244,4 @@ process.once("SIGTERM", () => void shutdown("SIGTERM"));
 await app.listen({ host: config.HOST, port: config.PORT });
 if (config.JOB_WORKER_ENABLED) jobWorker.start();
 if (config.AGENT_RUN_WORKER_ENABLED) agentRunWorker.start();
+if (config.JOB_WORKER_ENABLED) scheduleWorker.start();

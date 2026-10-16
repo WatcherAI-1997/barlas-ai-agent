@@ -82,6 +82,10 @@ autonomy.
   Bounded retries recover stale `running` leases, while worker ownership guards
   terminal writes. Visible conversation messages, injected memory context, and
   optional delivery metadata are stored as separate fields.
+- A separate leased schedule worker evaluates five-field cron expressions in
+  each schedule's IANA timezone. Dispatch uses a unique schedule/occurrence key,
+  preventing duplicate autonomous runs after lease expiry or process restart;
+  pause/resume/disable transitions are owner-scoped and audited.
 - Telegram accounts are joined to web accounts through expiring, single-use,
   hashed codes. The resolved account ID is applied before memory lookup, quota
   consumption, tool execution, and approval ownership checks.

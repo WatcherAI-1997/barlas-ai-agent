@@ -3,11 +3,11 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 105 automated tests across 31 files pass.
+- 110 automated tests across 32 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
-- All sixteen SQL migrations apply twice to a clean PostgreSQL 17 database.
+- All seventeen SQL migrations apply twice to a clean PostgreSQL 17 database.
 - The production Docker image builds and runs read-only with dropped capabilities.
 - The pinned Playwright sidecar builds separately, runs read-only as an
   unprivileged user with all capabilities dropped, and completed a live public
@@ -22,6 +22,9 @@
   persisted statuses, tools, content-safe events, output constraints, steps,
   tokens, and cost without model self-grading. Credentialed baseline results
   and the staging restart drill remain release requirements.
+- Recurring schedule tests cover IANA timezone calculation, invalid zones,
+  pause/resume, idempotency-keyed autonomous dispatch, and fail-closed Telegram
+  delivery when an account is not linked.
 - An isolated live load smoke completed 1,000 `/health` and `/ready` requests at
   concurrency 50 with zero failures and 37.7 ms p95 latency on the test host.
 - A PostgreSQL custom dump restored into a separate disposable PostgreSQL 17

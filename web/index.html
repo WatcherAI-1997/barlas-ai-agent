@@ -53,6 +53,7 @@
           <button data-panel="approvals">Подтверждения</button>
           <button data-panel="runs">Запуски</button>
           <button data-panel="jobs">Задачи</button>
+          <button data-panel="schedules">Расписания</button>
           <button data-panel="traces">Трассировка</button>
           <button data-panel="skills">Навыки</button>
           <button data-panel="organizations">Организации</button>
@@ -95,6 +96,20 @@
         <section id="panel-approvals" class="panel hidden"><h2>Очередь подтверждений</h2><div id="approvals" class="grid"></div></section>
         <section id="panel-runs" class="panel hidden"><h2>Автономные запуски</h2><div id="runs" class="grid"></div></section>
         <section id="panel-jobs" class="panel hidden"><h2>Долговременные задачи</h2><div id="jobs" class="grid"></div></section>
+        <section id="panel-schedules" class="panel hidden">
+          <h2>Повторяющиеся задачи</h2>
+          <form id="schedule-form" class="inline-form">
+            <input id="schedule-name" placeholder="Название" maxlength="100" required>
+            <input id="schedule-objective" placeholder="Что должен сделать агент" maxlength="20000" required>
+            <input id="schedule-cron" value="0 9 * * *" placeholder="Cron: 0 9 * * *" maxlength="100" required>
+            <input id="schedule-timezone" placeholder="Asia/Tashkent" maxlength="100" required>
+            <select id="schedule-task-class"><option value="fast">Fast</option><option value="deep" selected>Deep</option><option value="private">Private</option></select>
+            <select id="schedule-delivery"><option value="web">Веб</option><option value="telegram">Telegram</option></select>
+            <button type="submit">Создать</button>
+          </form>
+          <p id="schedule-error" class="error" role="alert"></p>
+          <div id="schedules" class="grid"></div>
+        </section>
         <section id="panel-traces" class="panel hidden"><h2>Трассировка</h2><div id="traces" class="grid"></div></section>
         <section id="panel-skills" class="panel hidden"><h2>Навыки</h2><div id="skills" class="grid"></div></section>
         <section id="panel-organizations" class="panel hidden">
