@@ -18,6 +18,16 @@ function Read-Setting([string]$Path, [string]$Name) {
     return ""
 }
 
+function Open-VoiceTest {
+    $DashboardUrl = ([string](& (Join-Path $RootDir "scripts\dashboard-url.ps1"))).Trim()
+    $HashIndex = $DashboardUrl.IndexOf("#", [StringComparison]::Ordinal)
+    $BaseUrl = if ($HashIndex -ge 0) { $DashboardUrl.Substring(0, $HashIndex) } else { $DashboardUrl }
+    $Fragment = if ($HashIndex -ge 0) { $DashboardUrl.Substring($HashIndex) } else { "" }
+    $Separator = if ($BaseUrl.Contains("?")) { "&" } else { "?" }
+    Start-Process "$BaseUrl${Separator}voice-test=1$Fragment"
+    Write-Host "Barlas voice check opened. The microphone stays off until you press the test button." -ForegroundColor Cyan
+}
+
 if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
     $NodeExe = Join-Path $BarlasHome "runtime\node\node.exe"
     if (-not (Test-Path -LiteralPath $NodeExe -PathType Leaf)) { throw "Barlas native runtime is missing. Run the one-line installer again." }
@@ -38,6 +48,10 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
         & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady
         & (Join-Path $RootDir "scripts\doctor-native.ps1") -RequireRunning
         Write-Host "`n[OK] Barlas is configured and ready." -ForegroundColor Green
+        if ($Section -eq "all") {
+            $OpenVoiceCheck = Read-Host "Open the private microphone and voice check now? [Y/n]"
+            if ($OpenVoiceCheck -notmatch "^(n|no|нет)$") { Open-VoiceTest }
+        }
         exit 0
     }
     if ($LocalCommand -eq "config") {
@@ -119,6 +133,10 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
         $DashboardUrl = & (Join-Path $RootDir "scripts\dashboard-url.ps1")
         Start-Process ([string]$DashboardUrl).Trim()
         Write-Host "Barlas dashboard opened."
+        exit 0
+    }
+    if ($LocalCommand -eq "voice" -and $Arguments.Count -gt 1 -and $Arguments[1] -eq "test") {
+        Open-VoiceTest
         exit 0
     }
     if ($LocalCommand -eq "logs") {

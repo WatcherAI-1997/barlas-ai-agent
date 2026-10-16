@@ -1,9 +1,10 @@
 const fragmentToken = new URLSearchParams(location.hash.slice(1)).get("token");
+const startupVoiceTest = new URLSearchParams(location.search).get("voice-test") === "1";
 if (fragmentToken) {
   sessionStorage.setItem("barlasToken", fragmentToken);
   history.replaceState(null, "", `${location.pathname}${location.search}`);
 }
-const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [], agents: [], voiceRecorder: null, voiceStream: null, voiceChunks: [], voiceTimer: null };
+const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [], agents: [], voiceRecorder: null, voiceStream: null, voiceChunks: [], voiceTimer: null, microphoneRecorder: null, microphoneStream: null, microphoneChunks: [], microphoneTimer: null, microphoneUrl: null };
 const $ = (selector) => document.querySelector(selector);
 const panelTitles = {
   overview: "Обзор", chat: "Чат", approvals: "Подтверждения", runs: "Запуски",
@@ -127,7 +128,13 @@ async function showApp(account) {
   await loadAgentOptions();
   await loadVoiceAvailability();
   newConversation();
-  loadPanel("overview").catch((error) => notify(error.message, "error"));
+  const initialPanel = startupVoiceTest ? "settings" : "overview";
+  loadPanel(initialPanel).then(() => {
+    if (!startupVoiceTest) return;
+    history.replaceState(null, "", location.pathname);
+    $("#voice-diagnostic").focus();
+    $("#voice-diagnostic").scrollIntoView({ behavior: "smooth", block: "center" });
+  }).catch((error) => notify(error.message, "error"));
 }
 
 async function loadVoiceAvailability() {
@@ -136,6 +143,9 @@ async function loadVoiceAvailability() {
   $("#voice-status").textContent = status.available
     ? "Голос выключен. Микрофон включается только после нажатия кнопки."
     : "Голос недоступен: настройте media API для распознавания и озвучивания.";
+  $("#voice-service-status").textContent = status.available
+    ? `Распознавание и голосовой ответ готовы. Голос: ${status.defaultVoice || "по умолчанию"}.`
+    : "Локальную проверку микрофона можно выполнить сейчас. Для распознавания и голосовых ответов настройте media API.";
 }
 
 async function loadSkillOptions() {
@@ -309,6 +319,87 @@ $("#voice-toggle").addEventListener("click", async () => {
 });
 
 window.addEventListener("pagehide", stopVoiceTracks);
+
+function stopMicrophoneTestTracks() {
+  if (state.microphoneTimer) clearTimeout(state.microphoneTimer);
+  state.microphoneTimer = null;
+  state.microphoneStream?.getTracks().forEach((track) => track.stop());
+  state.microphoneStream = null;
+}
+
+function deleteMicrophoneTest() {
+  stopMicrophoneTestTracks();
+  if (state.microphoneUrl) URL.revokeObjectURL(state.microphoneUrl);
+  state.microphoneUrl = null;
+  const audio = $("#microphone-test-audio");
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  audio.classList.add("hidden");
+  $("#microphone-test-delete").classList.add("hidden");
+  $("#microphone-test-status").textContent = "Тестовая запись удалена. Микрофон выключен.";
+}
+
+$("#microphone-test-start").addEventListener("click", async () => {
+  const button = $("#microphone-test-start");
+  const status = $("#microphone-test-status");
+  if (state.microphoneRecorder?.state === "recording") {
+    state.microphoneRecorder.stop();
+    button.disabled = true;
+    status.textContent = "Завершаю локальную запись…";
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    status.textContent = "Этот браузер не поддерживает проверку микрофона.";
+    return;
+  }
+  deleteMicrophoneTest();
+  try {
+    const mimeType = preferredRecordingType();
+    const startedAt = performance.now();
+    state.microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.microphoneChunks = [];
+    state.microphoneRecorder = new MediaRecorder(state.microphoneStream, mimeType ? { mimeType } : undefined);
+    state.microphoneRecorder.addEventListener("dataavailable", (event) => {
+      if (event.data.size > 0) state.microphoneChunks.push(event.data);
+    });
+    state.microphoneRecorder.addEventListener("stop", () => {
+      const actualType = state.microphoneRecorder.mimeType || mimeType || "audio/webm";
+      const elapsed = Math.min(5, Math.max(0.1, (performance.now() - startedAt) / 1000));
+      const blob = new Blob(state.microphoneChunks, { type: actualType });
+      stopMicrophoneTestTracks();
+      state.microphoneRecorder = null;
+      button.disabled = false;
+      button.textContent = "Записать ещё раз";
+      if (blob.size > 10 * 1024 * 1024) {
+        status.textContent = "Запись превысила локальный предел 10 МБ и была удалена.";
+        return;
+      }
+      state.microphoneUrl = URL.createObjectURL(blob);
+      const audio = $("#microphone-test-audio");
+      audio.src = state.microphoneUrl;
+      audio.classList.remove("hidden");
+      $("#microphone-test-delete").classList.remove("hidden");
+      status.textContent = `Готово: ${elapsed.toFixed(1)} с · ${(blob.size / 1024).toFixed(1)} КБ · ${actualType}. Запись осталась только в браузере.`;
+    }, { once: true });
+    state.microphoneRecorder.start(100);
+    state.microphoneTimer = setTimeout(() => {
+      if (state.microphoneRecorder?.state === "recording") state.microphoneRecorder.stop();
+    }, 5_000);
+    button.textContent = "Остановить";
+    status.textContent = "Записываю локально… максимум 5 секунд.";
+  } catch (error) {
+    stopMicrophoneTestTracks();
+    state.microphoneRecorder = null;
+    button.disabled = false;
+    status.textContent = error.name === "NotAllowedError"
+      ? "Доступ к микрофону не разрешён. Разрешите его для локального адреса Barlas и повторите тест."
+      : `Не удалось проверить микрофон: ${error.message}`;
+  }
+});
+
+$("#microphone-test-delete").addEventListener("click", deleteMicrophoneTest);
+window.addEventListener("pagehide", deleteMicrophoneTest);
 
 $("#media-file").addEventListener("change", (event) => {
   const file = event.target.files[0];

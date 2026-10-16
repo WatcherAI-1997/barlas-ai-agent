@@ -91,6 +91,10 @@ nav button.active::before { color: var(--accent-bright); }
 .card > strong { display: block; margin-bottom: .3rem; overflow-wrap: anywhere; }
 .card > div:not(.meta):not(.actions) { margin-top: .75rem; overflow-wrap: anywhere; white-space: pre-wrap; line-height: 1.45; }
 .card > button, .card > select { margin-top: .85rem; }
+.voice-diagnostic { margin-top: 1.5rem; }
+.voice-diagnostic:focus { outline: 2px solid var(--accent); outline-offset: 3px; }
+.voice-diagnostic .button-row { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1rem; }
+.voice-diagnostic audio { display: block; width: min(100%, 34rem); margin-top: 1rem; }
 .empty-state { grid-column: 1 / -1; min-height: 150px; display: grid; place-items: center; padding: 2rem; border: 1px dashed var(--border-strong); border-radius: var(--radius); color: var(--muted); text-align: center; }
 
 .chat-layout { display: grid; grid-template-columns: 245px minmax(0, 1fr); gap: 1.2rem; }

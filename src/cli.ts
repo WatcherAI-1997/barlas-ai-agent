@@ -631,6 +631,7 @@ function help(): void {
   integrations delete <id>          удалить подключение
   status | health | doctor          состояние и диагностика
   dashboard                         открыть кабинет (Windows)
+  voice test                        приватная проверка микрофона и голоса (Windows)
 
 Работа:
   runs                              последние запуски

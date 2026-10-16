@@ -22,6 +22,8 @@ describe("Barlas web interface", () => {
       'id="detail-dialog"',
       'aria-labelledby="dialog-title"',
       'id="voice-toggle"',
+      'id="voice-diagnostic"',
+      'id="microphone-test-start"',
       'aria-pressed="false"',
     ]) expect(html).toContain(marker);
     expect(html).not.toMatch(/<script[^>]*>[^<]+<\/script>/u);
@@ -42,6 +44,10 @@ describe("Barlas web interface", () => {
       "closeNavigation",
       "navigator.mediaDevices.getUserMedia",
       "function stopVoiceTracks(",
+      "function stopMicrophoneTestTracks(",
+      'get("voice-test") === "1"',
+      "Запись осталась только в браузере",
+      "5_000",
       'consent: "true"',
     ]) expect(script).toContain(marker);
     expect(script).not.toContain("alert(");

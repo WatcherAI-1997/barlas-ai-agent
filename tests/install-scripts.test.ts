@@ -43,6 +43,9 @@ describe("production installer", () => {
     expect(configure).toContain("Import existing Barlas configuration");
     expect(configure).toContain("Imported $Imported supported settings");
     expect(cli).toContain("doctor-native.ps1");
+    expect(cli).toContain('if ($LocalCommand -eq "voice"');
+    expect(cli).toContain("voice-test=1");
+    expect(cli).toContain("Open the private microphone and voice check now?");
     expect(nativeUpdater).toContain('ValidateSet("check", "update", "rollback", "repair")');
     expect(nativeUpdater).toContain("Rollback failed; restoring the current version");
     expect(nativeUpdater).toContain("Protect-File");
@@ -72,6 +75,7 @@ describe("production installer", () => {
       "barlas gateway restart",
       "barlas onboard",
       "barlas configure",
+      "barlas voice test",
       "nodejs.org/dist",
       "playwright-core.cmd",
       "install-native.ps1",

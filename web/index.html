@@ -230,6 +230,17 @@
             <button type="submit">Сохранить</button>
           </form>
           <p id="language-settings-status" class="meta"></p>
+          <div id="voice-diagnostic" class="card voice-diagnostic" tabindex="-1">
+            <h2>Проверка микрофона и голоса</h2>
+            <p class="meta">Микрофон включается только по вашему нажатию. Тестовая запись длится не более 5 секунд, остаётся в этом браузере и не отправляется в Barlas.</p>
+            <p id="voice-service-status" class="meta" role="status">Проверяю голосовые возможности…</p>
+            <div class="button-row">
+              <button id="microphone-test-start" type="button">Проверить микрофон</button>
+              <button id="microphone-test-delete" class="secondary hidden" type="button">Удалить запись</button>
+            </div>
+            <p id="microphone-test-status" class="meta" role="status">Микрофон выключен.</p>
+            <audio id="microphone-test-audio" class="hidden" controls preload="metadata"></audio>
+          </div>
         </section>
         <section id="panel-users" class="panel hidden">
           <h2>Пользователи</h2>

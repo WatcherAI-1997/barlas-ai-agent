@@ -148,6 +148,8 @@ try {
     Write-Host "       developer profile"
     Write-Host "  barlas configure" -ForegroundColor Cyan -NoNewline
     Write-Host "               change settings"
+    Write-Host "  barlas voice test" -ForegroundColor Cyan -NoNewline
+    Write-Host "              private microphone and voice check"
     Write-Host "  barlas" -ForegroundColor Cyan -NoNewline
     Write-Host "                         open interactive AI chat"
     Write-Host '  barlas ask "your task"' -ForegroundColor Cyan -NoNewline
