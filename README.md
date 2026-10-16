@@ -53,7 +53,9 @@ encrypted GitHub/Drive/Gmail/Calendar connections with approval-gated writes,
 and SSRF-protected remote MCP Streamable HTTP tools,
 atomic per-user quotas, execution traces, secure owner/user accounts, and a
 branded web cabinet with conversation history, approvals, job controls, and
-token/cost monitoring. A reproducible live evaluation suite scores persisted
+token/cost monitoring. Named projects group files, conversations, runs, and
+memories, while immutable SHA-256 artifact snapshots provide recoverable result
+versions. A reproducible live evaluation suite scores persisted
 status, tool use, events, output constraints, steps, tokens, and cost without
 letting the model grade itself. First-login onboarding and account settings provide a
 broad Turkic-language catalogue, Mongolian, Russian/English fallbacks, RTL

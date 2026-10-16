@@ -47,10 +47,21 @@ for (const legalFile of [
 }
 for (const required of [
   "migrations/016_skills.sql",
+  "migrations/018_projects.sql",
   "src/skills/manager.ts",
   "tests/skill-manager.test.ts",
 ]) {
   if (!files.includes(required)) throw new Error(`Skill lifecycle component is missing: ${required}`);
+}
+const projects = await readFile("src/projects/service.ts", "utf8");
+const projectMigration = await readFile("migrations/018_projects.sql", "utf8");
+const database = await readFile("src/storage/database.ts", "utf8");
+for (const required of ["resourceBelongsToUser", "workspace.readBuffer", "writeUpload", 'createHash("sha256")']) {
+  if (!projects.includes(required)) throw new Error(`Project isolation/version boundary is missing: ${required}`);
+}
+if (!database.includes("pg_advisory_xact_lock")) throw new Error("Project artifact version allocation is not serialized");
+for (const required of ["unique (project_id, path, version)", "foreign key (project_id, user_id)", "size_bytes integer"]) {
+  if (!projectMigration.includes(required)) throw new Error(`Project artifact database boundary is missing: ${required}`);
 }
 const skillManager = await readFile("src/skills/manager.ts", "utf8");
 for (const required of ["latest evaluation", "validateTools", "1 to 5 cases", "without tools"]) {

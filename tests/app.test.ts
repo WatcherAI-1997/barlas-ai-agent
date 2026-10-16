@@ -341,7 +341,7 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
-  it("returns a durable run ID when persistent runtime is enabled", async () => {
+  it("returns a durable run ID and binds it to the selected owned project", async () => {
     const deps = dependencies();
     const loopResult = {
       status: "completed" as const,
@@ -377,17 +377,21 @@ describe("Barlas AI Agent API", () => {
       events: vi.fn(async () => []),
       cancel: vi.fn(async () => ({ ...record, status: "cancelled" as const })),
     };
-    const app = await buildApp({ apiToken, ...deps, agentRuntime });
+    const projectId = "00000000-0000-4000-8000-000000000201";
+    const projects = { create: vi.fn(), list: vi.fn(), detail: vi.fn(), context: vi.fn(async () => "Active Barlas project: Launch."), attach: vi.fn(async () => ({ projectId, type: "agent_run" as const, id: record.id, label: "Run durably", createdAt: record.createdAt })), snapshot: vi.fn(), restore: vi.fn() };
+    const app = await buildApp({ apiToken, ...deps, agentRuntime, projects });
     const response = await app.inject({
       method: "POST",
       url: "/v1/agent/run",
       headers: { authorization: `Bearer ${apiToken}` },
-      payload: { userId: "user-1", messages: [{ role: "user", content: "Run durably" }] },
+      payload: { userId: "user-1", projectId, messages: [{ role: "user", content: "Run durably" }] },
     });
 
     expect(response.statusCode).toBe(202);
     expect(response.json()).toMatchObject({ runId: record.id, status: "queued" });
     expect(agentRuntime.enqueue).toHaveBeenCalledOnce();
+    expect(agentRuntime.enqueue).toHaveBeenCalledWith(expect.objectContaining({ messages: expect.arrayContaining([{ role: "system", content: "Active Barlas project: Launch." }]) }));
+    expect(projects.attach).toHaveBeenCalledWith("user-1", projectId, "agent_run", record.id, "Run durably");
     await app.close();
   });
 
@@ -666,6 +670,19 @@ describe("Barlas AI Agent API", () => {
     expect(downloaded.headers["content-disposition"]).toContain("attachment;");
     expect(downloaded.rawPayload).toEqual(Buffer.from("report"));
     expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "file.downloaded", details: expect.not.objectContaining({ content: expect.anything() }) }));
+    await app.close();
+  });
+
+  it("creates an owned project and returns its linked resources and artifact versions", async () => {
+    const deps = dependencies();
+    const project = { id: "00000000-0000-4000-8000-000000000201", userId: "user-1", name: "Launch", description: "Ship", status: "active" as const, createdAt: "2026-10-16T00:00:00.000Z", updatedAt: "2026-10-16T00:00:00.000Z" };
+    const projects = { create: vi.fn(async () => project), list: vi.fn(async () => [project]), detail: vi.fn(async () => ({ project, resources: [], artifacts: [] })), context: vi.fn(async () => "Active Barlas project: Launch."), attach: vi.fn(), snapshot: vi.fn(), restore: vi.fn() };
+    const app = await buildApp({ apiToken, ...deps, projects }); const auth = { authorization: `Bearer ${apiToken}` };
+    const created = await app.inject({ method: "POST", url: "/v1/projects", headers: auth, payload: { userId: "user-1", name: "Launch", description: "Ship" } });
+    const detail = await app.inject({ method: "GET", url: `/v1/projects/${project.id}?userId=user-1`, headers: auth });
+    expect(created.statusCode).toBe(201); expect(created.json()).toEqual({ project });
+    expect(detail.json()).toEqual({ project, resources: [], artifacts: [] });
+    expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "project.created", resourceId: project.id }));
     await app.close();
   });
 

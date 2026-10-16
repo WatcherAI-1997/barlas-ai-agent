@@ -44,6 +44,11 @@ autonomy.
 - The authenticated file cabinet lists, uploads, and downloads owned workspace
   files. Upload replacement is explicit, downloads are attachment-only, and
   file contents never enter audit details. Upload never implies execution.
+- The project layer groups references to owned conversations, agent runs,
+  memories, and files. PostgreSQL stores immutable bounded artifact snapshots;
+  advisory locking serializes version allocation and SHA-256 identifies exact
+  content. Restore overwrites only the original owned workspace path after an
+  explicit authenticated request.
 - Media uploads are limited to 10 MB and verified from binary signatures before
   storage. Vision, scanned-PDF analysis, transcription, and speech generation
   use owned workspace paths and remain external approval-gated model calls;

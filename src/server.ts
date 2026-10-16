@@ -27,6 +27,7 @@ import { ToolExecutor } from "./tools/executor.js";
 import { ManagedBrowser } from "./tools/managed-browser.js";
 import { CodeSandboxClient } from "./tools/code-sandbox.js";
 import { FileWorkspace } from "./tools/file-workspace.js";
+import { ProjectService } from "./projects/service.js";
 import { MediaService, OpenAIMediaModel } from "./tools/media.js";
 import { ScheduleService } from "./schedules/service.js";
 import { ScheduleWorker } from "./schedules/worker.js";
@@ -95,6 +96,7 @@ const codeSandbox = config.SANDBOX_SOCKET_PATH && config.SANDBOX_SHARED_TOKEN
   ? new CodeSandboxClient(config.SANDBOX_SOCKET_PATH, config.SANDBOX_SHARED_TOKEN)
   : undefined;
 const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
+const projects = new ProjectService(database, workspace);
 const mediaService = new MediaService(
   workspace,
   new OpenAIMediaModel({
@@ -223,6 +225,7 @@ const app = await buildApp({
   organizations,
   media: mediaService,
   workspace,
+  projects,
   schedules,
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),
   webRoot: config.WEB_ROOT,

@@ -1,4 +1,4 @@
-const state = { token: sessionStorage.getItem("barlasToken"), account: null, conversationId: null, languages: [], skills: [] };
+const state = { token: sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [] };
 const $ = (selector) => document.querySelector(selector);
 
 async function api(path, options = {}) {
@@ -75,6 +75,7 @@ async function showApp(account) {
   $("#identity").textContent = `${account.displayName} · ${account.role}`;
   $("#users-tab").classList.toggle("hidden", account.role !== "owner");
   await loadSkillOptions();
+  await loadProjectOptions();
   newConversation();
   loadPanel("overview").catch((error) => alert(error.message));
 }
@@ -146,7 +147,7 @@ $("#chat-form").addEventListener("submit", async (event) => {
     const selectedSkill = $("#skill-select").value;
     const split = selectedSkill.lastIndexOf("@");
     const skill = split > 0 ? { skillId: selectedSkill.slice(0, split), skillVersion: selectedSkill.slice(split + 1) } : {};
-    const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, messages: [{ role: "user", content: text }], taskClass: $("#task-class").value, ...skill }) });
+    const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, projectId: $("#chat-project").value || undefined, messages: [{ role: "user", content: text }], taskClass: $("#task-class").value, ...skill }) });
     state.conversationId = data.conversationId;
     const statusNode = addMessage("agent", data.message.content);
     if (data.status === "queued" && data.runId) void watchAgentRun(data.runId, statusNode);
@@ -211,6 +212,7 @@ async function loadPanel(name) {
   if (name === "jobs") await loadJobs();
   if (name === "schedules") await loadSchedules();
   if (name === "files") await loadFiles();
+  if (name === "projects") await loadProjects();
   if (name === "traces") renderList("#traces", (await api(`/v1/traces?userId=${encodeURIComponent(state.account.id)}`)).traces, (item) => card(item.operation, `${item.status} · ${new Date(item.createdAt).toLocaleString()}`, item.traceId));
   if (name === "skills") {
     await loadSkillOptions();
@@ -282,6 +284,62 @@ async function loadFiles() {
     });
     node.append(button); return node;
   });
+}
+
+$("#project-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); const status = $("#project-status"); status.textContent = "Создание…";
+  try {
+    const data = await api("/v1/projects", { method: "POST", body: JSON.stringify({ userId: state.account.id, name: $("#project-name").value.trim(), description: $("#project-description").value.trim() }) });
+    event.target.reset(); status.textContent = `Создан проект: ${data.project.name}`; state.projectId = data.project.id; await loadProjects(); await openProject(data.project.id);
+  } catch (error) { status.textContent = `Ошибка: ${error.message}`; }
+});
+
+async function loadProjects() {
+  const items = (await api(`/v1/projects?userId=${encodeURIComponent(state.account.id)}`)).projects;
+  state.projects = items; fillProjectSelect();
+  renderList("#projects", items, (item) => {
+    const node = card(item.name, `${item.status} · ${new Date(item.updatedAt).toLocaleString()}`, item.description);
+    const button = document.createElement("button"); button.textContent = "Открыть"; button.addEventListener("click", () => openProject(item.id).catch((error) => alert(error.message))); node.append(button); return node;
+  });
+}
+
+async function loadProjectOptions() {
+  state.projects = (await api(`/v1/projects?userId=${encodeURIComponent(state.account.id)}`)).projects; fillProjectSelect();
+}
+
+function fillProjectSelect() {
+  const selected = $("#chat-project").value;
+  $("#chat-project").replaceChildren(new Option("Без проекта", ""), ...state.projects.map((project) => new Option(project.name, project.id)));
+  if (state.projects.some((project) => project.id === selected)) $("#chat-project").value = selected;
+}
+
+async function openProject(id) {
+  state.projectId = id;
+  const data = await api(`/v1/projects/${id}?userId=${encodeURIComponent(state.account.id)}`);
+  $("#project-detail").classList.remove("hidden"); $("#project-title").textContent = data.project.name; $("#project-description-view").textContent = data.project.description;
+  renderList("#project-resources", data.resources, (item) => card(item.label || item.id, item.type, item.id));
+  renderList("#project-artifacts", data.artifacts, (item) => {
+    const node = card(`${item.path} · v${item.version}`, `${item.bytes} байт · ${new Date(item.createdAt).toLocaleString()}`, item.sha256);
+    const button = document.createElement("button"); button.textContent = "Восстановить"; button.addEventListener("click", () => restoreArtifact(item.id).catch((error) => alert(error.message))); node.append(button); return node;
+  });
+}
+
+$("#project-resource-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); if (!state.projectId) return;
+  await api(`/v1/projects/${state.projectId}/resources`, { method: "POST", body: JSON.stringify({ userId: state.account.id, type: $("#project-resource-type").value, resourceId: $("#project-resource-id").value.trim(), label: $("#project-resource-label").value.trim() }) });
+  event.target.reset(); await openProject(state.projectId);
+});
+
+$("#project-artifact-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); if (!state.projectId) return;
+  await api(`/v1/projects/${state.projectId}/artifacts`, { method: "POST", body: JSON.stringify({ userId: state.account.id, path: $("#project-artifact-path").value.trim() }) });
+  event.target.reset(); await openProject(state.projectId);
+});
+
+async function restoreArtifact(versionId) {
+  if (!state.projectId || !confirm("Восстановить эту версию и заменить текущий файл?")) return;
+  await api(`/v1/projects/${state.projectId}/artifacts/${versionId}/restore`, { method: "POST", body: JSON.stringify({ userId: state.account.id }) });
+  $("#project-status").textContent = "Версия восстановлена."; await openProject(state.projectId);
 }
 
 function newConversation() {

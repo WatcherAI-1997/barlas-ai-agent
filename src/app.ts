@@ -43,6 +43,7 @@ import type { ToolExecutor } from "./tools/executor.js";
 import { MAX_MEDIA_BYTES, type MediaService } from "./tools/media.js";
 import type { FileWorkspace } from "./tools/file-workspace.js";
 import type { ScheduleService } from "./schedules/service.js";
+import type { ProjectService, ProjectResourceType } from "./projects/service.js";
 
 const chatBodySchema = z.object({
   userId: z.string().min(1).max(128),
@@ -65,6 +66,7 @@ const agentRunBodySchema = chatBodySchema.extend({
   allowedTools: z.array(z.string().min(1).max(128)).max(32).optional(),
   skillId: z.string().regex(/^[a-z][a-z0-9.-]{2,63}$/u).optional(),
   skillVersion: z.string().regex(/^\d+\.\d+\.\d+$/u).optional(),
+  projectId: z.string().uuid().optional(),
 }).refine((input) => !input.skillVersion || input.skillId, {
   message: "skillVersion requires skillId",
   path: ["skillVersion"],
@@ -116,6 +118,15 @@ const fileQuerySchema = z.object({
   userId: z.string().min(1).max(128), path: z.string().min(1).max(1_000).default("."),
 }).strict();
 const fileUploadQuerySchema = fileQuerySchema.extend({ overwrite: z.enum(["true", "false"]).default("false") });
+const projectBodySchema = z.object({ userId: z.string().min(1).max(128), name: z.string().min(1).max(120), description: z.string().max(4_000).default("") }).strict();
+const projectQuerySchema = z.object({ userId: z.string().min(1).max(128) }).strict();
+const projectParamsSchema = z.object({ id: z.string().uuid() });
+const projectResourceSchema = z.object({
+  userId: z.string().min(1).max(128), type: z.enum(["conversation", "agent_run", "memory", "file"]),
+  resourceId: z.string().min(1).max(1_000), label: z.string().max(200).default(""),
+}).strict();
+const artifactSchema = z.object({ userId: z.string().min(1).max(128), path: z.string().min(1).max(1_000) }).strict();
+const artifactParamsSchema = z.object({ id: z.string().uuid(), versionId: z.string().uuid() });
 
 function fileSystemCode(error: unknown): string | undefined {
   return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
@@ -291,6 +302,7 @@ export interface AppDependencies {
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
   media?: Pick<MediaService, "saveUpload">;
   workspace?: Pick<FileWorkspace, "list" | "readBuffer" | "writeUpload">;
+  projects?: Pick<ProjectService, "create" | "list" | "detail" | "context" | "attach" | "snapshot" | "restore">;
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
@@ -586,6 +598,77 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       if (isWorkspaceInputError(error)) return reply.badRequest("Invalid workspace file");
       throw error;
     }
+  });
+
+  app.post("/v1/projects", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const parsed = projectBodySchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid project request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    const project = await dependencies.projects.create(userId, parsed.data.name, parsed.data.description);
+    await dependencies.database.appendAudit({ userId, eventType: "project.created", resourceType: "project", resourceId: project.id, details: { name: project.name } });
+    return reply.code(201).send({ project });
+  });
+
+  app.get("/v1/projects", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const parsed = projectQuerySchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid projects query");
+    return { projects: await dependencies.projects.list(authorizeUser(request, parsed.data.userId)) };
+  });
+
+  app.get("/v1/projects/:id", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const params = projectParamsSchema.safeParse(request.params); const query = projectQuerySchema.safeParse(request.query);
+    if (!params.success || !query.success) return reply.badRequest("Invalid project query");
+    const detail = await dependencies.projects.detail(authorizeUser(request, query.data.userId), params.data.id);
+    return detail ? detail : reply.notFound("Project not found");
+  });
+
+  app.post("/v1/projects/:id/resources", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const params = projectParamsSchema.safeParse(request.params); const parsed = projectResourceSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid project resource request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    try {
+      const resource = await dependencies.projects.attach(userId, params.data.id, parsed.data.type as ProjectResourceType, parsed.data.resourceId, parsed.data.label);
+      if (!resource) return reply.notFound("Project not found");
+      await dependencies.database.appendAudit({ userId, eventType: "project.resource.attached", resourceType: "project", resourceId: params.data.id, details: { type: resource.type, resourceId: resource.id } });
+      return reply.code(201).send({ resource });
+    } catch (error) {
+      if (error instanceof Error && error.message === "Resource not found") return reply.notFound("Resource not found");
+      if (isWorkspaceInputError(error) || ["ENOENT", "ENOTDIR"].includes(fileSystemCode(error) ?? "")) return reply.notFound("Resource not found");
+      throw error;
+    }
+  });
+
+  app.post("/v1/projects/:id/artifacts", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const params = projectParamsSchema.safeParse(request.params); const parsed = artifactSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid artifact request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    let artifact;
+    try {
+      artifact = await dependencies.projects.snapshot(userId, params.data.id, parsed.data.path);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Project not found") return reply.notFound("Project not found");
+      if (error instanceof Error && error.message === "Artifact file is empty") return reply.badRequest(error.message);
+      if (isWorkspaceInputError(error) || ["ENOENT", "ENOTDIR"].includes(fileSystemCode(error) ?? "")) return reply.notFound("Workspace file not found");
+      throw error;
+    }
+    await dependencies.database.appendAudit({ userId, eventType: "project.artifact.snapshotted", resourceType: "project", resourceId: params.data.id, details: { path: artifact.path, version: artifact.version, sha256: artifact.sha256, bytes: artifact.bytes } });
+    return reply.code(201).send({ artifact });
+  });
+
+  app.post("/v1/projects/:id/artifacts/:versionId/restore", async (request, reply) => {
+    if (!dependencies.projects) return reply.notFound();
+    const params = artifactParamsSchema.safeParse(request.params); const parsed = projectQuerySchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid artifact restore request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    const artifact = await dependencies.projects.restore(userId, params.data.id, params.data.versionId);
+    if (!artifact) return reply.notFound("Artifact version not found");
+    await dependencies.database.appendAudit({ userId, eventType: "project.artifact.restored", resourceType: "project", resourceId: params.data.id, details: { path: artifact.path, version: artifact.version, sha256: artifact.sha256, bytes: artifact.bytes } });
+    return { artifact };
   });
 
   app.post("/v1/auth/logout", async (request, reply) => {
@@ -937,6 +1020,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         }]
       : [];
     const languageContext = await preferredLanguageContext(userId, dependencies.authService);
+    let projectContext: Array<{ role: "system"; content: string }> = [];
+    if (parsed.data.projectId) {
+      if (!dependencies.projects) return reply.badRequest("Projects are not available");
+      const context = await dependencies.projects.context(userId, parsed.data.projectId);
+      if (!context) return reply.notFound("Project not found");
+      projectContext = [{ role: "system", content: context }];
+    }
     let skillContext: Array<{ role: "system"; content: string }> = [];
     let allowedTools = parsed.data.allowedTools;
     let selectedSkill: { id: string; version: string } | undefined;
@@ -980,7 +1070,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const loopInput = {
         userId,
         conversationId,
-        messages: [...languageContext, ...skillContext, ...memoryContext, ...parsed.data.messages],
+        messages: [...languageContext, ...projectContext, ...skillContext, ...memoryContext, ...parsed.data.messages],
         taskClass: parsed.data.taskClass,
         maxSteps: parsed.data.maxSteps,
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
@@ -991,6 +1081,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           ...loopInput,
           conversationMessages: parsed.data.messages,
         });
+        if (parsed.data.projectId && dependencies.projects) {
+          await dependencies.projects.attach(userId, parsed.data.projectId, "agent_run", run.id, latestUserMessage?.content.slice(0, 200) ?? "Agent run");
+        }
         if (traceId) {
           await dependencies.governance?.trace({
             traceId,
@@ -1016,6 +1109,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         messages: parsed.data.messages,
         result: result.result,
       });
+      if (parsed.data.projectId && dependencies.projects) {
+        await dependencies.projects.attach(userId, parsed.data.projectId, "conversation", conversationId, latestUserMessage?.content.slice(0, 200) ?? "Conversation");
+      }
       if (traceId) {
         await dependencies.governance?.trace({
           traceId,

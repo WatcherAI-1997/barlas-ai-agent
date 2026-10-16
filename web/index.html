@@ -55,6 +55,7 @@
           <button data-panel="jobs">Задачи</button>
           <button data-panel="schedules">Расписания</button>
           <button data-panel="files">Файлы</button>
+          <button data-panel="projects">Проекты</button>
           <button data-panel="traces">Трассировка</button>
           <button data-panel="skills">Навыки</button>
           <button data-panel="organizations">Организации</button>
@@ -82,6 +83,7 @@
                 <select id="skill-select" aria-label="Навык">
                   <option value="">Без специального навыка</option>
                 </select>
+                <select id="chat-project" aria-label="Проект"><option value="">Без проекта</option></select>
                 <button type="submit">Отправить</button>
               </form>
               <form id="media-upload-form" class="inline-form">
@@ -127,6 +129,31 @@
             <button id="file-up" type="button" class="secondary">На уровень выше</button>
           </form>
           <div id="files" class="grid"></div>
+        </section>
+        <section id="panel-projects" class="panel hidden">
+          <h2>Проекты</h2>
+          <form id="project-form" class="inline-form">
+            <input id="project-name" maxlength="120" placeholder="Название проекта" required>
+            <input id="project-description" maxlength="4000" placeholder="Цель и контекст">
+            <button type="submit">Создать</button>
+          </form>
+          <p id="project-status" class="meta" role="status"></p>
+          <div id="projects" class="grid"></div>
+          <div id="project-detail" class="hidden">
+            <h2 id="project-title"></h2><p id="project-description-view" class="meta"></p>
+            <form id="project-resource-form" class="inline-form">
+              <select id="project-resource-type"><option value="conversation">Диалог</option><option value="agent_run">Запуск</option><option value="memory">Память</option><option value="file">Файл</option></select>
+              <input id="project-resource-id" maxlength="1000" placeholder="UUID или путь файла" required>
+              <input id="project-resource-label" maxlength="200" placeholder="Метка">
+              <button type="submit">Привязать</button>
+            </form>
+            <form id="project-artifact-form" class="inline-form">
+              <input id="project-artifact-path" maxlength="1000" placeholder="Путь файла для новой версии" required>
+              <button type="submit">Сохранить версию</button>
+            </form>
+            <h2>Связанные ресурсы</h2><div id="project-resources" class="grid"></div>
+            <h2>Версии результатов</h2><div id="project-artifacts" class="grid"></div>
+          </div>
         </section>
         <section id="panel-traces" class="panel hidden"><h2>Трассировка</h2><div id="traces" class="grid"></div></section>
         <section id="panel-skills" class="panel hidden"><h2>Навыки</h2><div id="skills" class="grid"></div></section>

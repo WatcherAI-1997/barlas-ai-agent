@@ -36,8 +36,9 @@ import type {
   MemoryEntry,
 } from "./types.js";
 import type { AgentSchedule } from "../schedules/types.js";
+import type { ArtifactVersion, Project, ProjectResource, ProjectResourceType, ProjectStore } from "../projects/service.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -50,6 +51,95 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async ping(): Promise<void> {
     await this.pool.query("select 1");
+  }
+
+  async createProject(input: { userId: string; name: string; description: string }): Promise<Project> {
+    const result = await this.pool.query<ProjectRow>(
+      `insert into projects (user_id, name, description) values ($1, $2, $3)
+       returning id, user_id, name, description, status, created_at, updated_at`,
+      [input.userId, input.name, input.description],
+    );
+    return mapProject(result.rows[0]!);
+  }
+
+  async listProjects(userId: string): Promise<Project[]> {
+    const result = await this.pool.query<ProjectRow>(
+      `select id, user_id, name, description, status, created_at, updated_at
+       from projects where user_id = $1 order by updated_at desc, id`, [userId],
+    );
+    return result.rows.map(mapProject);
+  }
+
+  async getProject(userId: string, id: string): Promise<Project | null> {
+    const result = await this.pool.query<ProjectRow>(
+      `select id, user_id, name, description, status, created_at, updated_at
+       from projects where user_id = $1 and id = $2`, [userId, id],
+    );
+    return result.rows[0] ? mapProject(result.rows[0]) : null;
+  }
+
+  async resourceBelongsToUser(userId: string, type: Exclude<ProjectResourceType, "file">, id: string): Promise<boolean> {
+    const table = { conversation: "conversations", agent_run: "agent_runs", memory: "memories" }[type];
+    const result = await this.pool.query(`select 1 from ${table} where user_id = $1 and id::text = $2`, [userId, id]);
+    return result.rowCount === 1;
+  }
+
+  async attachProjectResource(input: { projectId: string; userId: string; type: ProjectResourceType; resourceId: string; label: string }): Promise<ProjectResource | null> {
+    const result = await this.pool.query<ProjectResourceRow>(
+      `insert into project_resources (project_id, user_id, resource_type, resource_id, label)
+       select id, user_id, $3, $4, $5 from projects where id = $1 and user_id = $2
+       on conflict (project_id, resource_type, resource_id) do update set label = excluded.label
+       returning project_id, resource_type, resource_id, label, created_at`,
+      [input.projectId, input.userId, input.type, input.resourceId, input.label],
+    );
+    return result.rows[0] ? mapProjectResource(result.rows[0]) : null;
+  }
+
+  async listProjectResources(userId: string, projectId: string): Promise<ProjectResource[]> {
+    const result = await this.pool.query<ProjectResourceRow>(
+      `select resource.project_id, resource.resource_type, resource.resource_id, resource.label, resource.created_at
+       from project_resources resource join projects project on project.id = resource.project_id
+       where project.user_id = $1 and project.id = $2 order by resource.created_at, resource.resource_type`, [userId, projectId],
+    );
+    return result.rows.map(mapProjectResource);
+  }
+
+  async createArtifactVersion(input: { projectId: string; userId: string; path: string; sha256: string; content: Buffer }): Promise<ArtifactVersion | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`${input.projectId}:${input.path}`]);
+      const result = await client.query<ArtifactRow>(
+        `insert into project_artifact_versions (project_id, user_id, path, version, sha256, size_bytes, content)
+         select project.id, project.user_id, $3,
+           coalesce((select max(version) + 1 from project_artifact_versions where project_id = project.id and path = $3), 1),
+           $4, $5, $6 from projects project where project.id = $1 and project.user_id = $2
+         returning id, project_id, path, version, sha256, size_bytes, created_at`,
+        [input.projectId, input.userId, input.path, input.sha256, input.content.byteLength, input.content],
+      );
+      await client.query("commit");
+      return result.rows[0] ? mapArtifact(result.rows[0]) : null;
+    } catch (error) { await client.query("rollback"); throw error; } finally { client.release(); }
+  }
+
+  async listArtifactVersions(userId: string, projectId: string): Promise<ArtifactVersion[]> {
+    const result = await this.pool.query<ArtifactRow>(
+      `select artifact.id, artifact.project_id, artifact.path, artifact.version, artifact.sha256, artifact.size_bytes, artifact.created_at
+       from project_artifact_versions artifact join projects project on project.id = artifact.project_id
+       where project.user_id = $1 and project.id = $2 order by artifact.path, artifact.version desc`, [userId, projectId],
+    );
+    return result.rows.map(mapArtifact);
+  }
+
+  async getArtifactVersion(userId: string, projectId: string, id: string): Promise<(ArtifactVersion & { content: Buffer }) | null> {
+    const result = await this.pool.query<ArtifactRow & { content: Buffer }>(
+      `select artifact.id, artifact.project_id, artifact.path, artifact.version, artifact.sha256,
+              artifact.size_bytes, artifact.created_at, artifact.content
+       from project_artifact_versions artifact join projects project on project.id = artifact.project_id
+       where project.user_id = $1 and project.id = $2 and artifact.id = $3`, [userId, projectId, id],
+    );
+    const row = result.rows[0];
+    return row ? { ...mapArtifact(row), content: row.content } : null;
   }
 
   async listSkillVersions(): Promise<StoredSkill[]> {
@@ -1748,6 +1838,22 @@ interface SkillEvaluationRow {
   details: SkillEvaluation["details"];
   created_by: string | null;
   created_at: Date;
+}
+
+interface ProjectRow { id: string; user_id: string; name: string; description: string; status: Project["status"]; created_at: Date; updated_at: Date }
+interface ProjectResourceRow { project_id: string; resource_type: ProjectResourceType; resource_id: string; label: string; created_at: Date }
+interface ArtifactRow { id: string; project_id: string; path: string; version: number; sha256: string; size_bytes: number; created_at: Date }
+
+function mapProject(row: ProjectRow): Project {
+  return { id: row.id, userId: row.user_id, name: row.name, description: row.description, status: row.status, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
+}
+
+function mapProjectResource(row: ProjectResourceRow): ProjectResource {
+  return { projectId: row.project_id, type: row.resource_type, id: row.resource_id, label: row.label, createdAt: row.created_at.toISOString() };
+}
+
+function mapArtifact(row: ArtifactRow): ArtifactVersion {
+  return { id: row.id, projectId: row.project_id, path: row.path, version: row.version, sha256: row.sha256, bytes: row.size_bytes, createdAt: row.created_at.toISOString() };
 }
 
 function mapSkill(row: SkillRow): StoredSkill {

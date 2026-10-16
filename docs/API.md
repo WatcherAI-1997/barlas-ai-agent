@@ -76,6 +76,11 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
   — upload one file; replacement requires `overwrite=true` explicitly.
 - `GET /v1/files/download?userId=...&path=projects%2Freport.md` — download an
   owned regular file as an attachment.
+- `POST /v1/projects` / `GET /v1/projects` — create and list owned projects.
+- `GET /v1/projects/:id` — return an owned project with linked resources and artifact versions.
+- `POST /v1/projects/:id/resources` — link an owned conversation, run, memory, or workspace file.
+- `POST /v1/projects/:id/artifacts` — snapshot the current bytes of an owned file as the next immutable version.
+- `POST /v1/projects/:id/artifacts/:versionId/restore` — explicitly restore one owned version to its original path.
 
 An isolated background run uses `jobType: "agent.run"` and accepts an `input`
 with `objective`, optional bounded `context`, and `taskClass` (`fast`, `deep`,
@@ -177,6 +182,20 @@ downtime. Pausing or disabling a schedule never cancels an already queued run.
 - Audit records contain path and byte count, never file contents. Uploading a
   project file does not execute it; execution remains a separate approval-gated
   sandbox action.
+
+## Projects and artifact versions
+
+- Projects are scoped by `userId`; project lookups, links, artifact versions,
+  and restores include the owner in their database predicates.
+- `/v1/agent/run` accepts optional `projectId`. The project name, description,
+  and bounded linked-resource index become system context, and the durable run
+  is linked back to that project automatically.
+- Database-backed resources must already belong to the same user. File links
+  are resolved through the same isolated workspace boundary before insertion.
+- A snapshot stores at most 10 MB, its SHA-256 digest, byte count, original
+  path, and an atomically allocated per-path version. Existing versions are
+  immutable. Restore is an explicit authenticated request and is audit logged
+  without content.
 
 ## Quotas and traces
 
