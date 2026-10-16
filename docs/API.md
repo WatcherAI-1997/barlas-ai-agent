@@ -80,6 +80,20 @@ previous step result. Unknown skills and oversized workflows are rejected.
   (`sha256`, `word_count`, `head`, and `tail`) to direct executable calls over
   a previously resolved regular file inside the user's workspace. Runtime and
   output are bounded.
+- `browser.open` reads a public HTTP/HTTPS page as bounded plain text. It never
+  runs page JavaScript, stores cookies, submits forms, or exposes response
+  headers to the model. Every request and redirect is approval-gated, limited
+  to standard ports, DNS-checked and connection-pinned against private,
+  loopback, link-local, reserved, and metadata-network destinations. Responses
+  time out after ten seconds and are capped at 2 MB / 100,000 output characters.
+
+## Documents
+
+- `documents.create` writes Markdown (`.md`), plain text (`.txt`), or CSV
+  (`.csv`) only inside the current user's isolated workspace.
+- Document creation is a write action and therefore waits for explicit user
+  approval. CSV cells are escaped server-side; paths retain the same traversal,
+  symlink, size, and ownership protections as the other file tools.
 
 ## Quotas and traces
 

@@ -11,7 +11,7 @@
 - Telegram webhook, durable replies, and approval buttons. *(implemented; credentials pending)*
 - One-time Telegram-to-account linking and shared identity. *(implemented)*
 - Persistent conversations and explicit long-term memory. *(implemented)*
-- Web research, files, terminal tools, and task execution. *(SearXNG search, isolated files, and restricted inspection implemented)*
+- Web research, files, documents, terminal tools, and task execution. *(SearXNG search, SSRF-protected page reader, Markdown/TXT/CSV creation, isolated files, and restricted inspection implemented)*
 - Model switching and routing. *(fast/deep/private foundation implemented)*
 - Approval gates, audit trail, and usage limits. *(implemented foundation)*
 
@@ -32,6 +32,6 @@
 - Branded web application. *(authenticated cabinet foundation implemented)*
 - Conversation history, approval inbox, and job controls. *(implemented)*
 - Multi-user organizations, roles, and billing foundations. *(accounts and owner/user roles implemented; organizations/billing pending)*
-- Connector catalog and deployment automation.
+- Connector catalog and deployment automation. *(encrypted per-user vault and read-only GitHub connector implemented; Google services pending)*
 - Isolated production Compose, HTTPS proxy, database backups, restore guard, and smoke test. *(implemented; credentials and deployment pending)*
 - Security review, recovery drill, and staged release.

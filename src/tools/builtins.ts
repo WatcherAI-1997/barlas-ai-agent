@@ -4,6 +4,8 @@ import { ToolRegistry } from "./registry.js";
 import { FileWorkspace } from "./file-workspace.js";
 import { RestrictedTerminal } from "./terminal.js";
 import { SearxngSearchClient } from "./web-search.js";
+import { SafeWebReader } from "./safe-web.js";
+import { DocumentWriter } from "./documents.js";
 
 export function createBuiltinToolRegistry(options: {
   workspaceRoot?: string;
@@ -38,6 +40,7 @@ export function createBuiltinToolRegistry(options: {
   if (options.workspaceRoot) {
     const workspace = new FileWorkspace(options.workspaceRoot);
     const terminal = new RestrictedTerminal(workspace);
+    const documents = new DocumentWriter(workspace);
     registry.register({
       name: "files.list",
       description: "List regular files and directories in the current user's isolated workspace.",
@@ -83,7 +86,42 @@ export function createBuiltinToolRegistry(options: {
         return terminal.inspect({ userId: context.userId, ...value });
       },
     });
+    registry.register({
+      name: "documents.create",
+      description: "Create a Markdown, plain-text, or CSV document in the current user's isolated workspace.",
+      risk: "write",
+      inputSchema: z.discriminatedUnion("format", [
+        z.object({
+          format: z.literal("markdown"),
+          path: z.string().min(1).max(1_000),
+          content: z.string().max(1_000_000),
+        }).strict(),
+        z.object({
+          format: z.literal("text"),
+          path: z.string().min(1).max(1_000),
+          content: z.string().max(1_000_000),
+        }).strict(),
+        z.object({
+          format: z.literal("csv"),
+          path: z.string().min(1).max(1_000),
+          rows: z.array(z.array(z.string().max(10_000)).max(50)).max(1_000),
+        }).strict(),
+      ]),
+      execute: async (input, context) => documents.create({
+        userId: context.userId,
+        ...(input as { path: string; format: "markdown" | "text" | "csv"; content?: string; rows?: string[][] }),
+      }),
+    });
   }
+
+  const webReader = new SafeWebReader();
+  registry.register({
+    name: "browser.open",
+    description: "Read a public HTTP or HTTPS page as bounded plain text without scripts, cookies, or browser state.",
+    risk: "external",
+    inputSchema: z.object({ url: z.string().url().max(2_000) }).strict(),
+    execute: async (input) => webReader.open((input as { url: string }).url),
+  });
 
   if (options.searxngBaseUrl) {
     const search = new SearxngSearchClient(options.searxngBaseUrl);
