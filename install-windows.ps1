@@ -20,8 +20,16 @@ $Archive = Join-Path $WorkDir "barlas.zip"
 $Extracted = Join-Path $WorkDir "source"
 $PreviousDir = Join-Path $BarlasHome "previous"
 
-function Write-Step([int]$Number, [string]$Message) { Write-Host "[$Number/5] $Message" -ForegroundColor Cyan }
-function Write-Done([string]$Message) { Write-Host "[OK] $Message" -ForegroundColor Green }
+function Write-Step([int]$Number, [string]$Message) {
+    $Label = "{0:D2}/05" -f $Number
+    Write-Host ""
+    Write-Host "  $Label  " -ForegroundColor Red -NoNewline
+    Write-Host $Message -ForegroundColor White
+}
+function Write-Done([string]$Message) {
+    Write-Host "         OK  " -ForegroundColor Green -NoNewline
+    Write-Host $Message -ForegroundColor DarkGray
+}
 
 function Invoke-NativeCommand([string]$FilePath, [string[]]$Arguments, [string]$FailureMessage) {
     $PreviousPreference = $ErrorActionPreference
@@ -69,10 +77,13 @@ function Show-PixelBanner {
     }
     Write-Host "           A I   A G E N T" -ForegroundColor DarkGray
     Write-Host ""
+    Write-Host "  WINDOWS 10/11" -ForegroundColor Red -NoNewline
+    Write-Host "  /  PERSONAL AI INSTALLER" -ForegroundColor White
+    Write-Host "  Private local setup  |  No Docker  |  No WSL  |  No admin rights" -ForegroundColor DarkGray
+    Write-Host "  ───────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
 }
 
 Show-PixelBanner
-Write-Host "Native Windows installer - no Docker or WSL required" -ForegroundColor DarkGray
 Write-Host ""
 
 New-Item -ItemType Directory -Force -Path $WorkDir, $Extracted, $BarlasHome, $BinDir, $RuntimeDir, $LogDir | Out-Null

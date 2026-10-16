@@ -105,7 +105,9 @@ describe("production installer", () => {
       '" ▄██▄  ▄██▄ "',
       '"    ▄██▄    "',
       '"           A I   A G E N T"',
-      "[$Number/5]",
+      '"{0:D2}/05" -f $Number',
+      "PERSONAL AI INSTALLER",
+      "Private local setup  |  No Docker  |  No WSL  |  No admin rights",
       "install.log",
       '"ci", "--include=dev", "--ignore-scripts"',
       'node_modules\\typescript\\bin\\tsc',
@@ -127,7 +129,6 @@ describe("production installer", () => {
       "nodejs.org/dist",
       "node_modules\\playwright-core\\cli.js",
       "install-native.ps1",
-      "no Docker or WSL required",
     ]) expect(bootstrap).toContain(required);
     expect(bootstrap).not.toContain("docker info");
     expect(bootstrap).not.toContain("Docker.DockerDesktop");

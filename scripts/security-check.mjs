@@ -95,7 +95,7 @@ for (const required of ["Windows_NT", "Docker Desktop", "BARLAS_INSTALL_MODE = \
 for (const required of ["BARLAS_INSTALL_MODE = \"native\"", "RandomNumberGenerator", "Protect-SecretFile", "BROWSER_WS_ENDPOINT = $BrowserEndpoint", "start-native.ps1", "Read-MenuChoice", "Read-ArrowMenu", "Read-ValidatedValue", "[int]::TryParse", "OpenAI account - browser sign-in, no API key", "Ollama - local and private"]) {
   if (!nativeWindowsInstaller.includes(required)) throw new Error(`Native Windows installer boundary is missing: ${required}`);
 }
-for (const required of ["commits/main", "archive/$ReleaseSha.zip", ".barlas-version", "LOCALAPPDATA", "native.env", "barlas.cmd", "ExecutionPolicy Bypass", "nodejs.org", "node_modules\\playwright-core\\cli.js", "no Docker or WSL required"]) {
+for (const required of ["commits/main", "archive/$ReleaseSha.zip", ".barlas-version", "LOCALAPPDATA", "native.env", "barlas.cmd", "ExecutionPolicy Bypass", "nodejs.org", "node_modules\\playwright-core\\cli.js", "No Docker  |  No WSL  |  No admin rights"]) {
   if (!windowsBootstrap.includes(required)) throw new Error(`Windows bootstrap boundary is missing: ${required}`);
 }
 for (const forbidden of ["docker info", "Docker.DockerDesktop", "compose.local.yml"]) {
