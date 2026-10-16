@@ -25,7 +25,7 @@ for (const required of ["read_only: true", "no-new-privileges:true", "cap_drop:"
 const terminal = await readFile("src/tools/terminal.ts", "utf8");
 if (/\bshell\s*:\s*true\b/u.test(terminal)) throw new Error("Restricted terminal must not enable a shell");
 const gitignore = await readFile(".gitignore", "utf8");
-for (const required of [".env", "deploy/production.env", "*.key", "secrets/"]) {
+for (const required of [".env", "deploy/production.env", "deploy/local.env", "*.key", "secrets/"]) {
   if (!gitignore.includes(required)) throw new Error(`.gitignore must cover ${required}`);
 }
 
@@ -215,6 +215,7 @@ for (const required of ["scheduleId: schedule.id", "scheduleOccurrence: occurren
 }
 const telegramClient = await readFile("src/channels/telegram.ts", "utf8");
 const telegramVoice = await readFile("src/channels/telegram-voice.ts", "utf8");
+const telegramPolling = await readFile("src/channels/telegram-polling.ts", "utf8");
 for (const required of ["sendVoice", "FormData", "TELEGRAM_PUBLIC_UPLOAD_BYTES = 50_000_000", "maxUploadBytes", "parseTelegramVoiceCommand"]) {
   if (!telegramClient.includes(required)) throw new Error(`Telegram voice boundary is missing: ${required}`);
 }
@@ -225,6 +226,15 @@ for (const prohibited of ["phone.requestCall", "MTProto", "userbot"]) {
   if (telegramClient.includes(prohibited) || telegramVoice.includes(prohibited)) {
     throw new Error(`Unsupported Telegram account-call mechanism is present: ${prohibited}`);
   }
+}
+for (const required of ["deleteWebhook", "getUpdates", "update.update_id + 1", "await this.deliver(update)"]) {
+  if (!telegramPolling.includes(required) && !telegramClient.includes(required)) {
+    throw new Error(`Telegram local polling boundary is missing: ${required}`);
+  }
+}
+const localCompose = await readFile("compose.local.yml", "utf8");
+for (const required of ['127.0.0.1:${BARLAS_HTTP_PORT:-17840}:17840', 'profiles: ["public"]']) {
+  if (!localCompose.includes(required)) throw new Error(`Local installation boundary is missing: ${required}`);
 }
 const mcpConnector = await readFile("src/connectors/mcp.ts", "utf8");
 for (const required of ["assertPublicUrl", "publicNetworkFetch", "redirectPolicy: \"same-origin\"", "MAX_RESULT_BYTES = 1_000_000"]) {

@@ -44,7 +44,10 @@ else
 fi
 
 export BARLAS_ENV_FILE="$ENV_FILE"
-compose=(docker compose -f "$ROOT_DIR/compose.production.yml" --env-file "$ENV_FILE")
+install_mode="$(sed -n "s/^BARLAS_INSTALL_MODE='\([^']*\)'$/\1/p" "$ENV_FILE" | tail -n 1)"
+compose_files=(-f "$ROOT_DIR/compose.production.yml")
+if [[ "$install_mode" == "local" ]]; then compose_files+=(-f "$ROOT_DIR/compose.local.yml"); fi
+compose=(docker compose "${compose_files[@]}" --env-file "$ENV_FILE")
 if [[ $FAILURES -eq 0 ]] && "${compose[@]}" config --quiet >/dev/null 2>&1; then
   pass "Production Compose configuration is valid"
 else

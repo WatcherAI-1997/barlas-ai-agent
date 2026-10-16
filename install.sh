@@ -3,10 +3,12 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$ROOT_DIR/deploy/production.env"
+ENV_FILE_EXPLICIT=false
 INSTALL_LOG="$ROOT_DIR/logs/install.log"
 NON_INTERACTIVE=false
 PREPARE_ONLY=false
 VERBOSE=false
+LOCAL_MODE=false
 ENV_CREATED=false
 TEMP_FILE=""
 SUPPORTED_LANGUAGE_CODES="tr az azb tk gag qxq kmz klj uz ug ili slr ybe kk ky kaa nog tt ba crh kum krc kdr uum cv sah dlg tyv kim alt kjh cjs clw fuy sty mn ru en"
@@ -18,14 +20,17 @@ Usage: ./install.sh [options]
 Prepare and start an isolated Barlas AI Agent production stack.
 
 Options:
-  --env-file PATH       Production environment file (default: deploy/production.env)
+  --env-file PATH       Protected environment file (public default: deploy/production.env;
+                        local default: deploy/local.env)
   --non-interactive     Read required values from environment variables; never prompt
+  --local               Install on localhost without a domain, Caddy, or public ports
   --prepare-only        Create and validate configuration without starting containers
   --verbose             Stream Docker build/start output instead of only logging it
   -h, --help            Show this help
 
 Non-interactive required variables:
-  BARLAS_DOMAIN, OWNER_EMAIL, MODEL_NAME, MODEL_API_KEY
+  Public: BARLAS_DOMAIN, OWNER_EMAIL, MODEL_NAME, MODEL_API_KEY
+  Local: MODEL_NAME, MODEL_API_KEY (owner email defaults to owner@barlas.local)
 
 Optional variables include DEEP_MODEL_NAME, VISION_MODEL, EMBEDDING_MODEL,
 OWNER_DISPLAY_NAME, OWNER_LANGUAGE, TELEGRAM_BOT_TOKEN, and port/model settings.
@@ -36,14 +41,19 @@ while (($#)); do
   case "$1" in
     --env-file)
       [[ $# -ge 2 && -n "$2" ]] || { echo "--env-file needs a path" >&2; exit 2; }
-      ENV_FILE="$2"; shift 2 ;;
+      ENV_FILE="$2"; ENV_FILE_EXPLICIT=true; shift 2 ;;
     --non-interactive) NON_INTERACTIVE=true; shift ;;
+    --local) LOCAL_MODE=true; shift ;;
     --prepare-only|--config-only) PREPARE_ONLY=true; shift ;;
     --verbose) VERBOSE=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ "$LOCAL_MODE" == true && "$ENV_FILE_EXPLICIT" == false ]]; then
+  ENV_FILE="$ROOT_DIR/deploy/local.env"
+fi
 
 if [[ "$ENV_FILE" != /* ]]; then ENV_FILE="$ROOT_DIR/$ENV_FILE"; fi
 
@@ -164,6 +174,7 @@ print_banner
 for tool in docker openssl curl git; do require_command "$tool"; done
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required (docker compose)"
 [[ -r "$ROOT_DIR/compose.production.yml" ]] || fail "Run this installer from a complete Barlas AI Agent checkout"
+[[ -r "$ROOT_DIR/compose.local.yml" ]] || fail "Local Compose override is missing"
 
 if [[ -e "$ENV_FILE" ]]; then
   [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "Environment path must be a regular, non-symlink file: $ENV_FILE"
@@ -171,13 +182,26 @@ if [[ -e "$ENV_FILE" ]]; then
   if grep -Eq 'replace-with-|agent\.example\.com|owner@example\.com' "$ENV_FILE"; then
     fail "Existing environment file still contains placeholders: $ENV_FILE"
   fi
+  configured_mode="$(sed -n "s/^BARLAS_INSTALL_MODE='\([^']*\)'$/\1/p" "$ENV_FILE" | tail -n 1)"
+  if [[ "$configured_mode" == "local" ]]; then LOCAL_MODE=true; fi
+  if [[ "$LOCAL_MODE" == true && "$configured_mode" == "public" ]]; then
+    fail "The selected environment is configured for public mode, not --local"
+  fi
   ok "Using existing protected configuration: $ENV_FILE"
 else
-  info "Creating a new protected production configuration"
-  prompt BARLAS_DOMAIN "Domain name (without https://)"
-  prompt BARLAS_HTTP_PORT "Host HTTP port" "18080"
-  prompt BARLAS_HTTPS_PORT "Host HTTPS port" "18443"
-  prompt OWNER_EMAIL "First owner email"
+  if [[ "$LOCAL_MODE" == true ]]; then
+    info "Creating a new protected local configuration (no domain required)"
+    BARLAS_DOMAIN="localhost"
+    BARLAS_HTTPS_PORT="0"
+    prompt BARLAS_HTTP_PORT "Local web port" "17840"
+    prompt OWNER_EMAIL "First owner email (local identity only)" "owner@barlas.local"
+  else
+    info "Creating a new protected production configuration"
+    prompt BARLAS_DOMAIN "Domain name (without https://)"
+    prompt BARLAS_HTTP_PORT "Host HTTP port" "18080"
+    prompt BARLAS_HTTPS_PORT "Host HTTPS port" "18443"
+    prompt OWNER_EMAIL "First owner email"
+  fi
   prompt OWNER_DISPLAY_NAME "First owner display name" "Barlas Owner"
   prompt OWNER_LANGUAGE "Owner language code; blank means choose on first login" ""
   prompt MODEL_PROVIDER "Model provider" "openai"
@@ -199,9 +223,11 @@ else
     require_single_line "$variable"
   done
 
-  require_value BARLAS_DOMAIN "Domain"
-  [[ "$BARLAS_DOMAIN" != *://* && "$BARLAS_DOMAIN" =~ ^[A-Za-z0-9.-]+$ && "$BARLAS_DOMAIN" == *.* ]] || fail "Domain must be a hostname such as agent.example.com"
-  [[ "$BARLAS_DOMAIN" != *.example.com ]] || fail "Replace the example domain with the real hostname"
+  if [[ "$LOCAL_MODE" == false ]]; then
+    require_value BARLAS_DOMAIN "Domain"
+    [[ "$BARLAS_DOMAIN" != *://* && "$BARLAS_DOMAIN" =~ ^[A-Za-z0-9.-]+$ && "$BARLAS_DOMAIN" == *.* ]] || fail "Domain must be a hostname such as agent.example.com"
+    [[ "$BARLAS_DOMAIN" != *.example.com ]] || fail "Replace the example domain with the real hostname"
+  fi
   require_value OWNER_EMAIL "Owner email"
   [[ "$OWNER_EMAIL" == *@*.* ]] || fail "Owner email is invalid"
   if [[ -n "$OWNER_LANGUAGE" && " $SUPPORTED_LANGUAGE_CODES " != *" $OWNER_LANGUAGE "* ]]; then
@@ -211,7 +237,10 @@ else
   require_value MODEL_API_KEY "Model API key"
   [[ "$MODEL_PROVIDER" == "openai" ]] || fail "This release supports the openai-compatible provider adapter"
   [[ "$BARLAS_HTTP_PORT" =~ ^[0-9]+$ && "$BARLAS_HTTPS_PORT" =~ ^[0-9]+$ ]] || fail "Ports must be numeric"
-  ((BARLAS_HTTP_PORT >= 1 && BARLAS_HTTP_PORT <= 65535 && BARLAS_HTTPS_PORT >= 1 && BARLAS_HTTPS_PORT <= 65535)) || fail "Ports must be between 1 and 65535"
+  ((BARLAS_HTTP_PORT >= 1 && BARLAS_HTTP_PORT <= 65535)) || fail "HTTP port must be between 1 and 65535"
+  if [[ "$LOCAL_MODE" == false ]]; then
+    ((BARLAS_HTTPS_PORT >= 1 && BARLAS_HTTPS_PORT <= 65535)) || fail "HTTPS port must be between 1 and 65535"
+  fi
   [[ -z "${TELEGRAM_WEBHOOK_SECRET:-}" || ${#TELEGRAM_WEBHOOK_SECRET} -ge 32 ]] || fail "Telegram webhook secret must contain at least 32 characters"
 
   POSTGRES_PASSWORD="$(openssl rand -hex 32)"
@@ -227,6 +256,7 @@ else
   TEMP_FILE="$(mktemp "${ENV_FILE}.tmp.XXXXXX")"
   chmod 600 -- "$TEMP_FILE"
   write_setting APP_NAME "Barlas AI Agent"
+  if [[ "$LOCAL_MODE" == true ]]; then write_setting BARLAS_INSTALL_MODE "local"; else write_setting BARLAS_INSTALL_MODE "public"; fi
   write_setting BARLAS_DOMAIN "$BARLAS_DOMAIN"
   write_setting BARLAS_HTTP_PORT "$BARLAS_HTTP_PORT"
   write_setting BARLAS_HTTPS_PORT "$BARLAS_HTTPS_PORT"
@@ -252,6 +282,7 @@ else
   if [[ -n "${TELEGRAM_BOT_TOKEN:-}" ]]; then
     write_setting TELEGRAM_BOT_TOKEN "$TELEGRAM_BOT_TOKEN"
     write_setting TELEGRAM_WEBHOOK_SECRET "$TELEGRAM_WEBHOOK_SECRET"
+    if [[ "$LOCAL_MODE" == true ]]; then write_setting TELEGRAM_POLLING_ENABLED "true"; else write_setting TELEGRAM_POLLING_ENABLED "false"; fi
   fi
   write_setting AGENT_RUN_WORKER_ENABLED "true"
   write_setting AGENT_RUN_WORKER_POLL_MS "1000"
@@ -266,7 +297,10 @@ else
 fi
 
 export BARLAS_ENV_FILE="$ENV_FILE"
-run_logged "Validate the isolated production stack" docker compose -f "$ROOT_DIR/compose.production.yml" --env-file "$ENV_FILE" config --quiet
+compose_files=(-f "$ROOT_DIR/compose.production.yml")
+if [[ "$LOCAL_MODE" == true ]]; then compose_files+=(-f "$ROOT_DIR/compose.local.yml"); fi
+compose=(docker compose "${compose_files[@]}" --env-file "$ENV_FILE")
+run_logged "Validate the isolated Barlas stack" "${compose[@]}" config --quiet
 
 if [[ "$PREPARE_ONLY" == true ]]; then
   ok "Configuration is ready; containers were not started"
@@ -276,27 +310,34 @@ fi
 
 docker info >/dev/null 2>&1 || fail "Docker daemon is unavailable to the current user"
 if [[ "$ENV_CREATED" == true ]] && command_exists ss; then
-  for port in "$BARLAS_HTTP_PORT" "$BARLAS_HTTPS_PORT"; do
+  ports=("$BARLAS_HTTP_PORT")
+  if [[ "$LOCAL_MODE" == false ]]; then ports+=("$BARLAS_HTTPS_PORT"); fi
+  for port in "${ports[@]}"; do
     if ss -H -ltn "sport = :$port" 2>/dev/null | grep -q .; then
       fail "Host port $port is already in use; choose another port in $ENV_FILE before starting"
     fi
   done
 fi
 
-run_logged "Build and start Barlas AI Agent" docker compose -f "$ROOT_DIR/compose.production.yml" --env-file "$ENV_FILE" --profile backup up -d --build
+run_logged "Build and start Barlas AI Agent" "${compose[@]}" --profile backup up -d --build
 run_logged "Run post-install diagnostics" "$ROOT_DIR/scripts/doctor.sh" --env-file "$ENV_FILE" --require-running
 
 domain="$(sed -n 's/^BARLAS_DOMAIN=["'"']\{0,1\}\([^"'"']*\)["'"']\{0,1\}$/\1/p' "$ENV_FILE" | tail -n 1)"
+http_port="$(sed -n 's/^BARLAS_HTTP_PORT=["'"']\{0,1\}\([^"'"']*\)["'"']\{0,1\}$/\1/p' "$ENV_FILE" | tail -n 1)"
 https_port="$(sed -n 's/^BARLAS_HTTPS_PORT=["'"']\{0,1\}\([^"'"']*\)["'"']\{0,1\}$/\1/p' "$ENV_FILE" | tail -n 1)"
-public_url="https://${domain}"
-[[ "$https_port" == "443" ]] || public_url="${public_url}:${https_port}"
+if [[ "$LOCAL_MODE" == true ]]; then
+  public_url="http://127.0.0.1:${http_port}"
+else
+  public_url="https://${domain}"
+  [[ "$https_port" == "443" ]] || public_url="${public_url}:${https_port}"
+fi
 
 printf '\n%s%sInstallation complete.%s\n' "$C_GREEN" "$C_BOLD" "$C_RESET"
 printf 'Web address: %s\n' "$public_url"
 printf 'Dashboard access link: ./scripts/dashboard-url.sh --env-file %q\n' "$ENV_FILE"
 printf 'Diagnostics: ./scripts/doctor.sh --env-file %q --require-running\n' "$ENV_FILE"
 printf 'Logs: docker compose -f compose.production.yml --env-file %q logs -f api\n' "$ENV_FILE"
-if [[ "$https_port" != "443" ]]; then
+if [[ "$LOCAL_MODE" == false && "$https_port" != "443" ]]; then
   warn "HTTPS is published on port $https_port. Use an external reverse proxy/port forward, or change to 443 after confirming it is free."
 fi
 printf 'Secrets remain only in %s (mode 0600); the installer never prints them.\n' "$ENV_FILE"

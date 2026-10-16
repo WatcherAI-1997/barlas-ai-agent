@@ -13,8 +13,16 @@ Authenticate GitHub CLI with an account that can read the repository:
 gh auth login
 gh repo clone WatcherAI-1997/barlas-ai-agent
 cd barlas-ai-agent
-./install.sh
+./install.sh --local
 ```
+
+This personal path requires no domain. It binds the cabinet only to
+`127.0.0.1:17840`, skips Caddy and certificate issuance, and stores its protected
+configuration in `deploy/local.env`. If a Telegram bot token is supplied, Barlas
+uses Bot API long polling rather than a public webhook.
+
+Run `./install.sh` without `--local` only for a public HTTPS server deployment;
+that mode asks for a domain and starts Caddy.
 
 Do not place a GitHub personal access token in a `curl` URL or shell history.
 A public one-line bootstrap can be published later with signed release artifacts;
@@ -23,7 +31,7 @@ the safer and more honest installation path.
 
 The interactive wizard asks for:
 
-- the dedicated domain and non-conflicting host ports;
+- a local port, or a dedicated domain and public ports in public mode;
 - the first owner's email, display name, and optional language code;
 - fast, deep, vision, transcription, speech, and optional embedding models;
 - one dedicated model API key;
@@ -31,8 +39,8 @@ The interactive wizard asks for:
 
 Database, internal API, connector-vault, sandbox, and optional Telegram webhook
 secrets are generated independently with OpenSSL. They are never printed. The
-resulting `deploy/production.env` is a regular file with mode `0600` and is
-excluded from Git.
+resulting `deploy/local.env` or `deploy/production.env` is a regular file with
+mode `0600` and is excluded from Git.
 
 ## Prepare without starting
 
@@ -40,7 +48,7 @@ Use this before DNS is ready or when another operator will inspect the generated
 configuration:
 
 ```bash
-./install.sh --prepare-only
+./install.sh --local --prepare-only
 ```
 
 The command creates the protected environment and validates the entire
@@ -48,7 +56,7 @@ production Compose graph, but it does not build or start containers. Run the
 installer again with the same environment file to start:
 
 ```bash
-./install.sh --env-file deploy/production.env
+./install.sh --env-file deploy/local.env
 ```
 
 An existing environment is never regenerated or overwritten. If it contains a
@@ -63,8 +71,9 @@ Automation may provide configuration through its secret manager and then run:
 ./install.sh --non-interactive
 ```
 
-Required environment variables are `BARLAS_DOMAIN`, `OWNER_EMAIL`,
-`MODEL_NAME`, and `MODEL_API_KEY`. Optional variables include
+Local mode requires only `MODEL_NAME` and `MODEL_API_KEY`; owner email defaults
+to `owner@barlas.local`. Public mode additionally requires `BARLAS_DOMAIN` and
+`OWNER_EMAIL`. Optional variables include
 `DEEP_MODEL_NAME`, `VISION_MODEL`, `TRANSCRIPTION_MODEL`, `SPEECH_MODEL`,
 `EMBEDDING_MODEL`, `OWNER_DISPLAY_NAME`, `OWNER_LANGUAGE`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
@@ -106,7 +115,7 @@ with three true circular glyphs so the brand mark is never distorted.
 | Item | Location or name |
 |---|---|
 | Source checkout | directory selected during `gh repo clone` |
-| Protected configuration | `deploy/production.env` |
+| Protected configuration | `deploy/local.env` (local) or `deploy/production.env` (public) |
 | Installer log | `logs/install.log` |
 | Compose project | `barlas-ai-agent-production` |
 | Database volume | `barlas-ai-agent-production-db` |
@@ -150,6 +159,7 @@ Common problems:
 |---|---|
 | Docker daemon unavailable | Start Docker and grant the intended operator access; rerun doctor |
 | Host port already used | Select unused Barlas ports or configure the existing reverse proxy |
+| Local cabinet is not reachable remotely | It is intentionally loopback-only; use it on the same machine or an operator-controlled SSH tunnel |
 | Domain still uses `example.com` | Replace it with the dedicated DNS hostname |
 | API container unhealthy | Inspect `docker compose ... logs api` and the migration service |
 | HTTPS unavailable on 18443 | Include the port in the URL or terminate HTTPS at the existing proxy |
@@ -160,9 +170,11 @@ Create a database and workspace backup, inspect the target commit, then:
 
 ```bash
 git pull --ff-only
-./install.sh --env-file deploy/production.env
-./scripts/doctor.sh --env-file deploy/production.env --require-running
+./install.sh --env-file deploy/local.env
+./scripts/doctor.sh --env-file deploy/local.env --require-running
 ```
+
+Use `deploy/production.env` instead when updating a public deployment.
 
 The existing protected configuration is reused. Compose rebuilds the reviewed
 source, ordered migrations run before the API starts, and named volumes remain

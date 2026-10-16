@@ -80,17 +80,24 @@ erase the task or silently convert an unfinished action into success.
 
 ## 🚀 Quick install
 
-The supported production path is a dedicated Linux server with Docker Compose.
-Because this repository is private, authenticate with GitHub first:
+For a private local installation without a domain, DNS, Caddy, or public web
+exposure, authenticate with GitHub and run:
 
 ```bash
 gh auth login
 gh repo clone WatcherAI-1997/barlas-ai-agent
 cd barlas-ai-agent
-./install.sh
+./install.sh --local
 ```
 
-The guided installer checks prerequisites, asks for deployment-specific values,
+The cabinet opens only on `http://127.0.0.1:17840`. If a Telegram bot token is
+provided, local mode uses the official Bot API long polling, so Telegram also
+works without a webhook, domain, or HTTPS certificate.
+
+For a public HTTPS deployment on a dedicated Linux server, run `./install.sh`
+without `--local` and provide a domain.
+
+The guided installer checks prerequisites, asks only for relevant values,
 generates independent cryptographic secrets, protects them with mode `0600`,
 validates the entire production stack, starts it, and runs diagnostics.
 
@@ -138,7 +145,7 @@ See the [security policy](docs/SECURITY.md),
 
 ## Current state
 
-**Private alpha · 135 automated tests · 20 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
+**Private alpha · 141 automated tests · 20 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
 
 The functional agent core, web cabinet, Telegram channel, project system,
 recurring tasks, multimodal tools, sandbox, browser, MCP, encrypted connectors,

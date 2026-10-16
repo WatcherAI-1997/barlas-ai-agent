@@ -114,6 +114,9 @@ autonomy.
 - Telegram accounts are joined to web accounts through expiring, single-use,
   hashed codes. The resolved account ID is applied before memory lookup, quota
   consumption, tool execution, and approval ownership checks.
+- Local installations bind the cabinet to loopback, omit Caddy, and consume
+  Telegram updates through official long polling. Public installations retain
+  the secret-authenticated HTTPS webhook path.
 - Telegram `/voice` and `/call` are explicit per-message requests for TTS
   delivery through official Bot API `sendVoice`. Output stays in the requesting
   user's workspace, defaults to Telegram's public 50 MB upload boundary, and

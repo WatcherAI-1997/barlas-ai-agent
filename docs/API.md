@@ -403,6 +403,9 @@ scoped to their own account.
 `X-Telegram-Bot-Api-Secret-Token` header matches `TELEGRAM_WEBHOOK_SECRET`.
 Telegram remains disabled unless both its new bot token and webhook secret are
 configured specifically for Barlas AI Agent.
+Local installations may set `TELEGRAM_POLLING_ENABLED=true`. Barlas then removes
+any old webhook registration and consumes the same validated updates through
+official Bot API long polling; the HTTP webhook does not need to be public.
 When enabled, Telegram messages enqueue the same durable autonomous runtime.
 Results are delivered back to the originating chat. Approval requests use
 inline Allow/Reject buttons whose callback is ownership-checked against the

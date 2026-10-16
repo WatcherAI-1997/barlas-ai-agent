@@ -5,6 +5,11 @@ export interface TelegramMessage {
   messageId: number;
 }
 
+export interface TelegramUpdate {
+  update_id: number;
+  [key: string]: unknown;
+}
+
 export const TELEGRAM_PUBLIC_UPLOAD_BYTES = 50_000_000;
 
 export interface TelegramClientOptions {
@@ -78,6 +83,35 @@ export class TelegramClient {
       signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) throw new Error(`Telegram answerCallbackQuery failed with status ${response.status}`);
+  }
+
+  async deleteWebhook(): Promise<void> {
+    const response = await fetch(this.endpoint("deleteWebhook"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ drop_pending_updates: false }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) throw new Error(`Telegram deleteWebhook failed with status ${response.status}`);
+  }
+
+  async getUpdates(offset?: number, timeoutSeconds = 25): Promise<TelegramUpdate[]> {
+    const response = await fetch(this.endpoint("getUpdates"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...(offset === undefined ? {} : { offset }),
+        timeout: timeoutSeconds,
+        allowed_updates: ["message", "callback_query"],
+      }),
+      signal: AbortSignal.timeout((timeoutSeconds + 10) * 1_000),
+    });
+    if (!response.ok) throw new Error(`Telegram getUpdates failed with status ${response.status}`);
+    const payload = await response.json() as { ok?: boolean; result?: unknown };
+    if (!payload.ok || !Array.isArray(payload.result)) throw new Error("Telegram getUpdates returned an invalid response");
+    return payload.result.filter((item): item is TelegramUpdate => (
+      typeof item === "object" && item !== null && Number.isInteger((item as TelegramUpdate).update_id)
+    ));
   }
 }
 

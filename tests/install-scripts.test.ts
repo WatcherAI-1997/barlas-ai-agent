@@ -54,4 +54,34 @@ describe("production installer", () => {
     expect(dashboard.stdout).toMatch(/^https:\/\/agent\.barlas\.test:18443\/#token=[a-f0-9]{64}\n$/u);
     await rm(temporary, { recursive: true, force: true });
   });
+
+  it("prepares a localhost installation without requiring a domain", async () => {
+    const temporary = await mkdtemp(join(tmpdir(), "barlas-local-installer-"));
+    const fakeBin = join(temporary, "bin");
+    const envFile = join(temporary, "local.env");
+    await mkdir(fakeBin);
+    const fakeDocker = join(fakeBin, "docker");
+    await writeFile(fakeDocker, "#!/bin/sh\ncase \"$1 $2\" in \"compose version\") exit 0;; \"compose -f\") exit 0;; info*) exit 1;; esac\nexit 0\n", "utf8");
+    await chmod(fakeDocker, 0o755);
+
+    const result = spawnSync("bash", ["install.sh", "--local", "--non-interactive", "--prepare-only", "--env-file", envFile], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+        MODEL_NAME: "fast-test-model",
+        MODEL_API_KEY: "local-model-key",
+      },
+    });
+    expect(result.status, result.stderr).toBe(0);
+    const environment = await readFile(envFile, "utf8");
+    expect(environment).toContain("BARLAS_INSTALL_MODE='local'");
+    expect(environment).toContain("BARLAS_DOMAIN='localhost'");
+    expect(environment).toContain("OWNER_EMAIL='owner@barlas.local'");
+    const dashboard = spawnSync("bash", ["scripts/dashboard-url.sh", "--env-file", envFile], { cwd: root, encoding: "utf8" });
+    expect(dashboard.status, dashboard.stderr).toBe(0);
+    expect(dashboard.stdout).toMatch(/^http:\/\/127\.0\.0\.1:17840\/#token=[a-f0-9]{64}\n$/u);
+    await rm(temporary, { recursive: true, force: true });
+  });
 });

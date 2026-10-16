@@ -1,0 +1,7 @@
+services:
+  api:
+    ports:
+      - "127.0.0.1:${BARLAS_HTTP_PORT:-17840}:17840"
+
+  caddy:
+    profiles: ["public"]

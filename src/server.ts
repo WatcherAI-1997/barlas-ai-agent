@@ -2,6 +2,7 @@ import { buildApp } from "./app.js";
 import { AuthService } from "./auth/service.js";
 import { TelegramLinkService } from "./auth/telegram-link.js";
 import { TelegramClient } from "./channels/telegram.js";
+import { TelegramPollingWorker } from "./channels/telegram-polling.js";
 import { sendTelegramVoiceReply, telegramVoiceFallbackText } from "./channels/telegram-voice.js";
 import { GitHubConnector } from "./connectors/github.js";
 import { GoogleConnector } from "./connectors/google.js";
@@ -273,9 +274,27 @@ const app = await buildApp({
   ...(telegram ? { telegram } : {}),
   logger: true,
 });
+const telegramPolling = telegram && config.TELEGRAM_POLLING_ENABLED
+  ? new TelegramPollingWorker(
+      telegram.client,
+      async (update) => {
+        const response = await app.inject({
+          method: "POST",
+          url: "/channels/telegram/webhook",
+          headers: { "x-telegram-bot-api-secret-token": telegram.webhookSecret },
+          payload: update,
+        });
+        if (response.statusCode >= 400) {
+          throw new Error(`Local Telegram update failed with status ${response.statusCode}`);
+        }
+      },
+      (error) => app.log.error({ error }, "Barlas AI Agent Telegram polling error"),
+    )
+  : undefined;
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   app.log.info({ signal }, "Barlas AI Agent is shutting down");
+  await telegramPolling?.stop();
   await jobWorker.stop();
   await agentRunWorker.stop();
   await scheduleWorker.stop();
@@ -287,6 +306,7 @@ process.once("SIGINT", () => void shutdown("SIGINT"));
 process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 await app.listen({ host: config.HOST, port: config.PORT });
+await telegramPolling?.start();
 if (config.JOB_WORKER_ENABLED) jobWorker.start();
 if (config.AGENT_RUN_WORKER_ENABLED) agentRunWorker.start();
 if (config.JOB_WORKER_ENABLED) scheduleWorker.start();

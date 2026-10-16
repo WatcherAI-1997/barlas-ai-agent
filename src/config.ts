@@ -27,6 +27,7 @@ const configSchema = z.object({
   PRIVATE_MODEL_API_KEY: z.string().min(1).optional(),
   TELEGRAM_BOT_TOKEN: z.string().min(20).optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().min(32).optional(),
+  TELEGRAM_POLLING_ENABLED: z.stringbool().default(false),
   TELEGRAM_BOT_API_BASE_URL: z.string().url().default("https://api.telegram.org"),
   TELEGRAM_MAX_UPLOAD_BYTES: z.coerce.number().int().min(1).max(2_000_000_000).default(50_000_000),
   CONNECTOR_VAULT_KEY: z.string().optional(),
@@ -84,6 +85,9 @@ const configSchema = z.object({
       code: "custom",
       message: "TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET must be configured together",
     });
+  }
+  if (config.TELEGRAM_POLLING_ENABLED && !config.TELEGRAM_BOT_TOKEN) {
+    context.addIssue({ code: "custom", message: "TELEGRAM_BOT_TOKEN is required when Telegram polling is enabled" });
   }
 
   const privateModelFields = [

@@ -19,10 +19,18 @@ read_setting() {
 }
 
 domain="$(read_setting BARLAS_DOMAIN)"
+mode="$(read_setting BARLAS_INSTALL_MODE)"
+http_port="$(read_setting BARLAS_HTTP_PORT)"
 port="$(read_setting BARLAS_HTTPS_PORT)"
 token="$(read_setting BARLAS_GATEWAY_TOKEN)"
-[[ -n "$domain" && -n "$port" && ${#token} -ge 32 ]] || { echo "Gateway access configuration is incomplete" >&2; exit 1; }
+[[ ${#token} -ge 32 ]] || { echo "Gateway access configuration is incomplete" >&2; exit 1; }
 
-url="https://${domain}"
-[[ "$port" == "443" ]] || url="${url}:${port}"
+if [[ "$mode" == "local" ]]; then
+  [[ -n "$http_port" ]] || { echo "Local web port is missing" >&2; exit 1; }
+  url="http://127.0.0.1:${http_port}"
+else
+  [[ -n "$domain" && -n "$port" ]] || { echo "Public gateway configuration is incomplete" >&2; exit 1; }
+  url="https://${domain}"
+  [[ "$port" == "443" ]] || url="${url}:${port}"
+fi
 printf '%s/#token=%s\n' "$url" "$token"
