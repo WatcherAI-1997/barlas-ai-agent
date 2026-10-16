@@ -46,6 +46,7 @@
           <p class="nav-label">Рабочее пространство</p>
           <button data-panel="overview" data-icon="⌂" class="active" aria-current="page">Обзор</button>
           <button data-panel="chat" data-icon="✦">Чат</button>
+          <button data-panel="agents" data-icon="◉">Агенты</button>
           <button data-panel="projects" data-icon="◫">Проекты</button>
           <button data-panel="files" data-icon="▱">Файлы</button>
           <p class="nav-label">Автоматизация</p>
@@ -84,6 +85,7 @@
                 <select id="skill-select" aria-label="Навык">
                   <option value="">Без специального навыка</option>
                 </select>
+                <select id="chat-agent" aria-label="Агент"><option value="">Основной Barlas</option></select>
                 <select id="chat-project" aria-label="Проект"><option value="">Без проекта</option></select>
                 <button id="voice-toggle" class="voice-button secondary" type="button" aria-label="Начать голосовой ввод" aria-pressed="false" title="Голосовой режим">🎙</button>
                 <button type="submit">Отправить</button>
@@ -132,6 +134,21 @@
             <button id="file-up" type="button" class="secondary">На уровень выше</button>
           </form>
           <div id="files" class="grid"></div>
+        </section>
+        <section id="panel-agents" class="panel hidden">
+          <h2>Мои агенты</h2>
+          <p class="meta">Каждый агент получает собственную личность, модельный режим и проект-workspace. Начатый диалог навсегда закрепляется за выбранным агентом.</p>
+          <form id="agent-form" class="inline-form">
+            <input id="agent-slug" maxlength="32" pattern="[a-z][a-z0-9-]{1,31}" placeholder="slug, например research" required>
+            <input id="agent-name" maxlength="80" placeholder="Имя агента" required>
+            <select id="agent-style"><option value="balanced">Сбалансированный</option><option value="concise">Краткий</option><option value="warm">Тёплый</option><option value="analytical">Аналитический</option><option value="creative">Творческий</option></select>
+            <select id="agent-task-class"><option value="fast">Fast</option><option value="deep">Deep</option><option value="private">Private</option></select>
+            <select id="agent-project"><option value="">Без проекта</option></select>
+            <input id="agent-instructions" maxlength="4000" placeholder="Личные инструкции">
+            <button type="submit">Создать агента</button>
+          </form>
+          <p id="agent-status" class="meta" role="status"></p>
+          <div id="agents" class="grid"></div>
         </section>
         <section id="panel-projects" class="panel hidden">
           <h2>Проекты</h2>

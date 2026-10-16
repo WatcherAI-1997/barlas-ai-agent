@@ -3,11 +3,11 @@ if (fragmentToken) {
   sessionStorage.setItem("barlasToken", fragmentToken);
   history.replaceState(null, "", `${location.pathname}${location.search}`);
 }
-const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [], voiceRecorder: null, voiceStream: null, voiceChunks: [], voiceTimer: null };
+const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [], agents: [], voiceRecorder: null, voiceStream: null, voiceChunks: [], voiceTimer: null };
 const $ = (selector) => document.querySelector(selector);
 const panelTitles = {
   overview: "Обзор", chat: "Чат", approvals: "Подтверждения", runs: "Запуски",
-  jobs: "Задачи", schedules: "Расписания", files: "Файлы", projects: "Проекты",
+  jobs: "Задачи", schedules: "Расписания", files: "Файлы", projects: "Проекты", agents: "Агенты",
   traces: "Трассировка", skills: "Навыки", organizations: "Организации",
   connectors: "Подключения", settings: "Настройки", users: "Пользователи",
 };
@@ -124,6 +124,7 @@ async function showApp(account) {
   $("#users-tab").classList.toggle("hidden", account.role !== "owner");
   await loadSkillOptions();
   await loadProjectOptions();
+  await loadAgentOptions();
   await loadVoiceAvailability();
   newConversation();
   loadPanel("overview").catch((error) => notify(error.message, "error"));
@@ -198,7 +199,8 @@ $("#chat-form").addEventListener("submit", async (event) => {
     const selectedSkill = $("#skill-select").value;
     const split = selectedSkill.lastIndexOf("@");
     const skill = split > 0 ? { skillId: selectedSkill.slice(0, split), skillVersion: selectedSkill.slice(split + 1) } : {};
-    const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, projectId: $("#chat-project").value || undefined, messages: [{ role: "user", content: text }], taskClass: $("#task-class").value, ...skill }) });
+    const agentId = $("#chat-agent").value || undefined;
+    const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, agentId, ...(!agentId ? { projectId: $("#chat-project").value || undefined, taskClass: $("#task-class").value } : {}), messages: [{ role: "user", content: text }], ...skill }) });
     state.conversationId = data.conversationId;
     const statusNode = addMessage("agent", data.message.content);
     if (data.status === "queued" && data.runId) void watchAgentRun(data.runId, statusNode);
@@ -240,8 +242,8 @@ async function submitVoiceTurn(blob, extension) {
     formData.append("file", blob, `voice.${extension}`);
     const query = new URLSearchParams({
       userId: state.account.id,
-      taskClass: $("#task-class").value,
       consent: "true",
+      ...($("#chat-agent").value ? { agentId: $("#chat-agent").value } : { taskClass: $("#task-class").value }),
       ...(state.conversationId ? { conversationId: state.conversationId } : {}),
     });
     const data = await upload(`/v1/voice/turn?${query}`, formData);
@@ -373,6 +375,7 @@ async function loadPanel(name) {
   if (name === "schedules") await loadSchedules();
   if (name === "files") await loadFiles();
   if (name === "projects") await loadProjects();
+  if (name === "agents") await loadAgents();
   if (name === "traces") renderList("#traces", (await api(`/v1/traces?userId=${encodeURIComponent(state.account.id)}`)).traces, (item) => card(item.operation, `${item.status} · ${new Date(item.createdAt).toLocaleString()}`, item.traceId));
   if (name === "skills") {
     await loadSkillOptions();
@@ -481,7 +484,47 @@ function fillProjectSelect() {
   const selected = $("#chat-project").value;
   $("#chat-project").replaceChildren(new Option("Без проекта", ""), ...state.projects.map((project) => new Option(project.name, project.id)));
   if (state.projects.some((project) => project.id === selected)) $("#chat-project").value = selected;
+  const selectedAgentProject = $("#agent-project").value;
+  $("#agent-project").replaceChildren(new Option("Без проекта", ""), ...state.projects.map((project) => new Option(project.name, project.id)));
+  if (state.projects.some((project) => project.id === selectedAgentProject)) $("#agent-project").value = selectedAgentProject;
 }
+
+async function loadAgentOptions() {
+  state.agents = (await api(`/v1/agents?userId=${encodeURIComponent(state.account.id)}`)).profiles;
+  const selected = $("#chat-agent").value;
+  $("#chat-agent").replaceChildren(new Option("Основной Barlas", ""), ...state.agents.map((agent) => new Option(`${agent.name} · ${agent.slug}`, agent.id)));
+  if (state.agents.some((agent) => agent.id === selected)) $("#chat-agent").value = selected;
+}
+
+async function loadAgents() {
+  await loadProjectOptions();
+  await loadAgentOptions();
+  renderList("#agents", state.agents, (agent) => {
+    const project = state.projects.find((item) => item.id === agent.projectId);
+    const node = card(agent.name, `${agent.slug} · ${agent.style} · ${agent.defaultTaskClass}`, project ? `Workspace: ${project.name}` : "Без отдельного workspace");
+    const use = document.createElement("button"); use.textContent = "Открыть чат"; use.addEventListener("click", () => {
+      $("#chat-agent").value = agent.id; state.conversationId = null; loadPanel("chat").catch((error) => notify(error.message, "error"));
+    });
+    const remove = document.createElement("button"); remove.textContent = "Удалить"; remove.className = "reject"; remove.addEventListener("click", async () => {
+      await api(`/v1/agents/${agent.id}?userId=${encodeURIComponent(state.account.id)}`, { method: "DELETE" }); await loadAgents();
+    });
+    node.append(use, remove); return node;
+  });
+}
+
+$("#agent-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#agent-status").textContent = "Создание…";
+  try {
+    const data = await api("/v1/agents", { method: "POST", body: JSON.stringify({
+      userId: state.account.id, slug: $("#agent-slug").value.trim(), name: $("#agent-name").value.trim(),
+      style: $("#agent-style").value, defaultTaskClass: $("#agent-task-class").value,
+      projectId: $("#agent-project").value || undefined, instructions: $("#agent-instructions").value.trim(),
+    }) });
+    event.target.reset(); $("#agent-status").textContent = `Создан агент: ${data.profile.name}`; await loadAgents();
+  } catch (error) { $("#agent-status").textContent = `Ошибка: ${error.message}`; }
+});
+
+$("#chat-agent").addEventListener("change", () => { state.conversationId = null; $("#chat-project").disabled = Boolean($("#chat-agent").value); });
 
 async function openProject(id) {
   state.projectId = id;
