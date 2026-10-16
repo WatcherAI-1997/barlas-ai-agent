@@ -6,6 +6,17 @@ ports, credentials, and bot identity.
 
 ## Prepare
 
+The recommended path is the interactive installer:
+
+```bash
+./install.sh
+```
+
+It creates the protected environment, validates Compose, starts the isolated
+stack, and runs `scripts/doctor.sh`. See [Installation](INSTALLATION.md).
+
+For a fully manual deployment:
+
 1. Copy `deploy/production.env.example` to `deploy/production.env`.
 2. Set file mode to `0600` and replace every placeholder with a dedicated
    secret. Never reuse an existing agent token or database.
@@ -25,6 +36,12 @@ ports, credentials, and bot identity.
 
 ```bash
 docker compose -f compose.production.yml --env-file deploy/production.env --profile backup up -d --build
+```
+
+Run the same post-install diagnostics used by the installer:
+
+```bash
+./scripts/doctor.sh --env-file deploy/production.env --require-running
 ```
 
 Check container health, then run `deploy/smoke-test.sh` against the public URL.

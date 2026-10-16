@@ -66,6 +66,40 @@ handling, and a persisted response-language preference shared with linked
 Telegram. No production agent, token,
 configuration, memory, port, database, or process is shared with this project.
 
+## Quick install
+
+Barlas AI Agent currently targets a dedicated Linux server with Docker Compose.
+Because the repository is private, authenticate with GitHub first, then run the
+included installer from the checkout:
+
+```bash
+gh auth login
+gh repo clone WatcherAI-1997/barlas-ai-agent
+cd barlas-ai-agent
+./install.sh
+```
+
+The installer checks prerequisites, asks only for deployment-specific values,
+generates independent cryptographic secrets, writes them to
+`deploy/production.env` with mode `0600`, validates the production Compose
+stack, builds it, starts it, and runs diagnostics. It never prints secrets and
+never imports settings from another agent.
+
+To prepare and validate configuration without starting containers:
+
+```bash
+./install.sh --prepare-only
+```
+
+To diagnose an installation later:
+
+```bash
+./scripts/doctor.sh --require-running
+```
+
+See [Installation](docs/INSTALLATION.md) for non-interactive setup, ports,
+updates, troubleshooting, and the exact install layout.
+
 ## Local verification
 
 ```bash
@@ -82,6 +116,7 @@ and replace every placeholder secret before starting the containers.
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Installation](docs/INSTALLATION.md)
 - [API](docs/API.md)
 - [Isolation policy](docs/ISOLATION.md)
 - [Roadmap](docs/ROADMAP.md)

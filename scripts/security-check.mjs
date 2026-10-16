@@ -25,7 +25,7 @@ for (const required of ["read_only: true", "no-new-privileges:true", "cap_drop:"
 const terminal = await readFile("src/tools/terminal.ts", "utf8");
 if (/\bshell\s*:\s*true\b/u.test(terminal)) throw new Error("Restricted terminal must not enable a shell");
 const gitignore = await readFile(".gitignore", "utf8");
-for (const required of [".env", "*.key", "secrets/"]) {
+for (const required of [".env", "deploy/production.env", "*.key", "secrets/"]) {
   if (!gitignore.includes(required)) throw new Error(`.gitignore must cover ${required}`);
 }
 
@@ -49,10 +49,21 @@ for (const required of [
   "migrations/016_skills.sql",
   "migrations/018_projects.sql",
   "migrations/019_project_execution.sql",
+  "install.sh",
+  "scripts/doctor.sh",
+  "docs/INSTALLATION.md",
   "src/skills/manager.ts",
   "tests/skill-manager.test.ts",
 ]) {
   if (!files.includes(required)) throw new Error(`Skill lifecycle component is missing: ${required}`);
+}
+const installer = await readFile("install.sh", "utf8");
+const doctor = await readFile("scripts/doctor.sh", "utf8");
+for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "--prepare-only", "scripts/doctor.sh", "never prints them"]) {
+  if (!installer.includes(required)) throw new Error(`Installer safety/usability boundary is missing: ${required}`);
+}
+for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {
+  if (!doctor.includes(required)) throw new Error(`Doctor safety/usability boundary is missing: ${required}`);
 }
 const projects = await readFile("src/projects/service.ts", "utf8");
 const projectMigration = await readFile("migrations/018_projects.sql", "utf8");

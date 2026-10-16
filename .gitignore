@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+deploy/production.env
 *.pem
 *.key
 *.crt
