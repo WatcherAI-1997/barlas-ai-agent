@@ -2,6 +2,12 @@ import { Pool } from "pg";
 
 import type { AccountRole, AuthStore, StoredAccount, UserAccount } from "../auth/service.js";
 import type { TelegramLink, TelegramLinkStore } from "../auth/telegram-link.js";
+import type {
+  ConnectorProvider,
+  ConnectorRecord,
+  ConnectorStore,
+  StoredConnector,
+} from "../connectors/vault.js";
 import type { AgentMessage, GenerateResult } from "../core/models.js";
 import type { GovernanceStore, QuotaCategory, TraceEvent, TraceStatus } from "../governance/runtime.js";
 import type {
@@ -20,7 +26,7 @@ import type {
   MemoryEntry,
 } from "./types.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -33,6 +39,76 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async ping(): Promise<void> {
     await this.pool.query("select 1");
+  }
+
+  async upsertConnector(input: {
+    userId: string;
+    provider: ConnectorProvider;
+    label: string;
+    ciphertext: Buffer;
+    iv: Buffer;
+    authTag: Buffer;
+    keyVersion: number;
+    metadata: Record<string, unknown>;
+  }): Promise<ConnectorRecord> {
+    const result = await this.pool.query<ConnectorRow>(
+      `insert into connector_credentials
+         (user_id, provider, label, ciphertext, iv, auth_tag, key_version, metadata)
+       values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+       on conflict (user_id, provider, label) do update set
+         ciphertext = excluded.ciphertext,
+         iv = excluded.iv,
+         auth_tag = excluded.auth_tag,
+         key_version = excluded.key_version,
+         metadata = excluded.metadata,
+         updated_at = now()
+       returning id, user_id, provider, label, metadata, key_version, created_at, updated_at`,
+      [
+        input.userId,
+        input.provider,
+        input.label,
+        input.ciphertext,
+        input.iv,
+        input.authTag,
+        input.keyVersion,
+        JSON.stringify(input.metadata),
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Connector upsert returned no row");
+    return mapConnector(row);
+  }
+
+  async listConnectors(userId: string): Promise<ConnectorRecord[]> {
+    const result = await this.pool.query<ConnectorRow>(
+      `select id, user_id, provider, label, metadata, key_version, created_at, updated_at
+       from connector_credentials where user_id = $1 order by updated_at desc, id`,
+      [userId],
+    );
+    return result.rows.map(mapConnector);
+  }
+
+  async getConnector(userId: string, id: string): Promise<StoredConnector | null> {
+    const result = await this.pool.query<ConnectorRow & {
+      ciphertext: Buffer;
+      iv: Buffer;
+      auth_tag: Buffer;
+    }>(
+      `select id, user_id, provider, label, metadata, key_version, created_at, updated_at,
+              ciphertext, iv, auth_tag
+       from connector_credentials where user_id = $1 and id = $2`,
+      [userId, id],
+    );
+    const row = result.rows[0];
+    return row ? { ...mapConnector(row), ciphertext: row.ciphertext, iv: row.iv, authTag: row.auth_tag } : null;
+  }
+
+  async deleteConnector(userId: string, id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `delete from connector_credentials where user_id = $1 and id = $2`,
+      [userId, id],
+    );
+    return result.rowCount === 1;
   }
 
   async saveTurn(input: {
@@ -1109,6 +1185,30 @@ interface TelegramLinkRow {
   telegram_user_id: string;
   telegram_chat_id: string;
   created_at: Date;
+}
+
+interface ConnectorRow {
+  id: string;
+  user_id: string;
+  provider: ConnectorProvider;
+  label: string;
+  metadata: Record<string, unknown>;
+  key_version: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+function mapConnector(row: ConnectorRow): ConnectorRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    provider: row.provider,
+    label: row.label,
+    metadata: row.metadata,
+    keyVersion: row.key_version,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  };
 }
 
 interface ApprovalRow {

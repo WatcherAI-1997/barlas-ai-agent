@@ -46,6 +46,11 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `POST /v1/jobs/:id/cancel` — cancel a queued or waiting task.
 - `POST /v1/jobs/:id/retry` — requeue a failed or cancelled task.
 - `GET /v1/dashboard` — return health, queue, token, and estimated-cost totals.
+- `GET /v1/connectors?userId=...` — list the current user's connector metadata.
+- `POST /v1/connectors` — encrypt and save a per-user connector credential.
+- `DELETE /v1/connectors/:id` — delete an owned connector.
+- `GET /v1/integrations/github/profile` — load the connected GitHub profile.
+- `GET /v1/integrations/github/repositories` — list accessible GitHub repositories.
 
 An isolated background run uses `jobType: "agent.run"` and accepts an `input`
 with `objective`, optional bounded `context`, and `taskClass` (`fast`, `deep`,
@@ -95,6 +100,26 @@ administrative scope. Login attempts are bounded per source address.
 The optional initial owner is created from `OWNER_EMAIL`, `OWNER_PASSWORD`, and
 `OWNER_DISPLAY_NAME`; both email and password must be supplied together. The
 bootstrap is idempotent and never writes credentials to source control.
+
+## Connector vault and GitHub
+
+Connector credentials are encrypted with AES-256-GCM before they reach
+PostgreSQL. Every encrypted value uses a fresh 96-bit IV and authenticated
+additional data bound to the account, provider, label, and key version. The
+plaintext secret is never returned by the connector API, written to traces, or
+included in audit details. Connector reads and deletes are scoped by account ID
+inside the database query.
+
+Set `CONNECTOR_VAULT_KEY` to the canonical base64 encoding of exactly 32 random
+bytes and preserve it independently from the database backup. Production startup
+fails when this key is missing. `CONNECTOR_VAULT_KEY_VERSION` records the active
+key version; changing it requires an explicit credential re-encryption procedure.
+
+The initial GitHub integration is intentionally read-only: it can retrieve the
+connected profile and repository metadata. Requests go only to the fixed
+`https://api.github.com` origin, reject redirects, time out after ten seconds,
+and cap responses at 2 MB. Use a fine-grained token with metadata-only access
+where possible. Repository mutation, webhooks, and GitHub Actions are not enabled.
 
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.

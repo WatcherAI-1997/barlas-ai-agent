@@ -2,6 +2,8 @@ import { buildApp } from "./app.js";
 import { AuthService } from "./auth/service.js";
 import { TelegramLinkService } from "./auth/telegram-link.js";
 import { TelegramClient } from "./channels/telegram.js";
+import { GitHubConnector } from "./connectors/github.js";
+import { ConnectorService, ConnectorVault } from "./connectors/vault.js";
 import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
 import { AgentLoop } from "./core/agent-loop.js";
@@ -21,6 +23,13 @@ const config = loadConfig();
 const database = new Database(config.DATABASE_URL);
 const authService = new AuthService(database, config.SESSION_TTL_HOURS);
 const telegramLinks = new TelegramLinkService(database);
+const connectors = config.CONNECTOR_VAULT_KEY
+  ? new ConnectorService(
+      database,
+      new ConnectorVault(config.CONNECTOR_VAULT_KEY, config.CONNECTOR_VAULT_KEY_VERSION),
+    )
+  : undefined;
+const githubConnector = connectors ? new GitHubConnector(connectors) : undefined;
 if (config.OWNER_EMAIL && config.OWNER_PASSWORD) {
   await authService.bootstrapOwner({
     email: config.OWNER_EMAIL,
@@ -137,6 +146,7 @@ const app = await buildApp({
   governance,
   authService,
   telegramLinks,
+  ...(connectors && githubConnector ? { connectors, githubConnector } : {}),
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
   ...(telegram ? { telegram } : {}),

@@ -16,6 +16,8 @@ import {
 import type { ModelProvider } from "./core/models.js";
 import type { AgentLoop } from "./core/agent-loop.js";
 import type { TelegramLinkService } from "./auth/telegram-link.js";
+import type { GitHubConnector } from "./connectors/github.js";
+import { connectorProviders, type ConnectorService } from "./connectors/vault.js";
 import type { PersistentAgentRuntime } from "./runs/runtime.js";
 import { QuotaExceededError, type RuntimeGovernance } from "./governance/runtime.js";
 import { agentJobSchema } from "./jobs/agent-handler.js";
@@ -122,6 +124,20 @@ const conversationParamsSchema = z.object({ id: z.string().uuid() });
 const jobParamsSchema = z.object({ id: z.string().uuid() });
 const agentRunParamsSchema = z.object({ id: z.string().uuid() });
 const dashboardQuerySchema = z.object({ userId: z.string().min(1).max(128).optional() });
+const connectorParamsSchema = z.object({ id: z.string().uuid() });
+const connectorListSchema = z.object({ userId: z.string().min(1).max(128) });
+const connectorCreateSchema = z.object({
+  userId: z.string().min(1).max(128),
+  provider: z.enum(connectorProviders),
+  label: z.string().trim().min(1).max(100),
+  secret: z.string().min(1).max(20_000),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+}).strict();
+const githubRepositoriesSchema = z.object({
+  userId: z.string().min(1).max(128),
+  connectorId: z.string().uuid(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+});
 
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -154,6 +170,8 @@ export interface AppDependencies {
   governance?: RuntimeGovernance;
   authService?: Pick<AuthService, "authenticate" | "login" | "logout" | "listAccounts" | "createAccount">;
   telegramLinks?: Pick<TelegramLinkService, "createCode" | "claim" | "get" | "resolve" | "unlink">;
+  connectors?: Pick<ConnectorService, "save" | "list" | "delete">;
+  githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
   telegram?: {
@@ -362,6 +380,75 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       details: { email: user.email, role: user.role },
     });
     return reply.code(201).send({ user });
+  });
+
+  app.get("/v1/connectors", async (request, reply) => {
+    if (!dependencies.connectors) return reply.notFound();
+    const parsed = connectorListSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid connectors query");
+    const userId = authorizeUser(request, parsed.data.userId);
+    return { connectors: await dependencies.connectors.list(userId) };
+  });
+
+  app.post("/v1/connectors", async (request, reply) => {
+    if (!dependencies.connectors) return reply.notFound();
+    const parsed = connectorCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid connector request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    const connector = await dependencies.connectors.save({
+      userId,
+      provider: parsed.data.provider,
+      label: parsed.data.label,
+      secret: parsed.data.secret,
+      ...(parsed.data.metadata ? { metadata: parsed.data.metadata } : {}),
+    });
+    await dependencies.database.appendAudit({
+      userId,
+      eventType: "connector.saved",
+      resourceType: "connector",
+      resourceId: connector.id,
+      details: { provider: connector.provider, label: connector.label },
+    });
+    return reply.code(201).send({ connector });
+  });
+
+  app.delete("/v1/connectors/:id", async (request, reply) => {
+    if (!dependencies.connectors) return reply.notFound();
+    const params = connectorParamsSchema.safeParse(request.params);
+    const body = connectorListSchema.strict().safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid connector deletion request");
+    const userId = authorizeUser(request, body.data.userId);
+    const deleted = await dependencies.connectors.delete(userId, params.data.id);
+    if (!deleted) return reply.notFound("Connector not found");
+    await dependencies.database.appendAudit({
+      userId,
+      eventType: "connector.deleted",
+      resourceType: "connector",
+      resourceId: params.data.id,
+    });
+    return { deleted: true };
+  });
+
+  app.get("/v1/integrations/github/profile", async (request, reply) => {
+    if (!dependencies.githubConnector) return reply.notFound();
+    const parsed = githubRepositoriesSchema.omit({ limit: true }).safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid GitHub profile request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    return { profile: await dependencies.githubConnector.profile(userId, parsed.data.connectorId) };
+  });
+
+  app.get("/v1/integrations/github/repositories", async (request, reply) => {
+    if (!dependencies.githubConnector) return reply.notFound();
+    const parsed = githubRepositoriesSchema.safeParse(request.query);
+    if (!parsed.success) return reply.badRequest("Invalid GitHub repositories request");
+    const userId = authorizeUser(request, parsed.data.userId);
+    return {
+      repositories: await dependencies.githubConnector.repositories(
+        userId,
+        parsed.data.connectorId,
+        parsed.data.limit,
+      ),
+    };
   });
 
   const runChat = async (input: z.infer<typeof chatBodySchema>) => {

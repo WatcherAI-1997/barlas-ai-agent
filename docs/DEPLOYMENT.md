@@ -9,6 +9,9 @@ ports, credentials, and bot identity.
 1. Copy `deploy/production.env.example` to `deploy/production.env`.
 2. Set file mode to `0600` and replace every placeholder with a dedicated
    secret. Never reuse an existing agent token or database.
+   Generate the connector encryption key with `openssl rand -base64 32`, store
+   it in `CONNECTOR_VAULT_KEY`, and back it up separately in an operator-owned
+   secret manager. Losing this key makes saved connector credentials unreadable.
 3. Point the chosen domain to the server. The default host ports are 18080 and
    18443 specifically to avoid taking ports from current services; map or proxy
    them intentionally after checking the host.
