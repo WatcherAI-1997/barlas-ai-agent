@@ -3,7 +3,7 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 123 automated tests across 35 files pass.
+- 125 automated tests across 36 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.

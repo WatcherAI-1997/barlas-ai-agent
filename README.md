@@ -1,76 +1,86 @@
-# Barlas AI Agent
+<p align="center">
+  <img src="assets/brand/barlas-ai-agent-github-hero.png" alt="Barlas AI Agent — Think ahead. Act beyond." width="100%">
+</p>
 
-**Think ahead. Act beyond.**
+<h1 align="center">Barlas AI Agent</h1>
 
-![Barlas AI Agent](assets/brand/barlas-ai-agent-logo-original.png)
+<p align="center">
+  <strong>A private, persistent, autonomous AI agent built to plan deeply, act safely, and grow with its owner.</strong>
+</p>
 
-## Language / Язык
+<p align="center">
+  <img alt="Status: Private Alpha" src="https://img.shields.io/badge/STATUS-PRIVATE_ALPHA-E10600?style=for-the-badge&labelColor=090909">
+  <img alt="Tests: 125 passing" src="https://img.shields.io/badge/TESTS-125_PASSING-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
+  <img alt="Languages: 38" src="https://img.shields.io/badge/LANGUAGES-38-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
+  <img alt="Runtime: Docker" src="https://img.shields.io/badge/RUNTIME-DOCKER-FFFFFF?style=for-the-badge&labelColor=090909&color=E10600">
+</p>
 
-[Türkçe](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#tr) ·
-[Azərbaycanca](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#az) ·
-[Türkmençe](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#tk) ·
-[O‘zbekcha](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#uz) ·
-[Қазақша](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#kk) ·
-[Кыргызча](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ky) ·
-[ئۇيغۇرچە](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ug) ·
-[Татарча](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#tt) ·
-[Башҡортса](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ba) ·
-[Монгол хэл](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#mn) ·
-[Русский](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ru) ·
-[English](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#en) ·
-[All 38 languages](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md)
+<p align="center">
+  <a href="#-quick-install"><strong>Install</strong></a> ·
+  <a href="docs/ARCHITECTURE.md"><strong>Architecture</strong></a> ·
+  <a href="docs/API.md"><strong>API</strong></a> ·
+  <a href="docs/SECURITY.md"><strong>Security</strong></a> ·
+  <a href="docs/ROADMAP.md"><strong>Roadmap</strong></a>
+</p>
 
-Barlas AI Agent is an independent, brand-owned AI agent platform inspired by
-the strongest product ideas in OpenClaw and Nous Research Hermes Agent.
+<p align="center">
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#tr">Türkçe</a> ·
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#az">Azərbaycanca</a> ·
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#uz">O‘zbekcha</a> ·
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#kk">Қазақша</a> ·
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ky">Кыргызча</a> ·
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ug">ئۇيغۇرچە</a> ·
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#mn">Монгол хэл</a> ·
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#ru">Русский</a> ·
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md#en">English</a> ·
+  <a href="docs/PRODUCT_OVERVIEW_MULTILINGUAL.md"><strong>All 38</strong></a>
+</p>
 
-## Product principles
+---
 
-- One assistant with persistent memory and long-running task execution.
-- Model-agnostic routing across cloud and local providers.
-- Tools, files, web research, schedules, and isolated subagents.
-- Explicit approval gates for destructive or externally visible actions.
-- Private-by-default storage, auditable actions, and cost controls.
-- Complete operational isolation from all existing production agents.
+## Built to do real work
 
-## Status
+Barlas AI Agent combines the strongest product ideas behind OpenClaw, Codex,
+and Nous Research Hermes Agent in an independent, brand-owned platform. It is
+not a chat wrapper: it can hold a goal, build a plan, use tools, delegate work,
+pause for approval, recover after interruption, and preserve project state.
 
-The isolated foundation now includes a branded HTTP API, an OpenAI Responses
-API adapter, a task-aware model router, PostgreSQL conversation and long-term
-memory storage, an authenticated Telegram webhook, approval policy primitives,
-an auditable tool executor, durable job storage, container hardening, and
-automated tests. The private-alpha core also includes versioned skills,
-owner-installed candidates with automated activation tests, bounded
-subagent workflows, per-user file workspaces, and a native autonomous tool loop
-with hard step limits, durable checkpoints, approval continuation, restart
-recovery, cancellation, an asynchronous lease worker, live progress, Telegram
-delivery, timezone-aware recurring schedules, approval buttons, and a content-safe step journal. It also includes optional SearXNG
-web search, a no-shell read-only terminal inspector,
-an isolated approval-gated JavaScript browser, PDF/DOCX extraction, Unicode
-DOCX creation, an authenticated personal file cabinet with safe upload/download,
-secure media uploads, vision/PDF analysis, audio transcription,
-speech generation, and an approval-gated offline Python/Node/Git/npm sandbox,
-encrypted GitHub/Drive/Gmail/Calendar connections with approval-gated writes,
-and SSRF-protected remote MCP Streamable HTTP tools,
-atomic per-user quotas, execution traces, secure owner/user accounts, and a
-branded web cabinet with conversation history, approvals, job controls, and
-token/cost monitoring. Named projects group files, conversations, runs, and
-memories, while immutable SHA-256 artifact snapshots provide recoverable result
-versions. Project goals, ordered plans, progress checkpoints, and idempotent
-agent-run summaries preserve execution state. A dedicated project-execution
-skill lets the agent inspect that state and propose approval-gated goal, plan,
-checkpoint, snapshot, and restore updates. A reproducible live evaluation suite scores persisted
-status, tool use, events, output constraints, steps, tokens, and cost without
-letting the model grade itself. First-login onboarding and account settings provide a
-broad Turkic-language catalogue, Mongolian, Russian/English fallbacks, RTL
-handling, and a persisted response-language preference shared with linked
-Telegram. No production agent, token,
-configuration, memory, port, database, or process is shared with this project.
+| | Capability | What it means |
+|---|---|---|
+| 🧠 | **Persistent intelligence** | Conversations, explicit memory, semantic recall, user language, and project context survive across sessions. |
+| ⚙️ | **Autonomous execution** | Durable multi-step runs, background workers, retries, recovery, cancellation, schedules, and live progress. |
+| 🧩 | **Skills that evolve safely** | Versioned skills, acceptance tests, activation gates, strict tool permissions, and rollback. |
+| 🕸️ | **Parallel subagents** | The main agent can delegate bounded analytical work to isolated, non-recursive subagents. |
+| 🖥️ | **Real tools** | Files, documents, web research, JavaScript browser, offline Python/Node/Git/npm sandbox, MCP, and connected services. |
+| 👁️ | **Multimodal understanding** | Images, scanned PDFs, audio transcription, speech generation, and Unicode document workflows. |
+| 📁 | **Project operating system** | Goals, ordered plans, checkpoints, linked runs, immutable artifact versions, and recoverable results. |
+| 🛡️ | **Human control** | External, write, and destructive operations stop before execution and require approval of the exact stored request. |
 
-## Quick install
+## How it works
 
-Barlas AI Agent currently targets a dedicated Linux server with Docker Compose.
-Because the repository is private, authenticate with GitHub first, then run the
-included installer from the checkout:
+```mermaid
+flowchart LR
+    U[Web · Telegram · API] --> G[Authenticated gateway]
+    G --> A[Durable agent loop]
+    A --> M[Model router]
+    A --> P[Memory · projects · skills]
+    A --> S[Isolated subagents]
+    A --> T[Tool registry]
+    T --> R{Risk policy}
+    R -->|read only| X[Execute]
+    R -->|write · external · destructive| H[Human approval]
+    H -->|approved exact request| X
+    X --> A
+```
+
+Every autonomous run is persisted before the first model call. A restart,
+expired worker lease, Telegram approval, or temporary provider failure does not
+erase the task or silently convert an unfinished action into success.
+
+## 🚀 Quick install
+
+The supported production path is a dedicated Linux server with Docker Compose.
+Because this repository is private, authenticate with GitHub first:
 
 ```bash
 gh auth login
@@ -79,28 +89,70 @@ cd barlas-ai-agent
 ./install.sh
 ```
 
-The installer checks prerequisites, asks only for deployment-specific values,
-generates independent cryptographic secrets, writes them to
-`deploy/production.env` with mode `0600`, validates the production Compose
-stack, builds it, starts it, and runs diagnostics. It never prints secrets and
-never imports settings from another agent.
-
-To prepare and validate configuration without starting containers:
+The guided installer checks prerequisites, asks for deployment-specific values,
+generates independent cryptographic secrets, protects them with mode `0600`,
+validates the entire production stack, starts it, and runs diagnostics.
 
 ```bash
+# Prepare and validate without starting anything
 ./install.sh --prepare-only
-```
 
-To diagnose an installation later:
-
-```bash
+# Diagnose an existing deployment
 ./scripts/doctor.sh --require-running
 ```
 
-See [Installation](docs/INSTALLATION.md) for non-interactive setup, ports,
-updates, troubleshooting, and the exact install layout.
+> [!IMPORTANT]
+> Never paste production passwords or tokens into chat. Enter them directly on
+> the target server. Barlas does not import credentials or data from another
+> agent installation.
 
-## Local verification
+Read the full [installation guide](docs/INSTALLATION.md) for non-interactive
+setup, port strategy, updates, troubleshooting, and the exact data layout.
+
+## Security by design
+
+- **Tenant isolation:** user identity comes from authenticated execution
+  context, never from model-supplied input.
+- **Approval before effect:** write, external, and destructive tools persist
+  their validated arguments and stop until the same user decides.
+- **Container boundaries:** production API, PostgreSQL, browser, sandbox,
+  backups, networks, and volumes are dedicated to Barlas.
+- **No host shell:** code runs in an offline, constrained container without the
+  Docker socket, host filesystem, public ports, or internal network.
+- **Encrypted connections:** connector secrets use AES-256-GCM with a dedicated
+  operator-controlled vault key.
+- **Auditable behavior:** quotas, traces, approval decisions, tool execution,
+  recovery, and project changes are recorded without copying sensitive bodies.
+- **SSRF resistance:** browser, web, and MCP paths reject local/private networks,
+  unsafe redirects, nonstandard ports, and oversized responses.
+
+See the [security policy](docs/SECURITY.md),
+[isolation model](docs/ISOLATION.md), and
+[release gates](docs/RELEASE_READINESS.md).
+
+## Current state
+
+**Private alpha · 125 automated tests · 19 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
+
+The functional agent core, web cabinet, Telegram channel, project system,
+recurring tasks, multimodal tools, sandbox, browser, MCP, encrypted connectors,
+production Compose, backups, recovery procedures, and evaluation framework are
+implemented. A public release remains intentionally blocked until dedicated
+production credentials, a domain, live model evaluations, an independent
+security review, recovery rehearsal, and a monitored closed-alpha period are
+complete.
+
+## Documentation
+
+| Start here | Build and operate | Trust and release |
+|---|---|---|
+| [Installation](docs/INSTALLATION.md) | [Architecture](docs/ARCHITECTURE.md) | [Security](docs/SECURITY.md) |
+| [Multilingual overview](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md) | [API reference](docs/API.md) | [Isolation policy](docs/ISOLATION.md) |
+| [Roadmap](docs/ROADMAP.md) | [Production deployment](docs/DEPLOYMENT.md) | [Release readiness](docs/RELEASE_READINESS.md) |
+| [Agent evaluation](docs/AGENT_EVALUATION.md) | [Backup and recovery](docs/BACKUP_RECOVERY.md) | [Acceptable use](docs/ACCEPTABLE_USE.md) |
+
+<details>
+<summary><strong>Local development verification</strong></summary>
 
 ```bash
 npm install
@@ -111,21 +163,23 @@ npm run build
 ```
 
 Copy `.env.example` to `.env` only inside an isolated development environment
-and replace every placeholder secret before starting the containers.
+and replace every placeholder before starting containers.
 
-## Documentation
+</details>
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Installation](docs/INSTALLATION.md)
-- [API](docs/API.md)
-- [Isolation policy](docs/ISOLATION.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Agent evaluation](docs/AGENT_EVALUATION.md)
-- [Production deployment](docs/DEPLOYMENT.md)
-- [Backup and recovery](docs/BACKUP_RECOVERY.md)
-- [Release readiness](docs/RELEASE_READINESS.md)
-- [Product overview in 38 languages](docs/PRODUCT_OVERVIEW_MULTILINGUAL.md)
+<details>
+<summary><strong>Policies and legal templates</strong></summary>
+
 - [Privacy policy template](docs/PRIVACY_POLICY_TEMPLATE.md)
 - [Terms of use template](docs/TERMS_OF_USE_TEMPLATE.md)
 - [Acceptable use](docs/ACCEPTABLE_USE.md)
 - [Security policy](docs/SECURITY.md)
+
+</details>
+
+---
+
+<p align="center">
+  <strong>THINK AHEAD. ACT BEYOND.</strong><br>
+  Built as an independent system. Designed to remain under human control.
+</p>

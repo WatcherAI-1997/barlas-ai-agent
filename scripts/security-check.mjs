@@ -52,6 +52,8 @@ for (const required of [
   "install.sh",
   "scripts/doctor.sh",
   "docs/INSTALLATION.md",
+  "assets/brand/barlas-ai-agent-logo-original.png",
+  "assets/brand/barlas-ai-agent-github-hero.png",
   "src/skills/manager.ts",
   "tests/skill-manager.test.ts",
 ]) {
@@ -59,6 +61,10 @@ for (const required of [
 }
 const installer = await readFile("install.sh", "utf8");
 const doctor = await readFile("scripts/doctor.sh", "utf8");
+const readme = await readFile("README.md", "utf8");
+for (const required of ["barlas-ai-agent-github-hero.png", "Quick install", "Security by design", "All 38", "THINK AHEAD. ACT BEYOND."]) {
+  if (!readme.includes(required)) throw new Error(`GitHub product presentation is missing: ${required}`);
+}
 for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64 32", "--prepare-only", "scripts/doctor.sh", "never prints them"]) {
   if (!installer.includes(required)) throw new Error(`Installer safety/usability boundary is missing: ${required}`);
 }
