@@ -36,6 +36,7 @@ function addMessage(kind, text) {
   node.textContent = text;
   $("#messages").append(node);
   node.scrollIntoView({ behavior: "smooth", block: "end" });
+  return node;
 }
 
 async function restore() {
@@ -62,10 +63,37 @@ $("#chat-form").addEventListener("submit", async (event) => {
   addMessage("user", text); input.value = "";
   try {
     const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, messages: [{ role: "user", content: text }], taskClass: $("#task-class").value }) });
-    state.conversationId = data.conversationId; addMessage("agent", data.message.content); await loadConversations();
+    state.conversationId = data.conversationId;
+    const statusNode = addMessage("agent", data.message.content);
+    if (data.status === "queued" && data.runId) void watchAgentRun(data.runId, statusNode);
+    else await loadConversations();
     if (data.status === "waiting_approval") await loadApprovals();
   } catch (error) { addMessage("agent", `Ошибка: ${error.message}`); }
 });
+
+async function watchAgentRun(runId, statusNode) {
+  const terminal = new Set(["completed", "step_limit", "budget_limit", "cancelled", "failed", "waiting_approval"]);
+  while (true) {
+    try {
+      const data = await api(`/v1/agent-runs/${runId}?userId=${encodeURIComponent(state.account.id)}`);
+      const events = await api(`/v1/agent-runs/${runId}/events?userId=${encodeURIComponent(state.account.id)}`);
+      const latest = events.events.at(-1);
+      statusNode.textContent = latest
+        ? `Выполняется: шаг ${latest.step}, ${latest.eventType}`
+        : `Состояние: ${data.run.status}`;
+      if (terminal.has(data.run.status)) {
+        statusNode.textContent = data.run.result?.text || data.run.error || `Состояние: ${data.run.status}`;
+        await loadConversations();
+        if (data.run.status === "waiting_approval") await loadApprovals();
+        return;
+      }
+    } catch (error) {
+      statusNode.textContent = `Не удалось обновить прогресс: ${error.message}`;
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
 
 async function loadPanel(name) {
   document.querySelectorAll(".panel").forEach((panel) => panel.classList.add("hidden"));

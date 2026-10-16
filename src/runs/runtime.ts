@@ -12,12 +12,46 @@ export class PersistentAgentRuntime {
     userId: string;
     conversationId: string;
     messages: AgentRunRecord["messages"];
+    conversationMessages?: AgentRunRecord["conversationMessages"];
     taskClass: AgentRunRecord["taskClass"];
     maxSteps: number;
     maxTotalTokens?: number;
     allowedTools?: string[];
   }): Promise<AgentRunRecord> {
     const run = await this.store.createAgentRun(input);
+    return this.execute(run);
+  }
+
+  async enqueue(input: {
+    userId: string;
+    conversationId: string;
+    messages: AgentRunRecord["messages"];
+    conversationMessages: AgentRunRecord["conversationMessages"];
+    delivery?: AgentRunRecord["delivery"];
+    taskClass: AgentRunRecord["taskClass"];
+    maxSteps: number;
+    maxTotalTokens?: number;
+    allowedTools?: string[];
+    scheduledFor?: Date;
+  }): Promise<AgentRunRecord> {
+    const run = await this.store.enqueueAgentRun({
+      userId: input.userId,
+      conversationId: input.conversationId,
+      messages: input.messages,
+      conversationMessages: input.conversationMessages,
+      taskClass: input.taskClass,
+      maxSteps: input.maxSteps,
+      ...(input.delivery ? { delivery: input.delivery } : {}),
+      ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}),
+      ...(input.maxTotalTokens ? { maxTotalTokens: input.maxTotalTokens } : {}),
+      ...(input.scheduledFor ? { scheduledFor: input.scheduledFor } : {}),
+    });
+    await this.store.appendAgentRunEvent({ runId: run.id, step: 0, eventType: "run.queued" });
+    return run;
+  }
+
+  executeClaimed(run: AgentRunRecord): Promise<AgentRunRecord> {
+    if (run.status !== "running" || !run.workerId) throw new Error("Agent run is not leased by a worker");
     return this.execute(run);
   }
 
@@ -101,6 +135,7 @@ export class PersistentAgentRuntime {
       });
       return await this.persistResult(run, result);
     } catch (error) {
+      if (run.workerId) throw error;
       const failed = await this.store.updateAgentRun({
         id: run.id,
         userId: run.userId,
@@ -121,6 +156,7 @@ export class PersistentAgentRuntime {
       ...(result.continuation ? { continuation: result.continuation } : {}),
       ...(pendingApprovalId ? { pendingApprovalId } : {}),
       result,
+      ...(run.workerId ? { workerId: run.workerId } : {}),
     });
     if (!updated) throw new Error("Agent run was cancelled or changed concurrently");
     return updated;

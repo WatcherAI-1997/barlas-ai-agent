@@ -67,6 +67,12 @@ const telegramUpdateSchema = z.object({
       from: z.object({ id: z.number().int() }).optional(),
     })
     .optional(),
+  callback_query: z.object({
+    id: z.string().min(1).max(256),
+    data: z.string().min(1).max(64),
+    from: z.object({ id: z.number().int() }),
+    message: z.object({ chat: z.object({ id: z.number().int() }) }).optional(),
+  }).optional(),
 });
 
 const toolExecutionSchema = z.object({
@@ -141,7 +147,7 @@ export interface AppDependencies {
   database: AgentStore;
   modelProvider: ModelProvider;
   agentLoop?: Pick<AgentLoop, "run">;
-  agentRuntime?: Pick<PersistentAgentRuntime, "start" | "resume" | "resumeByApproval" | "get" | "list" | "events" | "cancel">;
+  agentRuntime?: Pick<PersistentAgentRuntime, "start" | "enqueue" | "resume" | "resumeByApproval" | "get" | "list" | "events" | "cancel">;
   toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
   skillRegistry?: Pick<SkillRegistry, "list">;
   governance?: RuntimeGovernance;
@@ -150,7 +156,11 @@ export interface AppDependencies {
   runtimeInfo?: { workerEnabled: boolean };
   telegram?: {
     webhookSecret: string;
-    client: { sendMessage(chatId: number, text: string): Promise<void> };
+    client: {
+      sendMessage(chatId: number, text: string): Promise<void>;
+      sendApproval?(chatId: number, text: string, approvalId: string): Promise<void>;
+      answerCallbackQuery?(callbackQueryId: string, text: string): Promise<void>;
+    };
   };
   logger?: boolean;
 }
@@ -462,15 +472,30 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
         ...(parsed.data.allowedTools ? { allowedTools: parsed.data.allowedTools } : {}),
       };
-      const run = dependencies.agentRuntime ? await dependencies.agentRuntime.start(loopInput) : null;
-      if (run && !run.result) {
-        return reply.code(run.status === "cancelled" ? 409 : 500).send({
+      if (dependencies.agentRuntime) {
+        const run = await dependencies.agentRuntime.enqueue({
+          ...loopInput,
+          conversationMessages: parsed.data.messages,
+        });
+        if (traceId) {
+          await dependencies.governance?.trace({
+            traceId,
+            userId,
+            operation: "agent.loop",
+            status: "pending",
+            details: { runId: run.id, agentStatus: run.status },
+          });
+        }
+        return reply.code(202).send({
           runId: run.id,
+          conversationId,
           status: run.status,
-          error: run.error ?? "Agent run did not produce a result",
+          message: { role: "assistant", content: "Задача принята и выполняется в фоне." },
+          memoriesUsed: memories.length,
+          traceId,
         });
       }
-      const result = run?.result ?? await dependencies.agentLoop!.run(loopInput);
+      const result = await dependencies.agentLoop!.run(loopInput);
       await dependencies.database.saveTurn({
         userId,
         conversationId,
@@ -492,7 +517,6 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         });
       }
       return {
-        runId: run?.id,
         conversationId,
         status: result.status,
         message: { role: "assistant", content: result.text },
@@ -809,9 +833,60 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
 
     const parsed = telegramUpdateSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid Telegram update");
+    if (parsed.data.callback_query) {
+      const callback = parsed.data.callback_query;
+      const match = /^(approve|reject):([0-9a-f-]{36})$/i.exec(callback.data);
+      if (!match || !dependencies.toolExecutor) return { ok: true, ignored: true };
+      const userId = `telegram:${callback.from.id}`;
+      try {
+        const decision = await dependencies.toolExecutor.decide({
+          approvalId: match[2]!,
+          userId,
+          approved: match[1] === "approve",
+        });
+        const resumed = dependencies.agentRuntime
+          ? await dependencies.agentRuntime.resumeByApproval({
+              userId,
+              approvalId: match[2]!,
+              output: decision.status === "completed" ? decision.output : null,
+              rejected: decision.status === "rejected",
+            })
+          : null;
+        await dependencies.telegram.client.answerCallbackQuery?.(callback.id, "Решение принято");
+        if (callback.message && resumed?.result) {
+          await dependencies.telegram.client.sendMessage(callback.message.chat.id, resumed.result.text);
+        }
+        return { ok: true };
+      } catch (error) {
+        await dependencies.telegram.client.answerCallbackQuery?.(
+          callback.id,
+          error instanceof Error ? error.message.slice(0, 150) : "Ошибка",
+        );
+        return { ok: true };
+      }
+    }
     if (!parsed.data.message) return { ok: true, ignored: true };
 
     const message = parsed.data.message;
+    if (dependencies.agentRuntime) {
+      const userId = `telegram:${message.from?.id ?? message.chat.id}`;
+      const memories = await dependencies.database.recall(userId, message.text, 5);
+      const memoryContext = memories.length > 0 ? [{
+        role: "system" as const,
+        content: ["Use these Barlas AI Agent user memories only when relevant:", ...memories.map((item) => `- [${item.category}] ${item.content}`)].join("\n"),
+      }] : [];
+      const run = await dependencies.agentRuntime.enqueue({
+        userId,
+        conversationId: randomUUID(),
+        messages: [...memoryContext, { role: "user", content: message.text }],
+        conversationMessages: [{ role: "user", content: message.text }],
+        delivery: { channel: "telegram", chatId: message.chat.id },
+        taskClass: "fast",
+        maxSteps: 8,
+      });
+      await dependencies.telegram.client.sendMessage(message.chat.id, `Задача принята. Запуск ${run.id.slice(0, 8)}.`);
+      return { ok: true, runId: run.id };
+    }
     const { result } = await runChat({
       userId: `telegram:${message.from?.id ?? message.chat.id}`,
       messages: [{ role: "user", content: message.text }],

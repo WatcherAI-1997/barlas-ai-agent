@@ -5,6 +5,7 @@ import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
 import { AgentLoop } from "./core/agent-loop.js";
 import { PersistentAgentRuntime } from "./runs/runtime.js";
+import { AgentRunWorker } from "./runs/worker.js";
 import { RuntimeGovernance } from "./governance/runtime.js";
 import { createAgentJobHandler } from "./jobs/agent-handler.js";
 import { JobWorker } from "./jobs/worker.js";
@@ -82,6 +83,38 @@ for (const recovered of await agentRuntime.recoverReady()) {
     });
   }
 }
+const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
+  ? {
+      webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,
+      client: new TelegramClient(config.TELEGRAM_BOT_TOKEN),
+    }
+  : undefined;
+const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
+  pollIntervalMs: config.AGENT_RUN_WORKER_POLL_MS,
+  batchSize: config.AGENT_RUN_WORKER_BATCH_SIZE,
+  leaseSeconds: config.AGENT_RUN_LEASE_SECONDS,
+  onFinished: async (run) => {
+    if (!run.result) return;
+    await database.saveTurn({
+      userId: run.userId,
+      conversationId: run.conversationId,
+      messages: run.conversationMessages,
+      result: run.result.result,
+    });
+    if (run.delivery?.channel === "telegram" && telegram) {
+      if (run.status === "waiting_approval" && run.pendingApprovalId) {
+        await telegram.client.sendApproval(
+          run.delivery.chatId,
+          run.result.text,
+          run.pendingApprovalId,
+        );
+      } else {
+        await telegram.client.sendMessage(run.delivery.chatId, run.result.text);
+      }
+    }
+  },
+  onError: (error) => console.error("Barlas AI Agent autonomous run worker error", error),
+});
 const jobWorker = new JobWorker(database, {
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
   batchSize: config.JOB_WORKER_BATCH_SIZE,
@@ -91,12 +124,6 @@ const jobWorker = new JobWorker(database, {
 });
 jobWorker.register("agent.run", createAgentJobHandler(modelProvider));
 jobWorker.register("agent.workflow", createWorkflowJobHandler(modelProvider, skillRegistry));
-const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
-  ? {
-      webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,
-      client: new TelegramClient(config.TELEGRAM_BOT_TOKEN),
-    }
-  : undefined;
 const app = await buildApp({
   apiToken: config.BARLAS_API_TOKEN,
   database,
@@ -116,6 +143,7 @@ const app = await buildApp({
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   app.log.info({ signal }, "Barlas AI Agent is shutting down");
   await jobWorker.stop();
+  await agentRunWorker.stop();
   await app.close();
   process.exit(0);
 };
@@ -125,3 +153,4 @@ process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 await app.listen({ host: config.HOST, port: config.PORT });
 if (config.JOB_WORKER_ENABLED) jobWorker.start();
+if (config.AGENT_RUN_WORKER_ENABLED) agentRunWorker.start();

@@ -25,7 +25,8 @@ an auditable tool executor, durable job storage, container hardening, and
 automated tests. The private-alpha core also includes versioned skills, bounded
 subagent workflows, per-user file workspaces, and a native autonomous tool loop
 with hard step limits, durable checkpoints, approval continuation, restart
-recovery, cancellation, and a content-safe step journal. It also includes optional SearXNG
+recovery, cancellation, an asynchronous lease worker, live progress, Telegram
+delivery, approval buttons, and a content-safe step journal. It also includes optional SearXNG
 web search, a no-shell read-only terminal inspector,
 atomic per-user quotas, execution traces, secure owner/user accounts, and a
 branded web cabinet with conversation history, approvals, job controls, and

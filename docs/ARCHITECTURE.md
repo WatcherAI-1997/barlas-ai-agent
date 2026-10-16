@@ -56,6 +56,10 @@ autonomy.
   continuation, and startup recovery resumes decisions committed immediately
   before a process interruption. Cancellation wins over late completion through
   conditional PostgreSQL updates.
+- New runs use a PostgreSQL lease queue and return to web/Telegram immediately.
+  Bounded retries recover stale `running` leases, while worker ownership guards
+  terminal writes. Visible conversation messages, injected memory context, and
+  optional delivery metadata are stored as separate fields.
 
 ## Data boundaries
 

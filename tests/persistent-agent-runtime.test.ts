@@ -38,12 +38,30 @@ function memoryStore() {
       const created: AgentRunRecord = {
         id: runId,
         ...input,
+        conversationMessages: input.conversationMessages ?? input.messages,
         status: "running",
+        scheduledFor: "2026-10-16T00:00:00.000Z",
+        attempts: 0,
+        maxAttempts: 3,
         createdAt: "2026-10-16T00:00:00.000Z",
         updatedAt: "2026-10-16T00:00:00.000Z",
       };
       current = created;
       return created;
+    }),
+    enqueueAgentRun: vi.fn(async (input) => {
+      const queued: AgentRunRecord = {
+        id: runId,
+        ...input,
+        status: "queued",
+        scheduledFor: (input.scheduledFor ?? new Date("2026-10-16T00:00:00.000Z")).toISOString(),
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: "2026-10-16T00:00:00.000Z",
+        updatedAt: "2026-10-16T00:00:00.000Z",
+      };
+      current = queued;
+      return queued;
     }),
     getAgentRun: vi.fn(async (userId, id) => current && current.userId === userId && current.id === id ? current : null),
     findAgentRunByApproval: vi.fn(async (userId, id) => current && current.userId === userId && current.pendingApprovalId === id ? current : null),
@@ -65,6 +83,8 @@ function memoryStore() {
     listAgentRunEvents: vi.fn(async () => []),
     getApprovalOutcome: vi.fn(async () => ({ status: "executed" as const, output: { written: true } })),
     listReadyAgentRuns: vi.fn(async () => current ? [current] : []),
+    claimAgentRuns: vi.fn(async () => []),
+    failClaimedAgentRun: vi.fn(async () => "failed" as const),
   };
   return { store, events, current: () => current };
 }

@@ -8,7 +8,7 @@
 
 ## Phase 1 — Private alpha
 
-- Telegram webhook and replies. *(foundation implemented; credentials pending)*
+- Telegram webhook, durable replies, and approval buttons. *(implemented; credentials pending)*
 - Persistent conversations and explicit long-term memory. *(implemented)*
 - Web research, files, terminal tools, and task execution. *(SearXNG search, isolated files, and restricted inspection implemented)*
 - Model switching and routing. *(fast/deep/private foundation implemented)*
@@ -18,6 +18,7 @@
 
 - Native autonomous tool loop with bounded steps and approval pauses. *(implemented)*
 - Durable run checkpoints, approval continuation, recovery, cancellation, and step journal. *(implemented)*
+- Asynchronous leased agent-run queue, live progress polling, and Telegram result delivery. *(implemented)*
 - Durable long-running job storage and schedules. *(worker, leases, retries implemented)*
 - Isolated subagents and resumable workflows. *(bounded sequential workflows implemented)*
 - Versioned skills with evaluation and rollback. *(versioned registry implemented; evaluation/rollback pending)*

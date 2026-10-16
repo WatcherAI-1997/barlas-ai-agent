@@ -200,14 +200,19 @@ describe("Barlas AI Agent API", () => {
       conversationId: "00000000-0000-4000-8000-000000000001",
       status: "completed" as const,
       messages: [{ role: "user" as const, content: "Run durably" }],
+      conversationMessages: [{ role: "user" as const, content: "Run durably" }],
       taskClass: "fast" as const,
       maxSteps: 8,
+      scheduledFor: "2026-10-16T00:00:00.000Z",
+      attempts: 0,
+      maxAttempts: 3,
       result: loopResult,
       createdAt: "2026-10-16T00:00:00.000Z",
       updatedAt: "2026-10-16T00:00:01.000Z",
     };
     const agentRuntime = {
       start: vi.fn(async () => record),
+      enqueue: vi.fn(async () => ({ ...record, status: "queued" as const })),
       resume: vi.fn(async () => record),
       resumeByApproval: vi.fn(async () => record),
       get: vi.fn(async () => record),
@@ -223,9 +228,9 @@ describe("Barlas AI Agent API", () => {
       payload: { userId: "user-1", messages: [{ role: "user", content: "Run durably" }] },
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ runId: record.id, status: "completed" });
-    expect(agentRuntime.start).toHaveBeenCalledOnce();
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({ runId: record.id, status: "queued" });
+    expect(agentRuntime.enqueue).toHaveBeenCalledOnce();
     await app.close();
   });
 
@@ -278,6 +283,61 @@ describe("Barlas AI Agent API", () => {
 
     expect(response.statusCode).toBe(200);
     expect(sendMessage).toHaveBeenCalledWith(42, "Hello from Barlas AI Agent");
+    await app.close();
+  });
+
+  it("queues Telegram messages in the durable autonomous runtime", async () => {
+    const deps = dependencies();
+    const sendMessage = vi.fn(async () => undefined);
+    const queued = {
+      id: "00000000-0000-4000-8000-000000000010",
+      userId: "telegram:7",
+      conversationId: "00000000-0000-4000-8000-000000000001",
+      status: "queued" as const,
+      messages: [{ role: "user" as const, content: "Do it" }],
+      conversationMessages: [{ role: "user" as const, content: "Do it" }],
+      delivery: { channel: "telegram" as const, chatId: 42 },
+      taskClass: "fast" as const,
+      maxSteps: 8,
+      scheduledFor: "2026-10-16T00:00:00.000Z",
+      attempts: 0,
+      maxAttempts: 3,
+      createdAt: "2026-10-16T00:00:00.000Z",
+      updatedAt: "2026-10-16T00:00:00.000Z",
+    };
+    const agentRuntime = {
+      start: vi.fn(),
+      enqueue: vi.fn(async () => queued),
+      resume: vi.fn(),
+      resumeByApproval: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(),
+      events: vi.fn(),
+      cancel: vi.fn(),
+    };
+    const app = await buildApp({
+      apiToken,
+      ...deps,
+      agentRuntime,
+      telegram: { webhookSecret: "t".repeat(32), client: { sendMessage } },
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/channels/telegram/webhook",
+      headers: { "x-telegram-bot-api-secret-token": "t".repeat(32) },
+      payload: {
+        update_id: 2,
+        message: { message_id: 3, text: "Do it", chat: { id: 42 }, from: { id: 7 } },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().runId).toBe(queued.id);
+    expect(agentRuntime.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "telegram:7",
+      delivery: { channel: "telegram", chatId: 42 },
+    }));
+    expect(sendMessage).toHaveBeenCalledWith(42, expect.stringContaining("Задача принята"));
     await app.close();
   });
 

@@ -508,6 +508,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     userId: string;
     conversationId: string;
     messages: AgentRunRecord["messages"];
+    conversationMessages?: AgentRunRecord["conversationMessages"];
     taskClass: AgentRunRecord["taskClass"];
     allowedTools?: string[];
     maxSteps: number;
@@ -515,13 +516,14 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
   }): Promise<AgentRunRecord> {
     const result = await this.pool.query<AgentRunRow>(
       `insert into agent_runs
-        (user_id, conversation_id, messages, task_class, allowed_tools, max_steps, max_total_tokens)
-       values ($1, $2, $3::jsonb, $4, $5::jsonb, $6, $7)
+        (user_id, conversation_id, messages, conversation_messages, task_class, allowed_tools, max_steps, max_total_tokens)
+       values ($1, $2, $3::jsonb, $4::jsonb, $5, $6::jsonb, $7, $8)
        returning *`,
       [
         input.userId,
         input.conversationId,
         JSON.stringify(input.messages),
+        JSON.stringify(input.conversationMessages ?? input.messages),
         input.taskClass,
         input.allowedTools ? JSON.stringify(input.allowedTools) : null,
         input.maxSteps,
@@ -530,6 +532,42 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     );
     const row = result.rows[0];
     if (!row) throw new Error("Agent run insert returned no row");
+    return this.mapAgentRun(row);
+  }
+
+  async enqueueAgentRun(input: {
+    userId: string;
+    conversationId: string;
+    messages: AgentRunRecord["messages"];
+    conversationMessages: AgentRunRecord["conversationMessages"];
+    delivery?: AgentRunRecord["delivery"];
+    taskClass: AgentRunRecord["taskClass"];
+    allowedTools?: string[];
+    maxSteps: number;
+    maxTotalTokens?: number;
+    scheduledFor?: Date;
+  }): Promise<AgentRunRecord> {
+    const result = await this.pool.query<AgentRunRow>(
+      `insert into agent_runs
+        (user_id, conversation_id, status, messages, conversation_messages, delivery, task_class,
+         allowed_tools, max_steps, max_total_tokens, scheduled_for)
+       values ($1, $2, 'queued', $3::jsonb, $4::jsonb, $5::jsonb, $6, $7::jsonb, $8, $9, $10)
+       returning *`,
+      [
+        input.userId,
+        input.conversationId,
+        JSON.stringify(input.messages),
+        JSON.stringify(input.conversationMessages),
+        input.delivery ? JSON.stringify(input.delivery) : null,
+        input.taskClass,
+        input.allowedTools ? JSON.stringify(input.allowedTools) : null,
+        input.maxSteps,
+        input.maxTotalTokens ?? null,
+        input.scheduledFor ?? new Date(),
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("Agent run enqueue returned no row");
     return this.mapAgentRun(row);
   }
 
@@ -565,6 +603,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     pendingApprovalId?: string;
     result?: AgentRunRecord["result"];
     error?: string;
+    workerId?: string;
   }): Promise<AgentRunRecord | null> {
     const result = await this.pool.query<AgentRunRow>(
       `update agent_runs
@@ -573,9 +612,13 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
              when $3 in ('running', 'waiting_approval') then coalesce($4::jsonb, continuation)
              else null end,
            pending_approval_id = case when $3 = 'waiting_approval' then $5::uuid else null end,
-           result = $6::jsonb, error = $7, updated_at = now()
+           result = $6::jsonb, error = $7,
+           worker_id = case when $3 = 'running' then worker_id else null end,
+           locked_at = case when $3 = 'running' then locked_at else null end,
+           updated_at = now()
        where id = $1 and user_id = $2
          and status <> 'cancelled'
+         and ($8::text is null or worker_id = $8)
          and (status = 'running' or (status = 'waiting_approval' and $3 = 'running'))
        returning *`,
       [
@@ -586,6 +629,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
         input.pendingApprovalId ?? null,
         input.result ? JSON.stringify(input.result) : null,
         input.error ?? null,
+        input.workerId ?? null,
       ],
     );
     return result.rows[0] ? this.mapAgentRun(result.rows[0]) : null;
@@ -595,7 +639,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     const result = await this.pool.query<AgentRunRow>(
       `with target as (
          select id, pending_approval_id from agent_runs
-         where id = $1 and user_id = $2 and status in ('running', 'waiting_approval')
+         where id = $1 and user_id = $2 and status in ('queued', 'running', 'waiting_approval')
          for update
        ), rejected as (
          update approval_requests approval
@@ -604,7 +648,8 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
          where approval.id = target.pending_approval_id and approval.status = 'pending'
        )
        update agent_runs run
-       set status = 'cancelled', pending_approval_id = null, updated_at = now()
+       set status = 'cancelled', pending_approval_id = null,
+           worker_id = null, locked_at = null, updated_at = now()
        from target
        where run.id = target.id
        returning run.*`,
@@ -676,6 +721,60 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       [limit],
     );
     return result.rows.map((row) => this.mapAgentRun(row));
+  }
+
+  async claimAgentRuns(input: {
+    workerId: string;
+    limit: number;
+    leaseSeconds: number;
+  }): Promise<AgentRunRecord[]> {
+    const result = await this.pool.query<AgentRunRow>(
+      `with exhausted as (
+         update agent_runs
+         set status = 'failed', error = 'Agent run lease expired after maximum attempts',
+             worker_id = null, locked_at = null, updated_at = now()
+         where status = 'running'
+           and locked_at < now() - make_interval(secs => $3)
+           and attempts >= max_attempts
+       ), candidates as (
+         select id from agent_runs
+         where (
+           (status = 'queued' and scheduled_for <= now())
+           or (status = 'running' and locked_at < now() - make_interval(secs => $3))
+         )
+         and attempts < max_attempts
+         order by scheduled_for, created_at
+         for update skip locked
+         limit $2
+       )
+       update agent_runs run
+       set status = 'running', worker_id = $1, locked_at = now(),
+           attempts = run.attempts + 1, error = null, updated_at = now()
+       from candidates
+       where run.id = candidates.id
+       returning run.*`,
+      [input.workerId, input.limit, input.leaseSeconds],
+    );
+    return result.rows.map((row) => this.mapAgentRun(row));
+  }
+
+  async failClaimedAgentRun(input: {
+    id: string;
+    workerId: string;
+    error: string;
+    retryAt?: Date;
+  }): Promise<"queued" | "failed" | null> {
+    const result = await this.pool.query<{ status: "queued" | "failed" }>(
+      `update agent_runs
+       set status = case when attempts < max_attempts and $4::timestamptz is not null
+                         then 'queued' else 'failed' end,
+           scheduled_for = coalesce($4::timestamptz, scheduled_for),
+           error = $3, worker_id = null, locked_at = null, updated_at = now()
+       where id = $1 and worker_id = $2 and status = 'running'
+       returning status`,
+      [input.id, input.workerId, input.error, input.retryAt ?? null],
+    );
+    return result.rows[0]?.status ?? null;
   }
 
   async consumeQuota(input: {
@@ -841,17 +940,23 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       conversationId: row.conversation_id,
       status: row.status,
       messages: row.messages,
+      conversationMessages: row.conversation_messages,
       taskClass: row.task_class,
       maxSteps: row.max_steps,
+      scheduledFor: row.scheduled_for.toISOString(),
+      attempts: row.attempts,
+      maxAttempts: row.max_attempts,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
     if (row.allowed_tools) run.allowedTools = row.allowed_tools;
+    if (row.delivery) run.delivery = row.delivery;
     if (row.max_total_tokens !== null) run.maxTotalTokens = row.max_total_tokens;
     if (row.continuation) run.continuation = row.continuation;
     if (row.pending_approval_id) run.pendingApprovalId = row.pending_approval_id;
     if (row.result) run.result = row.result;
     if (row.error) run.error = row.error;
+    if (row.worker_id) run.workerId = row.worker_id;
     return run;
   }
 
@@ -921,6 +1026,8 @@ interface AgentRunRow {
   conversation_id: string;
   status: AgentRunStatus;
   messages: AgentRunRecord["messages"];
+  conversation_messages: AgentRunRecord["conversationMessages"];
+  delivery: AgentRunRecord["delivery"] | null;
   task_class: AgentRunRecord["taskClass"];
   allowed_tools: string[] | null;
   max_steps: number;
@@ -929,6 +1036,11 @@ interface AgentRunRow {
   pending_approval_id: string | null;
   result: AgentRunRecord["result"] | null;
   error: string | null;
+  scheduled_for: Date;
+  attempts: number;
+  max_attempts: number;
+  worker_id: string | null;
+  locked_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }

@@ -22,7 +22,7 @@ receive an opaque expiring session token whose SHA-256 hash is stored server-sid
 - `POST /v1/admin/users` — create an owner or user account; owner only.
 
 - `POST /v1/chat` — generate an answer using `fast`, `deep`, or `private` routing.
-- `POST /v1/agent/run` — run the bounded autonomous tool loop.
+- `POST /v1/agent/run` — enqueue the bounded autonomous tool loop and return HTTP 202.
 - `GET /v1/agent-runs` — list durable autonomous runs for one user.
 - `GET /v1/agent-runs/:id` — inspect one owned run.
 - `GET /v1/agent-runs/:id/events` — load its ordered, content-safe step journal.
@@ -119,6 +119,14 @@ model step, startup recovery finds the executed/rejected approval and continues
 from the saved provider response and call ID. Conditional state transitions
 prevent a cancelled run from being overwritten by a late model response.
 
+Queued runs are leased with PostgreSQL `FOR UPDATE SKIP LOCKED`. A worker crash
+leaves a recoverable lease; after its timeout another worker may claim the run.
+Retries are bounded and use exponential delay. The original visible messages
+are stored separately from injected memory context so background completion
+cannot leak internal context into conversation history. The web cabinet polls
+the content-safe event journal while work continues without holding the submit
+request open.
+
 Conversation IDs are ownership-checked inside the database transaction. A
 client cannot attach messages to another user's conversation even if it learns
 or guesses its UUID.
@@ -138,6 +146,10 @@ scoped to their own account.
 `X-Telegram-Bot-Api-Secret-Token` header matches `TELEGRAM_WEBHOOK_SECRET`.
 Telegram remains disabled unless both its new bot token and webhook secret are
 configured specifically for Barlas AI Agent.
+When enabled, Telegram messages enqueue the same durable autonomous runtime.
+Results are delivered back to the originating chat. Approval requests use
+inline Allow/Reject buttons whose callback is ownership-checked against the
+Telegram sender before the tool can execute.
 
 ## Safety model
 
