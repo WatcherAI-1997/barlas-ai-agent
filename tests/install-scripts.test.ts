@@ -9,9 +9,11 @@ const root = resolve(import.meta.dirname, "..");
 
 describe("production installer", () => {
   it("has valid Bash syntax and documents both entry points", () => {
-    expect(spawnSync("bash", ["-n", "install.sh", "scripts/doctor.sh", "scripts/dashboard-url.sh"], { cwd: root }).status).toBe(0);
+    expect(spawnSync("bash", ["-n", "install.sh", "barlas", "scripts/doctor.sh", "scripts/dashboard-url.sh", "scripts/update.sh"], { cwd: root }).status).toBe(0);
+    expect(spawnSync("sh", ["-n", "deploy/backup-loop.sh", "deploy/backup-now.sh"], { cwd: root }).status).toBe(0);
     expect(spawnSync("bash", ["install.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--prepare-only");
     expect(spawnSync("bash", ["scripts/doctor.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--require-running");
+    expect(spawnSync("bash", ["scripts/update.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--rollback");
   });
 
   it("prepares a protected config without printing supplied secrets", async () => {

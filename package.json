@@ -4,6 +4,9 @@
   "private": true,
   "description": "Barlas AI Agent core runtime",
   "type": "module",
+  "bin": {
+    "barlas": "dist/src/cli.js"
+  },
   "engines": {
     "node": ">=22"
   },

@@ -166,20 +166,36 @@ Common problems:
 
 ## Update
 
-Create a database and workspace backup, inspect the target commit, then:
+Check and apply a fast-forward update from the private GitHub repository:
 
 ```bash
-git pull --ff-only
-./install.sh --env-file deploy/local.env
-./scripts/doctor.sh --env-file deploy/local.env --require-running
+./scripts/update.sh --check
+./scripts/update.sh
 ```
 
-Use `deploy/production.env` instead when updating a public deployment.
+The updater refuses a dirty worktree or a target outside `origin/main`, creates
+database and workspace backups, records exact commit IDs, rebuilds the stack,
+and runs the full doctor. If health checks fail, it automatically restores the
+previous application commit. `--require-signed` additionally enforces
+`git verify-commit` for repositories whose release commits are signed.
+
+Explicit application rollback uses:
+
+```bash
+./scripts/update.sh --rollback
+```
 
 The existing protected configuration is reused. Compose rebuilds the reviewed
 source, ordered migrations run before the API starts, and named volumes remain
 intact. Database rollback and restore remain separate explicit operations; see
 [Backup and recovery](BACKUP_RECOVERY.md).
+
+## Terminal CLI
+
+The host needs only Docker. `./barlas` executes the compiled CLI inside the API
+container and reads authentication from the protected container environment;
+the gateway token is never placed on the command line. It supports interactive
+chat, status, autonomous runs, approvals, jobs, projects, and schedules.
 
 ## After installation
 

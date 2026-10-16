@@ -213,6 +213,7 @@ services:
     entrypoint: ["/bin/sh", "/opt/barlas/backup-loop.sh"]
     volumes:
       - ./deploy/backup-loop.sh:/opt/barlas/backup-loop.sh:ro
+      - ./deploy/backup-now.sh:/opt/barlas/backup-now.sh:ro
       - backups:/backups
       - workspaces:/workspaces:ro
     depends_on:

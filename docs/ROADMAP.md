@@ -40,6 +40,12 @@
 
 ## Phase 3 — Product
 
+- Local CLI/TUI for autonomous chat, status, runs, approvals, jobs, projects,
+  and schedules without host Node.js or token copying. *(implemented)*
+- Provenance-checked fast-forward updates with pre-update database/workspace
+  backup, health-gated automatic application rollback, and optional signed
+  commit enforcement. *(implemented)*
+
 - Branded web application. *(responsive authenticated cabinet, mobile
   navigation, accessible feedback/dialogs, and isolated file manager implemented)*
 - Named project workspaces with linked conversations, runs, memories, files,

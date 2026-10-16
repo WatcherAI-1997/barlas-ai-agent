@@ -94,6 +94,15 @@ The cabinet opens only on `http://127.0.0.1:17840`. If a Telegram bot token is
 provided, local mode uses the official Bot API long polling, so Telegram also
 works without a webhook, domain, or HTTPS certificate.
 
+After installation, work from the terminal without copying a token:
+
+```bash
+./barlas                 # interactive CLI/TUI
+./barlas ask "Проверь проект и составь план"
+./barlas approvals
+./barlas approve APPROVAL_ID
+```
+
 For a public HTTPS deployment on a dedicated Linux server, run `./install.sh`
 without `--local` and provide a domain.
 
@@ -145,7 +154,7 @@ See the [security policy](docs/SECURITY.md),
 
 ## Current state
 
-**Private alpha · 141 automated tests · 20 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
+**Private alpha · 143 automated tests · 20 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
 
 The functional agent core, web cabinet, Telegram channel, project system,
 recurring tasks, multimodal tools, sandbox, browser, MCP, encrypted connectors,

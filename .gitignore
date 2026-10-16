@@ -3,6 +3,7 @@
 !.env.example
 deploy/production.env
 deploy/local.env
+deploy/update-state
 *.pem
 *.key
 *.crt

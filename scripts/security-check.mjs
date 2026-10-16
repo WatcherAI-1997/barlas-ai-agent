@@ -25,7 +25,7 @@ for (const required of ["read_only: true", "no-new-privileges:true", "cap_drop:"
 const terminal = await readFile("src/tools/terminal.ts", "utf8");
 if (/\bshell\s*:\s*true\b/u.test(terminal)) throw new Error("Restricted terminal must not enable a shell");
 const gitignore = await readFile(".gitignore", "utf8");
-for (const required of [".env", "deploy/production.env", "deploy/local.env", "*.key", "secrets/"]) {
+for (const required of [".env", "deploy/production.env", "deploy/local.env", "deploy/update-state", "*.key", "secrets/"]) {
   if (!gitignore.includes(required)) throw new Error(`.gitignore must cover ${required}`);
 }
 
@@ -64,6 +64,7 @@ for (const required of [
 }
 const installer = await readFile("install.sh", "utf8");
 const doctor = await readFile("scripts/doctor.sh", "utf8");
+const updater = await readFile("scripts/update.sh", "utf8");
 const readme = await readFile("README.md", "utf8");
 for (const required of ["barlas-ai-agent-github-hero.png", "Quick install", "Security by design", "All 38", "THINK AHEAD. ACT BEYOND."]) {
   if (!readme.includes(required)) throw new Error(`GitHub product presentation is missing: ${required}`);
@@ -73,6 +74,13 @@ for (const required of ["set -Eeuo pipefail", "chmod 600", "openssl rand -base64
 }
 for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {
   if (!doctor.includes(required)) throw new Error(`Doctor safety/usability boundary is missing: ${required}`);
+}
+for (const required of ["git merge-base --is-ancestor", "git verify-commit", "backup-now.sh", "git switch --detach", "--require-running", "Refusing to update a dirty worktree"]) {
+  if (!updater.includes(required)) throw new Error(`Updater safety boundary is missing: ${required}`);
+}
+const cli = await readFile("src/cli.ts", "utf8");
+for (const required of ["Barlas CLI", "/v1/agent/run", "/v1/approvals/", "BARLAS_GATEWAY_TOKEN", "AbortSignal.timeout"]) {
+  if (!cli.includes(required)) throw new Error(`CLI boundary is missing: ${required}`);
 }
 const projects = await readFile("src/projects/service.ts", "utf8");
 const projectMigration = await readFile("migrations/018_projects.sql", "utf8");
