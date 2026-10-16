@@ -3,7 +3,7 @@
 ## Verified on 2026-10-16
 
 - TypeScript typecheck and production build pass.
-- 128 automated tests across 37 files pass.
+- 129 automated tests across 38 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -20,6 +20,9 @@
   registration for every vision, PDF, transcription, and speech tool.
 - File-cabinet tests verify authenticated listing, bounded upload, explicit-only
   overwrite, attachment download, metadata-only audit, and workspace isolation.
+- Web-interface checks preserve responsive navigation, visible keyboard focus,
+  reduced-motion behavior, accessible live feedback, and dialog-based copying
+  without inline scripts or blocking browser alerts.
 - Project tests verify cross-user denial, owned resource linking, immutable
   SHA-256 artifact snapshots, project-aware agent context/run linking, and
   explicit restoration of selected versions.

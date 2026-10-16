@@ -38,7 +38,8 @@
 
 ## Phase 3 — Product
 
-- Branded web application. *(authenticated cabinet and isolated file manager implemented)*
+- Branded web application. *(responsive authenticated cabinet, mobile
+  navigation, accessible feedback/dialogs, and isolated file manager implemented)*
 - Named project workspaces with linked conversations, runs, memories, files,
   and recoverable artifact versions. *(implemented)*
 - Project goals, ordered execution plans, progress checkpoints, and automatic

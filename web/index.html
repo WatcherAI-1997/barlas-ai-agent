@@ -34,26 +34,35 @@
       </section>
 
       <section id="app-view" class="app hidden">
-        <header>
-          <div class="brand"><span class="mark">●●●</span><strong>Barlas AI Agent</strong></div>
+        <header class="topbar">
+          <div class="header-context">
+            <button id="nav-toggle" class="icon-button secondary" type="button" aria-label="Открыть меню" aria-controls="primary-nav" aria-expanded="false">☰</button>
+            <div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><span><strong>Barlas</strong><small>AI Agent</small></span></div>
+            <div class="page-context"><span class="status-dot" aria-hidden="true"></span><span id="page-title">Обзор</span></div>
+          </div>
           <div class="identity"><span id="identity"></span><button id="logout" class="secondary">Выйти</button></div>
         </header>
-        <nav>
-          <button data-panel="overview" class="active">Обзор</button>
-          <button data-panel="chat">Чат</button>
-          <button data-panel="approvals">Подтверждения</button>
-          <button data-panel="runs">Запуски</button>
-          <button data-panel="jobs">Задачи</button>
-          <button data-panel="schedules">Расписания</button>
-          <button data-panel="files">Файлы</button>
-          <button data-panel="projects">Проекты</button>
-          <button data-panel="traces">Трассировка</button>
-          <button data-panel="skills">Навыки</button>
-          <button data-panel="organizations">Организации</button>
-          <button data-panel="connectors">Подключения</button>
-          <button data-panel="settings">Настройки</button>
-          <button id="users-tab" data-panel="users">Пользователи</button>
+        <nav id="primary-nav" aria-label="Основная навигация">
+          <p class="nav-label">Рабочее пространство</p>
+          <button data-panel="overview" data-icon="⌂" class="active" aria-current="page">Обзор</button>
+          <button data-panel="chat" data-icon="✦">Чат</button>
+          <button data-panel="projects" data-icon="◫">Проекты</button>
+          <button data-panel="files" data-icon="▱">Файлы</button>
+          <p class="nav-label">Автоматизация</p>
+          <button data-panel="runs" data-icon="▶">Запуски</button>
+          <button data-panel="jobs" data-icon="✓">Задачи</button>
+          <button data-panel="schedules" data-icon="◷">Расписания</button>
+          <button data-panel="approvals" data-icon="◇">Подтверждения</button>
+          <p class="nav-label">Система</p>
+          <button data-panel="traces" data-icon="⌁">Трассировка</button>
+          <button data-panel="skills" data-icon="◆">Навыки</button>
+          <button data-panel="organizations" data-icon="◎">Организации</button>
+          <button data-panel="connectors" data-icon="↗">Подключения</button>
+          <button data-panel="settings" data-icon="⚙">Настройки</button>
+          <button id="users-tab" data-panel="users" data-icon="♙">Пользователи</button>
+          <div class="nav-footer"><span>Think ahead.</span><strong>Act beyond.</strong></div>
         </nav>
+        <button id="nav-backdrop" class="nav-backdrop hidden" type="button" aria-label="Закрыть меню"></button>
 
         <section id="panel-overview" class="panel">
           <h2>Состояние системы</h2><div id="overview" class="stats"></div>
@@ -216,6 +225,12 @@
         </section>
       </section>
     </main>
+    <div id="toast-region" class="toast-region" role="status" aria-live="polite" aria-atomic="true"></div>
+    <dialog id="detail-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-head"><h2 id="dialog-title"></h2><button id="dialog-close" class="icon-button secondary" type="button" aria-label="Закрыть">×</button></div>
+      <pre id="dialog-content"></pre>
+      <div class="actions"><button id="dialog-copy" type="button">Копировать</button><button id="dialog-done" class="secondary" type="button">Готово</button></div>
+    </dialog>
     <script src="/ui/app.js" defer></script>
   </body>
 </html>

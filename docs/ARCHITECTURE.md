@@ -79,6 +79,9 @@ autonomy.
 - The branded web cabinet is served from immutable container assets with a
   restrictive Content Security Policy, no third-party browser scripts, and no
   access to the service automation token.
+- The cabinet uses a responsive sidebar/topbar shell, keyboard-visible focus,
+  reduced-motion support, accessible live notifications, and native modal
+  dialogs for copyable one-time credentials and run details.
 - Conversation history, approval decisions, task cancellation/retry, and the
   operational dashboard all reuse the same account ownership checks. Job state
   transitions are conditional SQL updates, preventing cancellation of an

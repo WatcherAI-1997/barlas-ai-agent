@@ -5,6 +5,49 @@ if (fragmentToken) {
 }
 const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, projectId: null, languages: [], skills: [], projects: [] };
 const $ = (selector) => document.querySelector(selector);
+const panelTitles = {
+  overview: "Обзор", chat: "Чат", approvals: "Подтверждения", runs: "Запуски",
+  jobs: "Задачи", schedules: "Расписания", files: "Файлы", projects: "Проекты",
+  traces: "Трассировка", skills: "Навыки", organizations: "Организации",
+  connectors: "Подключения", settings: "Настройки", users: "Пользователи",
+};
+
+function notify(message, tone = "info") {
+  const node = document.createElement("div");
+  node.className = `toast ${tone}`;
+  node.textContent = message;
+  $("#toast-region").append(node);
+  setTimeout(() => node.remove(), 4500);
+}
+
+function showDialog(title, content, copyable = false) {
+  $("#dialog-title").textContent = title;
+  $("#dialog-content").textContent = content;
+  $("#dialog-copy").classList.toggle("hidden", !copyable);
+  $("#detail-dialog").showModal();
+}
+
+function closeNavigation() {
+  $("#primary-nav").classList.remove("open");
+  $("#nav-backdrop").classList.add("hidden");
+  $("#nav-toggle").setAttribute("aria-expanded", "false");
+}
+
+$("#nav-toggle").addEventListener("click", () => {
+  const open = $("#primary-nav").classList.toggle("open");
+  $("#nav-backdrop").classList.toggle("hidden", !open);
+  $("#nav-toggle").setAttribute("aria-expanded", String(open));
+});
+$("#nav-backdrop").addEventListener("click", closeNavigation);
+$("#dialog-close").addEventListener("click", () => $("#detail-dialog").close());
+$("#dialog-done").addEventListener("click", () => $("#detail-dialog").close());
+$("#dialog-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("#dialog-content").textContent);
+    notify("Скопировано в буфер обмена", "success");
+  } catch { notify("Не удалось скопировать", "error"); }
+});
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeNavigation(); });
 
 async function api(path, options = {}) {
   const headers = { "content-type": "application/json", ...(options.headers || {}) };
@@ -82,7 +125,7 @@ async function showApp(account) {
   await loadSkillOptions();
   await loadProjectOptions();
   newConversation();
-  loadPanel("overview").catch((error) => alert(error.message));
+  loadPanel("overview").catch((error) => notify(error.message, "error"));
 }
 
 async function loadSkillOptions() {
@@ -202,8 +245,16 @@ async function watchAgentRun(runId, statusNode) {
 
 async function loadPanel(name) {
   document.querySelectorAll(".panel").forEach((panel) => panel.classList.add("hidden"));
-  document.querySelectorAll("nav button").forEach((button) => button.classList.toggle("active", button.dataset.panel === name));
+  document.querySelectorAll("nav button[data-panel]").forEach((button) => {
+    const active = button.dataset.panel === name;
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
   $(`#panel-${name}`).classList.remove("hidden");
+  $("#page-title").textContent = panelTitles[name] || name;
+  document.title = `${panelTitles[name] || name} · Barlas AI Agent`;
+  closeNavigation();
   if (name === "overview") await loadOverview();
   if (name === "chat") await loadConversations();
   if (name === "approvals") await loadApprovals();
@@ -223,8 +274,18 @@ async function loadPanel(name) {
   if (name === "users") await loadUsers();
 }
 
-function renderList(selector, items, renderer) { const root = $(selector); root.replaceChildren(...items.map(renderer)); }
-document.querySelectorAll("nav button[data-panel]").forEach((button) => button.addEventListener("click", () => loadPanel(button.dataset.panel).catch((error) => alert(error.message))));
+function renderList(selector, items, renderer) {
+  const root = $(selector);
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "Здесь пока ничего нет";
+    root.replaceChildren(empty);
+    return;
+  }
+  root.replaceChildren(...items.map(renderer));
+}
+document.querySelectorAll("nav button[data-panel]").forEach((button) => button.addEventListener("click", () => loadPanel(button.dataset.panel).catch((error) => notify(error.message, "error"))));
 
 $("#file-upload").addEventListener("change", (event) => {
   const file = event.target.files[0];
@@ -278,8 +339,8 @@ async function loadFiles() {
     const node = card(item.path, item.type === "directory" ? "Папка" : "Файл");
     const button = document.createElement("button"); button.textContent = item.type === "directory" ? "Открыть" : "Скачать";
     button.addEventListener("click", () => {
-      if (item.type === "directory") { $("#file-path").value = item.path; loadFiles().catch((error) => alert(error.message)); }
-      else downloadFile(item.path).catch((error) => alert(error.message));
+      if (item.type === "directory") { $("#file-path").value = item.path; loadFiles().catch((error) => notify(error.message, "error")); }
+      else downloadFile(item.path).catch((error) => notify(error.message, "error"));
     });
     node.append(button); return node;
   });
@@ -298,7 +359,7 @@ async function loadProjects() {
   state.projects = items; fillProjectSelect();
   renderList("#projects", items, (item) => {
     const node = card(item.name, `${item.status} · ${new Date(item.updatedAt).toLocaleString()}`, item.description);
-    const button = document.createElement("button"); button.textContent = "Открыть"; button.addEventListener("click", () => openProject(item.id).catch((error) => alert(error.message))); node.append(button); return node;
+    const button = document.createElement("button"); button.textContent = "Открыть"; button.addEventListener("click", () => openProject(item.id).catch((error) => notify(error.message, "error"))); node.append(button); return node;
   });
 }
 
@@ -325,14 +386,14 @@ async function openProject(id) {
   renderList("#project-resources", data.resources, (item) => card(item.label || item.id, item.type, item.id));
   renderList("#project-artifacts", data.artifacts, (item) => {
     const node = card(`${item.path} · v${item.version}`, `${item.bytes} байт · ${new Date(item.createdAt).toLocaleString()}`, item.sha256);
-    const button = document.createElement("button"); button.textContent = "Восстановить"; button.addEventListener("click", () => restoreArtifact(item.id).catch((error) => alert(error.message))); node.append(button); return node;
+    const button = document.createElement("button"); button.textContent = "Восстановить"; button.addEventListener("click", () => restoreArtifact(item.id).catch((error) => notify(error.message, "error"))); node.append(button); return node;
   });
 }
 
 function projectStatusCard(title, meta, body, status, statuses, update) {
   const node = card(title, meta, body); const select = document.createElement("select");
   select.replaceChildren(...statuses.map((value) => new Option(value, value, false, value === status)));
-  select.addEventListener("change", () => update(select.value).catch((error) => alert(error.message))); node.append(select); return node;
+  select.addEventListener("change", () => update(select.value).catch((error) => notify(error.message, "error"))); node.append(select); return node;
 }
 
 async function updateProjectItem(kind, id, status) {
@@ -390,6 +451,8 @@ async function loadConversations() {
   root.replaceChildren(...items.map((item) => {
     const button = document.createElement("button");
     button.className = "conversation";
+    button.dataset.conversationId = item.id;
+    button.classList.toggle("active", item.id === state.conversationId);
     button.textContent = item.title;
     button.title = `${item.messageCount} сообщений`;
     button.addEventListener("click", () => openConversation(item.id));
@@ -400,6 +463,7 @@ async function loadConversations() {
 async function openConversation(id) {
   const data = await api(`/v1/conversations/${id}?userId=${encodeURIComponent(state.account.id)}`);
   state.conversationId = id;
+  document.querySelectorAll(".conversation").forEach((button) => button.classList.toggle("active", button.dataset.conversationId === id));
   $("#messages").replaceChildren();
   data.conversation.messages.filter((item) => item.role !== "system").forEach((item) => addMessage(item.role === "assistant" ? "agent" : "user", item.content));
 }
@@ -482,7 +546,7 @@ async function loadRuns() {
     events.addEventListener("click", async () => {
       const data = await api(`/v1/agent-runs/${item.id}/events?userId=${encodeURIComponent(state.account.id)}`);
       const text = data.events.map((event) => `${event.step}. ${event.eventType}`).join("\n") || "Событий пока нет";
-      alert(text);
+      showDialog(`Шаги запуска ${item.id.slice(0, 8)}`, text, true);
     });
     actions.append(events);
     if (["running", "waiting_approval"].includes(item.status)) {
@@ -561,7 +625,7 @@ async function loadUsers() {
     const reset = document.createElement("button"); reset.textContent = "Новый токен"; reset.className = "secondary";
     reset.addEventListener("click", async () => {
       const data = await api(`/v1/admin/users/${user.id}/access-token`, { method: "POST" });
-      alert(`Новый токен показан один раз. Предыдущие токены отозваны:\n${data.token}\n\nДействует до: ${new Date(data.expiresAt).toLocaleString()}`);
+      showDialog("Новый токен пользователя", `Показан один раз. Предыдущие токены отозваны.\n\n${data.token}\n\nДействует до: ${new Date(data.expiresAt).toLocaleString()}`, true);
     });
     node.append(reset); return node;
   });
@@ -575,7 +639,7 @@ async function loadOrganizations() {
     members.textContent = "Участники"; members.className = "secondary";
     members.addEventListener("click", async () => {
       const data = await api(`/v1/organizations/${organization.id}/members`);
-      alert(data.members.map((member) => `${member.displayName} · ${member.email} · ${member.role}`).join("\n"));
+      showDialog(`Участники · ${organization.name}`, data.members.map((member) => `${member.displayName} · ${member.email} · ${member.role}`).join("\n") || "Участников пока нет", true);
     });
     node.append(members);
     return node;
@@ -644,7 +708,7 @@ $("#user-form").addEventListener("submit", async (event) => {
       role: $("#new-role").value,
       ...(languageCode ? { languageCode } : {}),
     }) });
-    alert(`Токен пользователя показан один раз:\n${data.access.token}\n\nДействует до: ${new Date(data.access.expiresAt).toLocaleString()}`);
+    showDialog("Токен нового пользователя", `Показан один раз.\n\n${data.access.token}\n\nДействует до: ${new Date(data.access.expiresAt).toLocaleString()}`, true);
     event.target.reset(); await loadUsers();
   } catch (error) { $("#user-error").textContent = error.message; }
 });

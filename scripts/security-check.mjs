@@ -176,6 +176,8 @@ for (const required of ["MAX_MEDIA_BYTES = 10_000_000", "detectMedia", "File ext
 const fileWorkspace = await readFile("src/tools/file-workspace.ts", "utf8");
 const appSource = await readFile("src/app.ts", "utf8");
 const webApp = await readFile("web/app.js", "utf8");
+const webIndex = await readFile("web/index.html", "utf8");
+const webStyles = await readFile("web/styles.css", "utf8");
 for (const required of ["writeUpload", "constants.O_EXCL", "MAX_DOCUMENT_BYTES"]) {
   if (!fileWorkspace.includes(required)) throw new Error(`Workspace upload boundary is missing: ${required}`);
 }
@@ -195,6 +197,13 @@ for (const prohibited of ["/auth/login", "password-reset"]) {
 for (const required of ["location.hash.slice(1)", "sessionStorage.setItem(\"barlasToken\"", "history.replaceState", "headers.authorization = `Bearer ${state.token}`"]) {
   if (!webApp.includes(required)) throw new Error(`Gateway-token browser bootstrap is missing: ${required}`);
 }
+for (const required of ['aria-live="polite"', 'id="detail-dialog"', 'aria-controls="primary-nav"']) {
+  if (!webIndex.includes(required)) throw new Error(`Accessible web shell is missing: ${required}`);
+}
+for (const required of ["prefers-reduced-motion", "button:focus-visible", ".nav-backdrop"]) {
+  if (!webStyles.includes(required)) throw new Error(`Responsive web boundary is missing: ${required}`);
+}
+if (webApp.includes("alert(")) throw new Error("Web interface must use non-blocking notifications or accessible dialogs");
 const evaluationRunner = await readFile("scripts/run-agent-evals.mjs", "utf8");
 if (evaluationRunner.includes("approved: true")) throw new Error("Agent evaluation must never auto-approve an action");
 for (const required of ["approved: false", "parseEvaluationScenarios", "BARLAS_EVAL_TOKEN"]) {
