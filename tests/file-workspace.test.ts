@@ -1,6 +1,7 @@
 import { mkdtemp, mkdir, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -64,5 +65,37 @@ describe("Barlas AI Agent file workspace", () => {
     await expect(files.writeUpload("user-a", "projects/input.txt", Buffer.from("second"))).rejects.toMatchObject({ code: "EEXIST" });
     await expect(files.writeUpload("user-a", "projects/input.txt", Buffer.from("second"), true)).resolves.toEqual({ path: "projects/input.txt", bytes: 6 });
     await expect(files.readBuffer("user-a", "projects/input.txt")).resolves.toMatchObject({ content: Buffer.from("second") });
+  });
+
+  it("streams files larger than the legacy 10 MB buffer boundary", async () => {
+    const files = await workspace();
+    const chunks = Array.from({ length: 12 }, () => Buffer.alloc(1_000_000, 0x61));
+    await expect(files.writeUploadStream(
+      "user-a",
+      "large/archive.bin",
+      Readable.from(chunks),
+      20_000_000,
+    )).resolves.toEqual({ path: "large/archive.bin", bytes: 12_000_000 });
+
+    const stored = await files.streamForRead("user-a", "large/archive.bin", 20_000_000);
+    let bytes = 0;
+    for await (const chunk of stored.stream) bytes += Buffer.byteLength(chunk);
+    expect(bytes).toBe(12_000_000);
+  });
+
+  it("does not replace an existing file when a streamed upload exceeds its boundary", async () => {
+    const files = await workspace();
+    await files.writeUpload("user-a", "large/result.bin", Buffer.from("original"));
+
+    await expect(files.writeUploadStream(
+      "user-a",
+      "large/result.bin",
+      Readable.from([Buffer.alloc(6), Buffer.alloc(6)]),
+      10,
+      true,
+    )).rejects.toThrow("configured workspace limit");
+    await expect(files.readBuffer("user-a", "large/result.bin")).resolves.toMatchObject({
+      content: Buffer.from("original"),
+    });
   });
 });

@@ -69,7 +69,7 @@ Required environment variables are `BARLAS_DOMAIN`, `OWNER_EMAIL`,
 `EMBEDDING_MODEL`, `OWNER_DISPLAY_NAME`, `OWNER_LANGUAGE`,
 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`,
 `TELEGRAM_BOT_API_BASE_URL`, `TELEGRAM_MAX_UPLOAD_BYTES`,
-`BARLAS_HTTP_PORT`, and `BARLAS_HTTPS_PORT`.
+`MAX_WORKSPACE_FILE_BYTES`, `BARLAS_HTTP_PORT`, and `BARLAS_HTTPS_PORT`.
 
 Pass secrets through the deployment platform's protected environment or secret
 store, not as literal command-line arguments. `--verbose` streams build output;

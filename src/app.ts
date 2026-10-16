@@ -1,5 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { basename } from "node:path";
+import { Readable } from "node:stream";
 
 import sensible from "@fastify/sensible";
 import multipart from "@fastify/multipart";
@@ -43,7 +44,7 @@ import type { SkillManager } from "./skills/manager.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
 import { MAX_MEDIA_BYTES, type MediaService } from "./tools/media.js";
-import type { FileWorkspace } from "./tools/file-workspace.js";
+import { DEFAULT_MAX_WORKSPACE_FILE_BYTES, type FileWorkspace } from "./tools/file-workspace.js";
 import type { ScheduleService } from "./schedules/service.js";
 import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } from "./projects/service.js";
 import { renderPrometheusMetrics } from "./operations/metrics.js";
@@ -303,7 +304,8 @@ export interface AppDependencies {
   memory?: Pick<SemanticMemory, "remember" | "recall">;
   organizations?: Pick<OrganizationService, "create" | "list" | "members" | "addMember" | "changePlan">;
   media?: Pick<MediaService, "saveUpload"> & Partial<Pick<MediaService, "createSpeech">>;
-  workspace?: Pick<FileWorkspace, "list" | "readBuffer" | "writeUpload">;
+  workspace?: Pick<FileWorkspace, "list" | "readBuffer" | "writeUpload"> & Partial<Pick<FileWorkspace, "streamForRead" | "writeUploadStream">>;
+  maxWorkspaceFileBytes?: number;
   projects?: Pick<ProjectService, "create" | "list" | "detail" | "context" | "attach" | "snapshot" | "restore" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "recordRunResult">;
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
@@ -340,9 +342,10 @@ async function preferredLanguageContext(
 export async function buildApp(dependencies: AppDependencies): Promise<FastifyInstance> {
   const app = Fastify({ logger: dependencies.logger ?? false });
   const memory = dependencies.memory ?? dependencies.database;
+  const maxWorkspaceFileBytes = dependencies.maxWorkspaceFileBytes ?? DEFAULT_MAX_WORKSPACE_FILE_BYTES;
   await app.register(sensible);
   await app.register(multipart, {
-    limits: { fileSize: MAX_MEDIA_BYTES, files: 1, fields: 0, parts: 1 },
+    limits: { fileSize: maxWorkspaceFileBytes + 1, files: 1, fields: 0, parts: 1 },
   });
   if (dependencies.webRoot) {
     await app.register(fastifyStatic, { root: dependencies.webRoot, prefix: "/ui/" });
@@ -503,10 +506,12 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (!query.success) return reply.badRequest("Invalid media upload query");
     const userId = authorizeUser(request, query.data.userId);
     if (!request.isMultipart()) return reply.badRequest("Expected multipart media upload");
-    const part = await request.file();
+    const part = await request.file({ limits: { fileSize: MAX_MEDIA_BYTES + 1, files: 1, fields: 0, parts: 1 } });
     if (!part) return reply.badRequest("Media file is required");
     const content = await part.toBuffer();
-    if (part.file.truncated) return reply.payloadTooLarge("Media file exceeds the 10 MB limit");
+    if (part.file.truncated || content.byteLength > MAX_MEDIA_BYTES) {
+      return reply.payloadTooLarge("Media file exceeds the 10 MB limit");
+    }
     const stored = await dependencies.media.saveUpload(
       userId,
       query.data.path,
@@ -541,20 +546,26 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const query = fileQuerySchema.safeParse(request.query);
     if (!query.success || query.data.path === ".") return reply.badRequest("Invalid file download query");
     const userId = authorizeUser(request, query.data.userId);
-    let file: Awaited<ReturnType<NonNullable<typeof dependencies.workspace>["readBuffer"]>>;
+    let file: { path: string; bytes: number; stream: Readable } | undefined;
     try {
-      file = await dependencies.workspace.readBuffer(userId, query.data.path, MAX_MEDIA_BYTES);
+      if (dependencies.workspace.streamForRead) {
+        file = await dependencies.workspace.streamForRead(userId, query.data.path, maxWorkspaceFileBytes);
+      } else {
+        const buffered = await dependencies.workspace.readBuffer(userId, query.data.path, maxWorkspaceFileBytes);
+        file = { path: buffered.path, bytes: buffered.content.byteLength, stream: Readable.from(buffered.content) };
+      }
     } catch (error) {
       if (["ENOENT", "ENOTDIR", "EISDIR"].includes(fileSystemCode(error) ?? "")) return reply.notFound("Workspace file was not found");
       if (isWorkspaceInputError(error)) return reply.badRequest("Invalid workspace file");
       throw error;
     }
     const filename = basename(file.path).replace(/[\r\n"\\]/gu, "_");
-    await dependencies.database.appendAudit({ userId, eventType: "file.downloaded", resourceType: "workspace_file", resourceId: file.path, details: { path: file.path, bytes: file.content.byteLength } });
+    await dependencies.database.appendAudit({ userId, eventType: "file.downloaded", resourceType: "workspace_file", resourceId: file.path, details: { path: file.path, bytes: file.bytes } });
     return reply
       .header("Content-Type", "application/octet-stream")
+      .header("Content-Length", String(file.bytes))
       .header("Content-Disposition", `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`)
-      .send(file.content);
+      .send(file.stream);
   });
 
   app.post("/v1/files/upload", async (request, reply) => {
@@ -563,16 +574,31 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     if (!query.success || query.data.path === ".") return reply.badRequest("Invalid file upload query");
     const userId = authorizeUser(request, query.data.userId);
     if (!request.isMultipart()) return reply.badRequest("Expected multipart file upload");
-    const part = await request.file();
+    const part = await request.file({ limits: { fileSize: maxWorkspaceFileBytes + 1, files: 1, fields: 0, parts: 1 } });
     if (!part) return reply.badRequest("File is required");
-    const content = await part.toBuffer();
-    if (part.file.truncated) return reply.payloadTooLarge("File exceeds the 10 MB limit");
     try {
-      const stored = await dependencies.workspace.writeUpload(userId, query.data.path, content, query.data.overwrite === "true");
+      const stored = dependencies.workspace.writeUploadStream
+        ? await dependencies.workspace.writeUploadStream(
+          userId,
+          query.data.path,
+          part.file,
+          maxWorkspaceFileBytes,
+          query.data.overwrite === "true",
+        )
+        : await dependencies.workspace.writeUpload(
+          userId,
+          query.data.path,
+          await part.toBuffer(),
+          query.data.overwrite === "true",
+        );
+      if (part.file.truncated) return reply.payloadTooLarge("File exceeds the configured workspace limit");
       await dependencies.database.appendAudit({ userId, eventType: "file.uploaded", resourceType: "workspace_file", resourceId: stored.path, details: { path: stored.path, bytes: stored.bytes, overwritten: query.data.overwrite === "true" } });
       return reply.code(201).send({ file: stored });
     } catch (error) {
       if (fileSystemCode(error) === "EEXIST") return reply.conflict("File already exists; explicit overwrite is required");
+      if (error instanceof Error && error.message.startsWith("File exceeds")) {
+        return reply.payloadTooLarge("File exceeds the configured workspace limit");
+      }
       if (isWorkspaceInputError(error)) return reply.badRequest("Invalid workspace file");
       throw error;
     }

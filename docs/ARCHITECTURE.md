@@ -61,6 +61,9 @@ autonomy.
   storage. Vision, scanned-PDF analysis, transcription, and speech generation
   use owned workspace paths and remain external approval-gated model calls;
   raw media and model results are not copied into traces or audit details.
+- Ordinary workspace files use bounded streaming I/O and atomic temporary-file
+  commits. Their configurable disk boundary defaults to 2 GB and is independent
+  from the smaller model-mediated media/document inspection boundaries.
 - The terminal surface has no arbitrary command or shell entry point. It exposes
   only bounded read-only file inspection operations.
 - Approved code execution is delegated to a separate read-only container over

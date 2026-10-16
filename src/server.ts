@@ -264,6 +264,7 @@ const app = await buildApp({
   organizations,
   media: mediaService,
   workspace,
+  maxWorkspaceFileBytes: config.MAX_WORKSPACE_FILE_BYTES,
   projects,
   schedules,
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),

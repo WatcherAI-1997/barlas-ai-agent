@@ -181,9 +181,14 @@ downtime. Pausing or disabling a schedule never cancels an already queued run.
 ## Workspace file cabinet
 
 - The authenticated file cabinet exposes only the requesting user's workspace.
-  Paths retain traversal, symlink, regular-file, ownership, and 10 MB limits.
+  Paths retain traversal, symlink, regular-file, and ownership protections.
+- Ordinary uploads and downloads are streamed instead of buffered in application
+  memory. `MAX_WORKSPACE_FILE_BYTES` is a configurable per-file disk boundary
+  (2 GB by default); operators may raise it to match available storage.
 - Uploads never replace an existing file unless the caller explicitly supplies
-  `overwrite=true`. Downloads use `application/octet-stream` and attachment
+  `overwrite=true`. Uploads are written to a restrictive temporary file and
+  committed atomically, so an interrupted or oversized upload does not damage
+  the previous file. Downloads use `application/octet-stream` and attachment
   disposition so uploaded code or active content is not rendered by the cabinet.
 - Audit records contain path and byte count, never file contents. Uploading a
   project file does not execute it; execution remains a separate approval-gated

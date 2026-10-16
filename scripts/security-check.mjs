@@ -178,7 +178,7 @@ const appSource = await readFile("src/app.ts", "utf8");
 const webApp = await readFile("web/app.js", "utf8");
 const webIndex = await readFile("web/index.html", "utf8");
 const webStyles = await readFile("web/styles.css", "utf8");
-for (const required of ["writeUpload", "constants.O_EXCL", "MAX_DOCUMENT_BYTES"]) {
+for (const required of ["writeUpload", "writeUploadStream", "streamForRead", "constants.O_EXCL", "constants.O_NOFOLLOW", "handle.sync", "DEFAULT_MAX_WORKSPACE_FILE_BYTES", "MAX_DOCUMENT_BYTES"]) {
   if (!fileWorkspace.includes(required)) throw new Error(`Workspace upload boundary is missing: ${required}`);
 }
 for (const required of ["application/octet-stream", "Content-Disposition", "explicit overwrite is required"]) {
