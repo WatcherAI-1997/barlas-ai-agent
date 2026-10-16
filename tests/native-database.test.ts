@@ -1,7 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, describe, expect, it } from "vitest";
@@ -17,7 +16,7 @@ describe("native embedded database", () => {
   it("applies every production migration without a PostgreSQL server", async () => {
     const directory = await mkdtemp(join(tmpdir(), "barlas-pglite-"));
     temporaryDirectories.push(directory);
-    const database = await PGlite.create(pathToFileURL(directory).href);
+    const database = await PGlite.create(directory);
     try {
       await applyMigrations(database, resolve(import.meta.dirname, "..", "migrations"));
       await applyMigrations(database, resolve(import.meta.dirname, "..", "migrations"));
@@ -26,5 +25,11 @@ describe("native embedded database", () => {
       const migrations = await database.query<{ count: string }>("select count(*)::text as count from _barlas_native_migrations");
       expect(Number(migrations.rows[0]?.count)).toBe(22);
     } finally { await database.close(); }
+  });
+
+  it("passes native Windows paths directly instead of creating a duplicated drive prefix", async () => {
+    const entrypoint = await readFile(resolve(import.meta.dirname, "..", "src", "native.ts"), "utf8");
+    expect(entrypoint).toContain("PGlite.create(databaseDirectory)");
+    expect(entrypoint).not.toContain("pathToFileURL(databaseDirectory)");
   });
 });
