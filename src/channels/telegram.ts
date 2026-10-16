@@ -5,11 +5,31 @@ export interface TelegramMessage {
   messageId: number;
 }
 
+export const TELEGRAM_PUBLIC_UPLOAD_BYTES = 50_000_000;
+
+export interface TelegramClientOptions {
+  baseUrl?: string;
+  maxUploadBytes?: number;
+}
+
 export class TelegramClient {
-  constructor(private readonly botToken: string) {}
+  readonly maxUploadBytes: number;
+  private readonly baseUrl: string;
+
+  constructor(
+    private readonly botToken: string,
+    options: TelegramClientOptions = {},
+  ) {
+    this.baseUrl = (options.baseUrl ?? "https://api.telegram.org").replace(/\/$/u, "");
+    this.maxUploadBytes = options.maxUploadBytes ?? TELEGRAM_PUBLIC_UPLOAD_BYTES;
+  }
+
+  private endpoint(method: string): string {
+    return `${this.baseUrl}/bot${this.botToken}/${method}`;
+  }
 
   async sendMessage(chatId: number, text: string, replyMarkup?: unknown): Promise<void> {
-    const response = await fetch(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
+    const response = await fetch(this.endpoint("sendMessage"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }),
@@ -31,8 +51,8 @@ export class TelegramClient {
   }
 
   async sendVoice(chatId: number, content: Buffer, caption = "Barlas AI Agent"): Promise<void> {
-    if (content.byteLength === 0 || content.byteLength > 10_000_000) {
-      throw new Error("Telegram voice reply must be between 1 byte and 10 MB");
+    if (content.byteLength === 0 || content.byteLength > this.maxUploadBytes) {
+      throw new Error(`Telegram voice reply must be between 1 byte and ${this.maxUploadBytes} bytes`);
     }
     const body = new FormData();
     body.set("chat_id", String(chatId));
@@ -42,7 +62,7 @@ export class TelegramClient {
       new Blob([new Uint8Array(content)], { type: "audio/mpeg" }),
       "barlas-voice.mp3",
     );
-    const response = await fetch(`https://api.telegram.org/bot${this.botToken}/sendVoice`, {
+    const response = await fetch(this.endpoint("sendVoice"), {
       method: "POST",
       body,
       signal: AbortSignal.timeout(30_000),
@@ -51,7 +71,7 @@ export class TelegramClient {
   }
 
   async answerCallbackQuery(callbackQueryId: string, text: string): Promise<void> {
-    const response = await fetch(`https://api.telegram.org/bot${this.botToken}/answerCallbackQuery`, {
+    const response = await fetch(this.endpoint("answerCallbackQuery"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ callback_query_id: callbackQueryId, text }),

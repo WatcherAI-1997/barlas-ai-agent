@@ -12,7 +12,7 @@ export function telegramVoiceFallbackText(text: string): string {
 }
 
 export async function sendTelegramVoiceReply(input: {
-  client: Pick<TelegramClient, "sendVoice">;
+  client: Pick<TelegramClient, "sendVoice" | "maxUploadBytes">;
   media: Pick<MediaService, "createSpeech">;
   workspace: Pick<FileWorkspace, "readBuffer">;
   userId: string;
@@ -32,7 +32,7 @@ export async function sendTelegramVoiceReply(input: {
     speechText,
     input.voice ?? "alloy",
   );
-  const file = await input.workspace.readBuffer(input.userId, generated.path, 10_000_000);
+  const file = await input.workspace.readBuffer(input.userId, generated.path, input.client.maxUploadBytes);
   await input.client.sendVoice(input.chatId, file.content, truncated
     ? "Barlas AI Agent · голосовая версия сокращена до 4096 символов"
     : "Barlas AI Agent · голосовой ответ");

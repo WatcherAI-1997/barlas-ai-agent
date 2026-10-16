@@ -311,6 +311,7 @@ export interface AppDependencies {
   telegram?: {
     webhookSecret: string;
     client: {
+      maxUploadBytes?: number;
       sendMessage(chatId: number, text: string): Promise<void>;
       sendVoice?(chatId: number, content: Buffer, caption?: string): Promise<void>;
       sendApproval?(chatId: number, text: string, approvalId: string): Promise<void>;
@@ -1681,7 +1682,10 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const runId = randomUUID();
       try {
         const voice = await sendTelegramVoiceReply({
-          client: { sendVoice: dependencies.telegram.client.sendVoice.bind(dependencies.telegram.client) },
+          client: {
+            sendVoice: dependencies.telegram.client.sendVoice.bind(dependencies.telegram.client),
+            maxUploadBytes: dependencies.telegram.client.maxUploadBytes ?? 50_000_000,
+          },
           media: { createSpeech: dependencies.media.createSpeech.bind(dependencies.media) },
           workspace: dependencies.workspace,
           userId,

@@ -405,6 +405,11 @@ Telegram sender before the tool can execute.
 `/voice <prompt>` and `/call <prompt>` explicitly request a bounded speech
 version of that run's final answer. The MP3 is stored in the same user's
 isolated workspace and uploaded with the official Bot API `sendVoice` method;
+the upload boundary is configurable with `TELEGRAM_MAX_UPLOAD_BYTES` (50 MB by
+default, matching Telegram's public Bot API). `TELEGRAM_BOT_API_BASE_URL` can
+point to a self-hosted local Bot API server, where Telegram supports uploads up
+to 2,000 MB. Deployments must keep the configured boundary aligned with their
+endpoint and available memory;
 generation and delivery metadata are audited without storing answer text in the
 audit event. If speech delivery fails, the text answer is sent instead. Telegram
 bots cannot initiate native incoming voice/video calls, so `/call` is an honest

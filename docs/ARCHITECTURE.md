@@ -113,9 +113,11 @@ autonomy.
   consumption, tool execution, and approval ownership checks.
 - Telegram `/voice` and `/call` are explicit per-message requests for TTS
   delivery through official Bot API `sendVoice`. Output stays in the requesting
-  user's workspace, is capped at 10 MB/4,096 text characters, and falls back to
-  text on delivery failure. No userbot, MTProto account automation, or false
-  native-call capability is used.
+  user's workspace, defaults to Telegram's public 50 MB upload boundary, and
+  falls back to text on delivery failure. The endpoint and upload boundary are
+  configurable for a local Bot API server (up to Telegram's 2,000 MB limit).
+  Speech input remains bounded to 4,096 text characters. No userbot, MTProto
+  account automation, or false native-call capability is used.
 
 ## Data boundaries
 

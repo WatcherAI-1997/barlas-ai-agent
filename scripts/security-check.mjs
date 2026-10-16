@@ -215,7 +215,7 @@ for (const required of ["scheduleId: schedule.id", "scheduleOccurrence: occurren
 }
 const telegramClient = await readFile("src/channels/telegram.ts", "utf8");
 const telegramVoice = await readFile("src/channels/telegram-voice.ts", "utf8");
-for (const required of ["sendVoice", "FormData", "10_000_000", "parseTelegramVoiceCommand"]) {
+for (const required of ["sendVoice", "FormData", "TELEGRAM_PUBLIC_UPLOAD_BYTES = 50_000_000", "maxUploadBytes", "parseTelegramVoiceCommand"]) {
   if (!telegramClient.includes(required)) throw new Error(`Telegram voice boundary is missing: ${required}`);
 }
 for (const required of ["MAX_SPEECH_TEXT = 4_096", "workspace.readBuffer", "telegram/voice/"]) {

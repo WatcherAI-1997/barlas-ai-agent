@@ -153,7 +153,10 @@ for (const recovered of await agentRuntime.recoverReady()) {
 const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
   ? {
       webhookSecret: config.TELEGRAM_WEBHOOK_SECRET,
-      client: new TelegramClient(config.TELEGRAM_BOT_TOKEN),
+      client: new TelegramClient(config.TELEGRAM_BOT_TOKEN, {
+        baseUrl: config.TELEGRAM_BOT_API_BASE_URL,
+        maxUploadBytes: config.TELEGRAM_MAX_UPLOAD_BYTES,
+      }),
     }
   : undefined;
 const scheduleWorker = new ScheduleWorker(database, agentRuntime, {

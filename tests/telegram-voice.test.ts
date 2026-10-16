@@ -38,7 +38,7 @@ describe("Telegram voice replies", () => {
     const sendVoice = vi.fn(async () => undefined);
 
     const result = await sendTelegramVoiceReply({
-      client: { sendVoice },
+      client: { sendVoice, maxUploadBytes: 50_000_000 },
       media: { createSpeech },
       workspace: { readBuffer },
       userId: "user-1",
@@ -48,9 +48,27 @@ describe("Telegram voice replies", () => {
     });
 
     expect(createSpeech).toHaveBeenCalledWith("user-1", "telegram/voice/run-1.mp3", "x".repeat(4_096), "alloy");
-    expect(readBuffer).toHaveBeenCalledWith("user-1", "telegram/voice/run-1.mp3", 10_000_000);
+    expect(readBuffer).toHaveBeenCalledWith("user-1", "telegram/voice/run-1.mp3", 50_000_000);
     expect(sendVoice).toHaveBeenCalledWith(42, Buffer.from("ID3voice"), expect.stringContaining("сокращена"));
     expect(result).toEqual({ path: "telegram/voice/run-1.mp3", bytes: 8, truncated: true });
+  });
+
+  it("supports a configurable Telegram upload endpoint and size boundary", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => (
+      new Response(JSON.stringify({ ok: true }), { status: 200 })
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new TelegramClient("test-telegram-bot-token-without-secret-format", {
+      baseUrl: "http://telegram-bot-api:8081/",
+      maxUploadBytes: 2_000_000_000,
+    });
+
+    await client.sendVoice(42, Buffer.from("ID3voice"));
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "http://telegram-bot-api:8081/bottest-telegram-bot-token-without-secret-format/sendVoice",
+    );
+    expect(client.maxUploadBytes).toBe(2_000_000_000);
   });
 
   it("keeps the text fallback inside Telegram's message limit", () => {

@@ -27,6 +27,8 @@ const configSchema = z.object({
   PRIVATE_MODEL_API_KEY: z.string().min(1).optional(),
   TELEGRAM_BOT_TOKEN: z.string().min(20).optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().min(32).optional(),
+  TELEGRAM_BOT_API_BASE_URL: z.string().url().default("https://api.telegram.org"),
+  TELEGRAM_MAX_UPLOAD_BYTES: z.coerce.number().int().min(1).max(2_000_000_000).default(50_000_000),
   CONNECTOR_VAULT_KEY: z.string().optional(),
   CONNECTOR_VAULT_KEY_VERSION: z.coerce.number().int().min(1).max(1_000_000).default(1),
   JOB_WORKER_ENABLED: z.stringbool().default(true),
