@@ -110,8 +110,8 @@ barlas ask "Проверь проект и составь план"
 
 Run `barlas onboard` for the full setup wizard, `barlas configure models` or
 `barlas configure channels` for a single section, and `barlas gateway restart`
-to manage the local service. `barlas help` lists the complete OpenClaw-style
-command surface.
+to manage the local service. `barlas help` lists the complete Barlas command
+surface.
 
 `barlas` opens a continuous terminal conversation: replies share one stored
 context until `/new` is used. `/sessions` lists earlier conversations and
@@ -208,9 +208,9 @@ The extension catalog declares each built-in channel, connector, provider,
 runtime, skill source, and device bridge together with its capabilities, risk
 classes, and required setting names. It never returns secret values.
 
-The maintained [OpenClaw + Hermes adaptation map](docs/OPENCLAW_HERMES_PARITY.md)
-shows what is implemented, what is only a foundation, and what still remains;
-the project does not label planned compatibility as finished functionality.
+The maintained [product capability map](docs/PRODUCT_CAPABILITIES.md) shows what
+is implemented, what is only a foundation, and what still remains; the project
+does not label planned work as finished functionality.
 
 Text and autonomous tool execution can use native OpenAI Responses, native
 Anthropic Messages, or a free local Ollama model

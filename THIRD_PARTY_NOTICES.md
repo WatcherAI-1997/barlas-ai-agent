@@ -1,10 +1,9 @@
 # Third-party notices
 
-## Nous Research agent skill workflows
+## Nous Research licensed workflow references
 
 The built-in Barlas core skill pack contains independently adapted workflow
-ideas from selected skill documents in the Nous Research `hermes-agent`
-repository, revision `f974134f367bc0a4c4cd24afd90494bbceaa86ee`:
+ideas from selected MIT-licensed skill documents published by Nous Research:
 
 - grounded citations and blocked-page recovery;
 - arXiv and competitor research;

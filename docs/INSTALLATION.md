@@ -32,7 +32,7 @@ barlas status
 & "$env:LOCALAPPDATA\Barlas\app\scripts\start-native.ps1" -WaitReady
 ```
 
-The OpenClaw-style setup and configuration surface is available after install:
+The complete Barlas setup and configuration surface is available after install:
 
 ```powershell
 barlas onboard

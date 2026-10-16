@@ -491,7 +491,7 @@ function tuiHelp(): void {
 }
 
 function help(): void {
-  output.write(`Barlas CLI — команды в стиле OpenClaw
+  output.write(`Barlas CLI — управление автономным агентом
 
 Настройка (Windows):
   onboard                           полный мастер настройки
