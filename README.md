@@ -135,6 +135,13 @@ On either operating system, the cabinet opens only on
 provided, local mode uses the official Bot API long polling, so Telegram also
 works without a webhook, domain, or HTTPS certificate.
 
+Discord also works without a domain through the official Discord Gateway.
+Run `barlas configure channels`, provide a dedicated bot token, and enable the
+Message Content intent in the Discord developer portal. Barlas answers all
+direct messages and only explicitly mentioned guild messages, ignores other
+bots, suppresses outgoing mention expansion, and preserves the same durable
+run and approval boundaries (`!approve ID` / `!reject ID`).
+
 After installation, work from the terminal without copying a token:
 
 ```bash
@@ -171,6 +178,10 @@ with `barlas skills keygen NAME`, and package templates signed with
 The extension catalog declares each built-in channel, connector, provider,
 runtime, skill source, and device bridge together with its capabilities, risk
 classes, and required setting names. It never returns secret values.
+
+The maintained [OpenClaw + Hermes adaptation map](docs/OPENCLAW_HERMES_PARITY.md)
+shows what is implemented, what is only a foundation, and what still remains;
+the project does not label planned compatibility as finished functionality.
 
 Text and autonomous tool execution can use native OpenAI Responses, native
 Anthropic Messages, or a free local Ollama model

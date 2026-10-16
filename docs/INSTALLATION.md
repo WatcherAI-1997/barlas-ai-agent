@@ -282,6 +282,15 @@ Third-party skill packages use the signed lifecycle:
 Never trust a fingerprint copied only from the package itself. Compare it with
 the publisher's independently authenticated release page or direct contact.
 
+## Discord without a domain
+
+Create a dedicated Discord application and bot, enable the Message Content
+intent, invite it only to the intended server, then run
+`barlas configure channels`. Barlas connects outbound to the official Gateway;
+no inbound port, domain, or webhook is needed. Direct messages are accepted.
+In a guild, the bot responds only when explicitly mentioned. Keep the bot token
+private and grant no Discord permissions beyond reading and sending messages.
+
 ## After installation
 
 Open the printed web address, sign in as the first owner, verify the selected

@@ -32,6 +32,8 @@ const configSchema = z.object({
   TELEGRAM_POLLING_ENABLED: z.stringbool().default(false),
   TELEGRAM_BOT_API_BASE_URL: z.string().url().default("https://api.telegram.org"),
   TELEGRAM_MAX_UPLOAD_BYTES: z.coerce.number().int().min(1).max(2_000_000_000).default(50_000_000),
+  DISCORD_BOT_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(20).optional()),
+  DISCORD_GATEWAY_ENABLED: z.stringbool().default(false),
   CONNECTOR_VAULT_KEY: z.string().optional(),
   CONNECTOR_VAULT_KEY_VERSION: z.coerce.number().int().min(1).max(1_000_000).default(1),
   JOB_WORKER_ENABLED: z.stringbool().default(true),
@@ -93,6 +95,9 @@ const configSchema = z.object({
   }
   if (config.TELEGRAM_POLLING_ENABLED && !config.TELEGRAM_BOT_TOKEN) {
     context.addIssue({ code: "custom", message: "TELEGRAM_BOT_TOKEN is required when Telegram polling is enabled" });
+  }
+  if (config.DISCORD_GATEWAY_ENABLED && !config.DISCORD_BOT_TOKEN) {
+    context.addIssue({ code: "custom", message: "DISCORD_BOT_TOKEN is required when Discord Gateway is enabled" });
   }
 
   const privateModelFields = [

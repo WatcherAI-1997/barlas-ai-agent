@@ -3,6 +3,7 @@ import { AuthService } from "./auth/service.js";
 import { TelegramLinkService } from "./auth/telegram-link.js";
 import { TelegramClient } from "./channels/telegram.js";
 import { TelegramPollingWorker } from "./channels/telegram-polling.js";
+import { DiscordClient, DiscordGatewayWorker } from "./channels/discord.js";
 import { sendTelegramVoiceReply, telegramVoiceFallbackText } from "./channels/telegram-voice.js";
 import { GitHubConnector } from "./connectors/github.js";
 import { GoogleConnector } from "./connectors/google.js";
@@ -113,6 +114,7 @@ const extensionCatalog = createBuiltinExtensionCatalog({
   mcp: Boolean(mcpConnector),
   sandbox: Boolean(codeSandbox),
   telegram: Boolean(config.TELEGRAM_BOT_TOKEN),
+  discord: Boolean(config.DISCORD_BOT_TOKEN && config.DISCORD_GATEWAY_ENABLED),
   privateModel: Boolean(config.PRIVATE_MODEL_BASE_URL && config.PRIVATE_MODEL_NAME && config.PRIVATE_MODEL_API_KEY),
   deviceNodes: true,
   modelProvider: config.MODEL_PROVIDER,
@@ -181,6 +183,9 @@ const telegram = config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_WEBHOOK_SECRET
         maxUploadBytes: config.TELEGRAM_MAX_UPLOAD_BYTES,
       }),
     }
+  : undefined;
+const discord = config.DISCORD_BOT_TOKEN && config.DISCORD_GATEWAY_ENABLED
+  ? { gatewaySecret: config.BARLAS_API_TOKEN, client: new DiscordClient(config.DISCORD_BOT_TOKEN) }
   : undefined;
 const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
@@ -258,6 +263,16 @@ const agentRunWorker = new AgentRunWorker(database, agentRuntime, {
         await telegram.client.sendMessage(run.delivery.chatId, run.result.text);
       }
     }
+    if (run.delivery?.channel === "discord" && discord) {
+      if (run.status === "waiting_approval" && run.pendingApprovalId) {
+        await discord.client.sendMessage(
+          run.delivery.channelId,
+          `${run.result.text}\n\nДля решения: !approve ${run.pendingApprovalId} или !reject ${run.pendingApprovalId}`,
+        );
+      } else {
+        await discord.client.sendMessage(run.delivery.channelId, run.result.text);
+      }
+    }
   },
   onError: (error) => console.error("Barlas AI Agent autonomous run worker error", error),
 });
@@ -297,6 +312,7 @@ const app = await buildApp({
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
   ...(telegram ? { telegram } : {}),
+  ...(discord ? { discord } : {}),
   logger: true,
 });
 const telegramPolling = telegram && config.TELEGRAM_POLLING_ENABLED
@@ -316,10 +332,24 @@ const telegramPolling = telegram && config.TELEGRAM_POLLING_ENABLED
       (error) => app.log.error({ error }, "Barlas AI Agent Telegram polling error"),
     )
   : undefined;
+const discordGateway = discord && config.DISCORD_BOT_TOKEN
+  ? new DiscordGatewayWorker(
+      config.DISCORD_BOT_TOKEN,
+      async (message) => {
+        const response = await app.inject({
+          method: "POST", url: "/channels/discord/message",
+          headers: { "x-barlas-discord-secret": discord.gatewaySecret }, payload: message,
+        });
+        if (response.statusCode >= 400) throw new Error(`Local Discord message failed with status ${response.statusCode}`);
+      },
+      (error) => app.log.error({ error }, "Barlas AI Agent Discord Gateway error"),
+    )
+  : undefined;
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   app.log.info({ signal }, "Barlas AI Agent is shutting down");
   await telegramPolling?.stop();
+  discordGateway?.stop();
   await jobWorker.stop();
   await agentRunWorker.stop();
   await scheduleWorker.stop();
@@ -333,6 +363,7 @@ process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 await app.listen({ host: config.HOST, port: config.PORT });
 await telegramPolling?.start();
+discordGateway?.start();
 if (config.JOB_WORKER_ENABLED) jobWorker.start();
 if (config.AGENT_RUN_WORKER_ENABLED) agentRunWorker.start();
 if (config.JOB_WORKER_ENABLED) scheduleWorker.start();

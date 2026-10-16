@@ -14,10 +14,10 @@ $AllowedKeys = @(
     "PORT", "BARLAS_HTTP_PORT", "OWNER_EMAIL", "OWNER_DISPLAY_NAME", "OWNER_LANGUAGE",
     "MODEL_PROVIDER", "MODEL_NAME", "MODEL_API_KEY", "OLLAMA_BASE_URL", "DEEP_MODEL_NAME", "MEDIA_API_KEY", "VISION_MODEL",
     "TRANSCRIPTION_MODEL", "SPEECH_MODEL", "EMBEDDING_MODEL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET",
-    "TELEGRAM_POLLING_ENABLED", "AGENT_MAX_STEPS", "AGENT_MAX_TOTAL_TOKENS", "AGENT_MAX_OUTPUT_TOKENS_PER_STEP",
+    "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "AGENT_MAX_STEPS", "AGENT_MAX_TOTAL_TOKENS", "AGENT_MAX_OUTPUT_TOKENS_PER_STEP",
     "DAILY_CHAT_QUOTA", "DAILY_TOOL_QUOTA", "DAILY_JOB_QUOTA"
 )
-$SecretKeys = @("MODEL_API_KEY", "MEDIA_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "BARLAS_API_TOKEN", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY")
+$SecretKeys = @("MODEL_API_KEY", "MEDIA_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "DISCORD_BOT_TOKEN", "BARLAS_API_TOKEN", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY")
 
 function Unquote-Value([string]$Raw) {
     if ($Raw.Length -ge 2 -and $Raw[0] -eq "'" -and $Raw[$Raw.Length - 1] -eq "'") { return $Raw.Substring(1, $Raw.Length - 2).Replace("\'", "'") }
@@ -117,6 +117,17 @@ function Configure-Channels {
     } elseif ($Choice -eq "disable") {
         foreach ($Name in @("TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_POLLING_ENABLED")) { $Settings.Remove($Name) }
     } elseif ($Choice -ne "keep") { throw "Choose keep, configure, or disable" }
+    $DiscordConfigured = -not [string]::IsNullOrWhiteSpace((Current "DISCORD_BOT_TOKEN"))
+    Write-Host "Discord: $(if ($DiscordConfigured) { 'configured (Gateway)' } else { 'disabled' })"
+    $DiscordChoice = Read-Plain "Discord action: keep, configure, disable" "keep"
+    if ($DiscordChoice -eq "configure") {
+        $DiscordToken = Read-Secret "Discord bot token"
+        if ($DiscordToken.Length -lt 20) { throw "Discord bot token is invalid" }
+        Set-Value "DISCORD_BOT_TOKEN" $DiscordToken
+        Set-Value "DISCORD_GATEWAY_ENABLED" "true"
+    } elseif ($DiscordChoice -eq "disable") {
+        foreach ($Name in @("DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED")) { $Settings.Remove($Name) }
+    } elseif ($DiscordChoice -ne "keep") { throw "Choose keep, configure, or disable" }
 }
 function Configure-Agent {
     Write-Host "`n[Agent]" -ForegroundColor Cyan
@@ -194,6 +205,7 @@ if ($Action -eq "models-status") {
 }
 if ($Action -eq "channels-status") {
     Write-Output "Telegram: $(if (Current 'TELEGRAM_BOT_TOKEN') { 'configured (long polling)' } else { 'disabled' })"
+    Write-Output "Discord: $(if (Current 'DISCORD_BOT_TOKEN') { 'configured (Gateway)' } else { 'disabled' })"
     return
 }
 if ($Action -eq "security-audit") {

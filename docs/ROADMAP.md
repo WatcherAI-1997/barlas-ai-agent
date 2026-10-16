@@ -42,6 +42,8 @@
 
 - Local CLI/TUI for autonomous chat, status, runs, approvals, jobs, projects,
   and schedules without host Node.js or token copying. *(implemented)*
+- Domain-free channels. *(Telegram long polling and Discord Gateway DMs plus
+  mention-gated guild chat implemented; broader channel adapters pending)*
 - Provenance-checked fast-forward updates with pre-update database/workspace
   backup, health-gated automatic application rollback, and optional signed
   commit enforcement. *(implemented)*

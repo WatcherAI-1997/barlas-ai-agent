@@ -139,6 +139,10 @@ const telegramUpdateSchema = z.object({
     message: z.object({ chat: z.object({ id: z.number().int() }) }).optional(),
   }).optional(),
 });
+const discordMessageSchema = z.object({
+  id: z.string().min(1).max(64), channelId: z.string().min(1).max(64),
+  authorId: z.string().min(1).max(64), content: z.string().trim().min(1).max(20_000),
+}).strict();
 
 const toolExecutionSchema = z.object({
   userId: z.string().min(1).max(128),
@@ -371,6 +375,10 @@ export interface AppDependencies {
       answerCallbackQuery?(callbackQueryId: string, text: string): Promise<void>;
     };
   };
+  discord?: {
+    gatewaySecret: string;
+    client: { sendMessage(channelId: string, text: string): Promise<void> };
+  };
   logger?: boolean;
 }
 
@@ -393,6 +401,7 @@ async function preferredLanguageContext(
 export async function buildApp(dependencies: AppDependencies): Promise<FastifyInstance> {
   const app = Fastify({ logger: dependencies.logger ?? false });
   const memory = dependencies.memory ?? dependencies.database;
+  const seenDiscordMessages = new Set<string>();
   const maxWorkspaceFileBytes = dependencies.maxWorkspaceFileBytes ?? DEFAULT_MAX_WORKSPACE_FILE_BYTES;
   await app.register(sensible);
   await app.register(multipart, {
@@ -1767,6 +1776,51 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         workerEnabled: dependencies.runtimeInfo?.workerEnabled ?? false,
         stats,
       }));
+  });
+
+  app.post("/channels/discord/message", async (request, reply) => {
+    if (!dependencies.discord) return reply.notFound();
+    const suppliedSecret = request.headers["x-barlas-discord-secret"];
+    if (typeof suppliedSecret !== "string" || !tokenMatches(dependencies.discord.gatewaySecret, suppliedSecret)) {
+      return reply.unauthorized("Invalid Discord gateway secret");
+    }
+    const parsed = discordMessageSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid Discord message");
+    if (seenDiscordMessages.has(parsed.data.id)) return { ok: true, duplicate: true };
+    seenDiscordMessages.add(parsed.data.id);
+    if (seenDiscordMessages.size > 1_000) seenDiscordMessages.delete(seenDiscordMessages.values().next().value!);
+    const userId = `discord:${parsed.data.authorId}`;
+    const decision = /^!(approve|reject)\s+([0-9a-f-]{36})$/iu.exec(parsed.data.content);
+    if (decision && dependencies.toolExecutor) {
+      try {
+        const outcome = await dependencies.toolExecutor.decide({
+          approvalId: decision[2]!, userId, approved: decision[1] === "approve",
+        });
+        const resumed = dependencies.agentRuntime ? await dependencies.agentRuntime.resumeByApproval({
+          userId, approvalId: decision[2]!, output: outcome.status === "completed" ? outcome.output : null,
+          rejected: outcome.status === "rejected",
+        }) : null;
+        await dependencies.discord.client.sendMessage(parsed.data.channelId, resumed?.result?.text ?? "Решение принято.");
+        if (resumed) await dependencies.projects?.recordRunResult(resumed);
+      } catch (error) {
+        await dependencies.discord.client.sendMessage(parsed.data.channelId, error instanceof Error ? error.message.slice(0, 500) : "Ошибка");
+      }
+      return { ok: true };
+    }
+    if (!dependencies.agentRuntime) return reply.serviceUnavailable("Agent runtime is unavailable");
+    const memories = await memory.recall(userId, parsed.data.content, 5);
+    const run = await dependencies.agentRuntime.enqueue({
+      userId, conversationId: randomUUID(),
+      messages: [
+        ...(memories.length ? [{ role: "system" as const, content: ["Use these Barlas AI Agent user memories only when relevant:", ...memories.map((item) => `- [${item.category}] ${item.content}`)].join("\n") }] : []),
+        { role: "user" as const, content: parsed.data.content },
+      ],
+      conversationMessages: [{ role: "user", content: parsed.data.content }],
+      delivery: { channel: "discord", channelId: parsed.data.channelId },
+      taskClass: "fast", maxSteps: 8,
+    });
+    await dependencies.discord.client.sendMessage(parsed.data.channelId, `Задача принята. Запуск ${run.id.slice(0, 8)}.`);
+    return { ok: true, runId: run.id };
   });
 
   app.post("/channels/telegram/webhook", async (request, reply) => {

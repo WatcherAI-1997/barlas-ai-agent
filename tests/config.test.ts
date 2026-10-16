@@ -29,4 +29,10 @@ describe("Barlas configuration", () => {
     expect(loadConfig({ ...base, MODEL_PROVIDER: "anthropic", MEDIA_API_KEY: "openai-key", VISION_MODEL: "gpt-4.1-mini" }).MEDIA_API_KEY)
       .toBe("openai-key");
   });
+
+  it("requires a dedicated token when Discord Gateway is enabled", () => {
+    expect(() => loadConfig({ ...base, DISCORD_GATEWAY_ENABLED: "true" })).toThrow(/DISCORD_BOT_TOKEN/u);
+    expect(loadConfig({ ...base, DISCORD_GATEWAY_ENABLED: "true", DISCORD_BOT_TOKEN: "d".repeat(32) }))
+      .toMatchObject({ DISCORD_GATEWAY_ENABLED: true, DISCORD_BOT_TOKEN: "d".repeat(32) });
+  });
 });

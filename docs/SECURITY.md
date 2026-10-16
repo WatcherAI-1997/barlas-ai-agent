@@ -44,3 +44,11 @@ and tool-allowlist validation and records publisher provenance in the audit
 log. Installation creates an inactive candidate; activation requires a passing
 bounded evaluation, and a skill cannot enlarge the runtime tool registry.
 Private publisher keys remain local and are created with mode `0600`.
+
+Discord local mode uses an outbound official Gateway connection and a dedicated
+bot token. Guild traffic is ignored unless the Barlas bot is explicitly
+mentioned; direct messages are accepted, bot-authored events are discarded,
+duplicate event IDs are bounded and suppressed, outbound mention expansion is
+disabled, and messages enter the same durable run, approval, quota, and audit
+boundaries as web and Telegram requests. The bot should receive only read/send
+message permissions and must not be granted administrator privileges.
