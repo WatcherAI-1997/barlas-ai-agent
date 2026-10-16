@@ -396,6 +396,7 @@ $("#connector-form").addEventListener("submit", async (event) => {
       provider: $("#connector-provider").value,
       label: $("#connector-label").value,
       secret: $("#connector-secret").value,
+      ...($("#connector-provider").value === "mcp_http" ? { metadata: { endpoint: $("#connector-endpoint").value } } : {}),
     }) });
     event.target.reset(); await loadConnectors();
   } catch (error) { $("#connector-error").textContent = error.message; }

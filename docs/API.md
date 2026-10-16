@@ -173,7 +173,7 @@ existing sessions for that account. Barlas AI Agent does not pretend to send
 email: until a dedicated mail connector is configured, an owner must deliver
 the code to the user through a trusted channel.
 
-## Connector vault and GitHub
+## Connector vault, write integrations, and MCP
 
 Connector credentials are encrypted with AES-256-GCM before they reach
 PostgreSQL. Every encrypted value uses a fresh 96-bit IV and authenticated
@@ -187,19 +187,33 @@ bytes and preserve it independently from the database backup. Production startup
 fails when this key is missing. `CONNECTOR_VAULT_KEY_VERSION` records the active
 key version; changing it requires an explicit credential re-encryption procedure.
 
-The initial GitHub integration is intentionally read-only: it can retrieve the
-connected profile and repository metadata. Requests go only to the fixed
-`https://api.github.com` origin, reject redirects, time out after ten seconds,
-and cap responses at 2 MB. Use a fine-grained token with metadata-only access
-where possible. Repository mutation, webhooks, and GitHub Actions are not enabled.
+GitHub can read profile/repository metadata and, after explicit approval,
+create a branch, create/update one file as a commit, open a pull request, or
+open an issue. Google connectors can list bounded metadata and, after approval,
+create/update bounded Drive text files, create Gmail drafts, send plain-text
+mail, and create/update primary-calendar events. Requests use only fixed
+official API origins, reject redirects, time out, and cap responses. Tokens are
+retrieved from the encrypted vault only inside the server process. Operators
+must issue minimum-scope credentials. The private-alpha accepts an already
+issued access token; production OAuth authorization/refresh requires dedicated
+client credentials and redirect URIs for the final domain.
 
-Google Drive, Gmail, and Calendar connectors are also read-only. They expose
-bounded normalized metadata through fixed official Google API origins, reject
-redirects, time out after ten seconds, and cap responses at 2 MB. Connector
-tokens are retrieved from the encrypted vault only inside the server process.
-The current private-alpha accepts an already issued access token; production
-OAuth authorization/refresh requires dedicated Google client credentials and
-redirect URIs for the final domain.
+An `mcp_http` connector stores a bearer token (or `-` for an unauthenticated
+server) and `metadata.endpoint`. Only public HTTPS Streamable HTTP endpoints on
+the standard port are allowed. DNS answers are checked against local/private
+ranges on every request, redirects stay on-origin, requests time out, and the
+transport and returned tool result are bounded. `mcp.tools.list` and every
+`mcp.tool.call` are external-risk actions, so the remote server is never called
+until the user approves the exact stored arguments. Remote tools cannot bypass
+the Barlas tool registry, quota, trace, approval, or audit layers.
+
+Write-capable tools are: `github.branch.create`, `github.file.commit`,
+`github.pull_request.create`, `github.issue.create`,
+`google_drive.file.create`, `google_drive.file.update`, `gmail.draft.create`,
+`gmail.send`, `google_calendar.event.create`, and
+`google_calendar.event.update`. GitHub Actions, arbitrary REST endpoints,
+HTML email, attachments, Drive binary uploads, event deletion, and bulk
+mutations remain disabled.
 
 The chat runtime retrieves up to five relevant memories and supplies them as
 context without copying those memories into another user's session.

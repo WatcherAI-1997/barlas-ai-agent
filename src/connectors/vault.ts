@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
-export const connectorProviders = ["github", "google_drive", "gmail", "google_calendar"] as const;
+export const connectorProviders = ["github", "google_drive", "gmail", "google_calendar", "mcp_http"] as const;
 export type ConnectorProvider = (typeof connectorProviders)[number];
 
 export interface ConnectorRecord {
@@ -104,6 +104,16 @@ export class ConnectorService {
     const record = await this.store.getConnector(userId, id);
     if (!record || (provider && record.provider !== provider)) return null;
     return this.vault.decrypt(record);
+  }
+
+  async connection(userId: string, id: string, provider?: ConnectorProvider): Promise<{
+    record: ConnectorRecord;
+    secret: string;
+  } | null> {
+    const record = await this.store.getConnector(userId, id);
+    if (!record || (provider && record.provider !== provider)) return null;
+    const { ciphertext: _ciphertext, iv: _iv, authTag: _authTag, ...publicRecord } = record;
+    return { record: publicRecord, secret: this.vault.decrypt(record) };
   }
 }
 

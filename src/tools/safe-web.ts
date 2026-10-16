@@ -6,6 +6,7 @@ import { Agent, fetch } from "undici";
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 const REQUEST_TIMEOUT_MS = 10_000;
+const MAX_PUBLIC_FETCH_BYTES = 2 * 1024 * 1024;
 const publicNetworkAgent = new Agent({
   connect: {
     lookup(hostname, options, callback) {
@@ -25,6 +26,43 @@ const publicNetworkAgent = new Agent({
     },
   },
 });
+
+export async function publicNetworkFetch(input: string | URL, init?: RequestInit): Promise<Response> {
+  const url = parsePublicUrl(input.toString());
+  await assertPublicHost(url.hostname);
+  const response = await fetch(url, {
+    ...(init as Parameters<typeof fetch>[1]),
+    dispatcher: publicNetworkAgent,
+    redirect: init?.redirect ?? "error",
+    signal: init?.signal ?? AbortSignal.timeout(15_000),
+  });
+  const contentLength = Number(response.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_PUBLIC_FETCH_BYTES) {
+    await response.body?.cancel();
+    throw new Error("Remote response exceeds 2 MB");
+  }
+  if (!response.body) return response as unknown as Response;
+  let received = 0;
+  const reader = (response.body as unknown as ReadableStream<Uint8Array>).getReader();
+  const bounded = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) return controller.close();
+      received += value.byteLength;
+      if (received > MAX_PUBLIC_FETCH_BYTES) {
+        await reader.cancel();
+        return controller.error(new Error("Remote response exceeds 2 MB"));
+      }
+      controller.enqueue(value);
+    },
+    cancel: (reason) => reader.cancel(reason),
+  });
+  return new Response(bounded, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: Object.fromEntries(response.headers.entries()),
+  });
+}
 
 export interface WebPage {
   url: string;

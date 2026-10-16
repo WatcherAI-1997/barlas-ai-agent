@@ -54,6 +54,13 @@ share only the `sandbox_socket` and Barlas workspace volumes; the runner uses
 `network_mode: none` and must never receive `/var/run/docker.sock` or a host
 filesystem mount.
 
+Remote MCP connections are created per user in the encrypted connector vault.
+Use public HTTPS Streamable HTTP endpoints only, store the endpoint in connector
+metadata and the bearer token in the secret field, and grant the remote server
+the minimum permissions required. Localhost, private networks, nonstandard
+ports, cross-origin redirects, and unbounded responses are rejected. A token of
+`-` explicitly selects an unauthenticated MCP endpoint.
+
 ## Rollback
 
 Keep the previous image tag and database backup. Application rollback is an

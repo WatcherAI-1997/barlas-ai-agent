@@ -49,6 +49,80 @@ export class GitHubConnector {
     });
   }
 
+  async createBranch(userId: string, connectorId: string, input: {
+    repository: string;
+    branch: string;
+    fromBranch: string;
+  }): Promise<{ ref: string; sha: string }> {
+    const token = await this.requireToken(userId, connectorId);
+    const repository = normalizeRepository(input.repository);
+    const source = await githubRequest(token, `/repos/${repository}/git/ref/heads/${encodeURIComponent(input.fromBranch)}`) as Record<string, unknown>;
+    const object = source.object as Record<string, unknown> | undefined;
+    if (!object || typeof object.sha !== "string") throw new Error("GitHub returned an invalid source ref");
+    const data = await githubRequest(token, `/repos/${repository}/git/refs`, {
+      method: "POST",
+      body: { ref: `refs/heads/${input.branch}`, sha: object.sha },
+    }) as Record<string, unknown>;
+    if (typeof data.ref !== "string") throw new Error("GitHub returned an invalid created ref");
+    return { ref: data.ref, sha: object.sha };
+  }
+
+  async commitFile(userId: string, connectorId: string, input: {
+    repository: string;
+    path: string;
+    branch: string;
+    message: string;
+    content: string;
+    sha?: string;
+  }): Promise<{ commitSha: string; contentPath: string }> {
+    const token = await this.requireToken(userId, connectorId);
+    const repository = normalizeRepository(input.repository);
+    const path = normalizePath(input.path);
+    const data = await githubRequest(token, `/repos/${repository}/contents/${path}`, {
+      method: "PUT",
+      body: {
+        message: input.message,
+        content: Buffer.from(input.content, "utf8").toString("base64"),
+        branch: input.branch,
+        ...(input.sha ? { sha: input.sha } : {}),
+      },
+    }) as Record<string, unknown>;
+    const commit = data.commit as Record<string, unknown> | undefined;
+    const content = data.content as Record<string, unknown> | undefined;
+    if (!commit || typeof commit.sha !== "string" || !content || typeof content.path !== "string") {
+      throw new Error("GitHub returned an invalid commit response");
+    }
+    return { commitSha: commit.sha, contentPath: content.path };
+  }
+
+  async createPullRequest(userId: string, connectorId: string, input: {
+    repository: string;
+    title: string;
+    body?: string;
+    head: string;
+    base: string;
+    draft?: boolean;
+  }): Promise<{ number: number; url: string; state: string }> {
+    const token = await this.requireToken(userId, connectorId);
+    const repository = normalizeRepository(input.repository);
+    const { repository: _repository, ...body } = input;
+    const data = await githubRequest(token, `/repos/${repository}/pulls`, { method: "POST", body }) as Record<string, unknown>;
+    return normalizeCreatedItem(data, "pull request");
+  }
+
+  async createIssue(userId: string, connectorId: string, input: {
+    repository: string;
+    title: string;
+    body?: string;
+    labels?: string[];
+  }): Promise<{ number: number; url: string; state: string }> {
+    const token = await this.requireToken(userId, connectorId);
+    const repository = normalizeRepository(input.repository);
+    const { repository: _repository, ...body } = input;
+    const data = await githubRequest(token, `/repos/${repository}/issues`, { method: "POST", body }) as Record<string, unknown>;
+    return normalizeCreatedItem(data, "issue");
+  }
+
   private async requireToken(userId: string, connectorId: string): Promise<string> {
     const token = await this.connectors.secret(userId, connectorId, "github");
     if (!token) throw new Error("GitHub connector was not found");
@@ -56,17 +130,42 @@ export class GitHubConnector {
   }
 }
 
-async function githubRequest(token: string, path: string): Promise<unknown> {
+function normalizeRepository(value: string): string {
+  if (!/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/u.test(value)) throw new Error("Invalid GitHub repository name");
+  return value.split("/").map(encodeURIComponent).join("/");
+}
+
+function normalizePath(value: string): string {
+  if (!value || value.startsWith("/") || value.includes("\0") || value.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new Error("Invalid repository file path");
+  }
+  return value.split("/").map(encodeURIComponent).join("/");
+}
+
+function normalizeCreatedItem(data: Record<string, unknown>, kind: string): { number: number; url: string; state: string } {
+  if (typeof data.number !== "number" || typeof data.html_url !== "string" || typeof data.state !== "string") {
+    throw new Error(`GitHub returned an invalid ${kind} response`);
+  }
+  return { number: data.number, url: data.html_url, state: data.state };
+}
+
+async function githubRequest(token: string, path: string, options: {
+  method?: "GET" | "POST" | "PUT";
+  body?: unknown;
+} = {}): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const response = await fetch(new URL(path, "https://api.github.com"), {
+      method: options.method ?? "GET",
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${token}`,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
         "User-Agent": "Barlas-AI-Agent",
         "X-GitHub-Api-Version": "2022-11-28",
       },
+      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
       redirect: "error",
       signal: controller.signal,
     });

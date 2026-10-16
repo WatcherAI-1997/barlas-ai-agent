@@ -86,5 +86,27 @@ for (const required of ["network_mode: none", "read_only: true", "pids_limit: 12
 if (["docker.sock", "ports:", "privileged:", "SYS_ADMIN", "NET_ADMIN", "SYS_PTRACE"].some((value) => sandboxService.includes(value))) {
   throw new Error("Production sandbox contains a prohibited privilege or exposure");
 }
+const builtins = await readFile("src/tools/builtins.ts", "utf8");
+for (const toolName of [
+  "github.branch.create",
+  "github.file.commit",
+  "github.pull_request.create",
+  "github.issue.create",
+  "google_drive.file.create",
+  "google_drive.file.update",
+  "gmail.draft.create",
+  "gmail.send",
+  "google_calendar.event.create",
+  "google_calendar.event.update",
+  "mcp.tool.call",
+]) {
+  const offset = builtins.indexOf(`name: "${toolName}"`);
+  const block = builtins.slice(offset, offset + 500);
+  if (offset < 0 || !block.includes('risk: "external"')) throw new Error(`External mutation is not approval-gated: ${toolName}`);
+}
+const mcpConnector = await readFile("src/connectors/mcp.ts", "utf8");
+for (const required of ["assertPublicUrl", "publicNetworkFetch", "redirectPolicy: \"same-origin\"", "MAX_RESULT_BYTES = 1_000_000"]) {
+  if (!mcpConnector.includes(required)) throw new Error(`MCP boundary is missing: ${required}`);
+}
 
 console.log(`Barlas AI Agent security baseline passed for ${textFiles.length} repository text files.`);

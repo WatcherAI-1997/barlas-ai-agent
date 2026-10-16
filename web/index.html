@@ -104,11 +104,12 @@
         </section>
         <section id="panel-connectors" class="panel hidden">
           <h2>Подключения</h2>
-          <p class="meta">Токен шифруется на сервере и больше не показывается. Используйте минимальные read-only права.</p>
+          <p class="meta">Токен шифруется на сервере и больше не показывается. Выдавайте только минимально необходимые права; любые изменения требуют подтверждения.</p>
           <form id="connector-form" class="inline-form">
-            <select id="connector-provider"><option value="github">GitHub</option><option value="google_drive">Google Drive</option><option value="gmail">Gmail</option><option value="google_calendar">Google Calendar</option></select>
+            <select id="connector-provider"><option value="github">GitHub</option><option value="google_drive">Google Drive</option><option value="gmail">Gmail</option><option value="google_calendar">Google Calendar</option><option value="mcp_http">MCP (Streamable HTTP)</option></select>
             <input id="connector-label" placeholder="Название" minlength="1" required>
             <input id="connector-secret" type="password" placeholder="Access token" autocomplete="off" required>
+            <input id="connector-endpoint" type="url" placeholder="MCP HTTPS endpoint (только для MCP)">
             <button type="submit">Сохранить</button>
           </form>
           <p id="connector-error" class="error" role="alert"></p>

@@ -47,6 +47,8 @@ delivery, approval buttons, and a content-safe step journal. It also includes op
 web search, a no-shell read-only terminal inspector,
 an isolated approval-gated JavaScript browser, PDF/DOCX extraction, Unicode
 DOCX creation, and an approval-gated offline Python/Node/Git/npm sandbox,
+encrypted GitHub/Drive/Gmail/Calendar connections with approval-gated writes,
+and SSRF-protected remote MCP Streamable HTTP tools,
 atomic per-user quotas, execution traces, secure owner/user accounts, and a
 branded web cabinet with conversation history, approvals, job controls, and
 token/cost monitoring. First-login onboarding and account settings provide a

@@ -93,5 +93,7 @@ sources and are not runtime dependencies.
 - Containerized services with an isolated Compose project and network.
 - PostgreSQL for application state; vector search selected after evaluation.
 - Provider adapters instead of hard-coding a single model vendor.
-- MCP-compatible external tools where that reduces custom integration work.
+- MCP Streamable HTTP external tools through encrypted per-user connections,
+  public-HTTPS/SSRF enforcement, bounded responses, same-origin redirects, and
+  mandatory approval for every remote call.
 - API-first backend so Telegram and the future web interface share one runtime.

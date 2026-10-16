@@ -4,6 +4,7 @@ import { TelegramLinkService } from "./auth/telegram-link.js";
 import { TelegramClient } from "./channels/telegram.js";
 import { GitHubConnector } from "./connectors/github.js";
 import { GoogleConnector } from "./connectors/google.js";
+import { McpConnector } from "./connectors/mcp.js";
 import { ConnectorService, ConnectorVault } from "./connectors/vault.js";
 import { loadConfig } from "./config.js";
 import { ModelRouter } from "./core/model-router.js";
@@ -38,6 +39,7 @@ const connectors = config.CONNECTOR_VAULT_KEY
   : undefined;
 const githubConnector = connectors ? new GitHubConnector(connectors) : undefined;
 const googleConnector = connectors ? new GoogleConnector(connectors) : undefined;
+const mcpConnector = connectors ? new McpConnector(connectors) : undefined;
 if (config.OWNER_EMAIL && config.OWNER_PASSWORD) {
   await authService.bootstrapOwner({
     email: config.OWNER_EMAIL,
@@ -100,6 +102,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   ...(codeSandbox ? { codeSandbox } : {}),
   ...(githubConnector ? { githubConnector } : {}),
   ...(googleConnector ? { googleConnector } : {}),
+  ...(mcpConnector ? { mcpConnector } : {}),
 }), database, governance);
 const skillManager = new SkillManager(
   database,

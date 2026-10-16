@@ -11,12 +11,14 @@ import type { SubagentCoordinator } from "../core/subagents.js";
 import type { CodeSandboxClient } from "./code-sandbox.js";
 import type { GitHubConnector } from "../connectors/github.js";
 import type { GoogleConnector } from "../connectors/google.js";
+import type { McpConnector } from "../connectors/mcp.js";
 
 export function createBuiltinToolRegistry(options: {
   workspaceRoot?: string;
   searxngBaseUrl?: string;
-  githubConnector?: Pick<GitHubConnector, "profile" | "repositories">;
-  googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents">;
+  githubConnector?: Pick<GitHubConnector, "profile" | "repositories" | "createBranch" | "commitFile" | "createPullRequest" | "createIssue">;
+  googleConnector?: Pick<GoogleConnector, "driveFiles" | "gmailMessages" | "calendarEvents" | "createDriveFile" | "updateDriveFile" | "createGmailDraft" | "sendGmail" | "createCalendarEvent" | "updateCalendarEvent">;
+  mcpConnector?: Pick<McpConnector, "listTools" | "callTool">;
   managedBrowser?: Pick<ManagedBrowser, "run">;
   subagentCoordinator?: Pick<SubagentCoordinator, "delegate">;
   codeSandbox?: Pick<CodeSandboxClient, "run">;
@@ -233,6 +235,70 @@ export function createBuiltinToolRegistry(options: {
         return options.githubConnector!.repositories(context.userId, value.connectorId, value.limit);
       },
     });
+    const githubBase = {
+      connectorId: z.string().uuid(),
+      repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u).max(201),
+    };
+    const branch = z.string().min(1).max(200).regex(/^(?!\/|.*(?:\.\.|\/\.|\.lock(?:\/|$)))[A-Za-z0-9._\/-]+$/u);
+    registry.register({
+      name: "github.branch.create",
+      description: "Create a branch in a repository through the user's encrypted GitHub connection.",
+      risk: "external",
+      inputSchema: z.object({ ...githubBase, branch, fromBranch: branch }).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; repository: string; branch: string; fromBranch: string };
+        return options.githubConnector!.createBranch(context.userId, value.connectorId, value);
+      },
+    });
+    registry.register({
+      name: "github.file.commit",
+      description: "Create or update one repository file as a GitHub commit.",
+      risk: "external",
+      inputSchema: z.object({
+        ...githubBase,
+        path: z.string().min(1).max(1_000),
+        branch,
+        message: z.string().min(1).max(500),
+        content: z.string().max(1_000_000),
+        sha: z.string().regex(/^[0-9a-f]{40,64}$/u).optional(),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; repository: string; path: string; branch: string; message: string; content: string; sha?: string };
+        return options.githubConnector!.commitFile(context.userId, value.connectorId, value);
+      },
+    });
+    registry.register({
+      name: "github.pull_request.create",
+      description: "Open a GitHub pull request.",
+      risk: "external",
+      inputSchema: z.object({
+        ...githubBase,
+        title: z.string().min(1).max(256),
+        body: z.string().max(50_000).optional(),
+        head: branch,
+        base: branch,
+        draft: z.boolean().default(false),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; repository: string; title: string; body?: string; head: string; base: string; draft?: boolean };
+        return options.githubConnector!.createPullRequest(context.userId, value.connectorId, value);
+      },
+    });
+    registry.register({
+      name: "github.issue.create",
+      description: "Create a GitHub issue with optional labels.",
+      risk: "external",
+      inputSchema: z.object({
+        ...githubBase,
+        title: z.string().min(1).max(256),
+        body: z.string().max(50_000).optional(),
+        labels: z.array(z.string().min(1).max(100)).max(20).optional(),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; repository: string; title: string; body?: string; labels?: string[] };
+        return options.githubConnector!.createIssue(context.userId, value.connectorId, value);
+      },
+    });
   }
 
   if (options.googleConnector) {
@@ -265,6 +331,119 @@ export function createBuiltinToolRegistry(options: {
       execute: async (input, context) => {
         const value = input as { connectorId: string; limit: number };
         return options.googleConnector!.calendarEvents(context.userId, value.connectorId, value.limit);
+      },
+    });
+    const connectorId = z.string().uuid();
+    const mimeType = z.enum(["text/plain", "text/markdown", "text/csv"]);
+    const email = z.string().email().max(320);
+    const mailSchema = {
+      connectorId,
+      to: z.array(email).min(1).max(20),
+      cc: z.array(email).max(20).optional(),
+      subject: z.string().min(1).max(500),
+      body: z.string().max(500_000),
+    };
+    const eventSchema = {
+      connectorId,
+      summary: z.string().min(1).max(1_000),
+      description: z.string().max(20_000).optional(),
+      start: z.string().datetime({ offset: true }),
+      end: z.string().datetime({ offset: true }),
+      timeZone: z.string().min(1).max(100).optional(),
+      attendees: z.array(email).max(50).optional(),
+    };
+    registry.register({
+      name: "google_drive.file.create",
+      description: "Create a bounded text, Markdown, or CSV file in Google Drive.",
+      risk: "external",
+      inputSchema: z.object({
+        connectorId,
+        name: z.string().min(1).max(500),
+        content: z.string().max(1_000_000),
+        mimeType,
+        parentId: z.string().min(1).max(500).optional(),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; name: string; content: string; mimeType: "text/plain" | "text/markdown" | "text/csv"; parentId?: string };
+        return options.googleConnector!.createDriveFile(context.userId, value.connectorId, value);
+      },
+    });
+    registry.register({
+      name: "google_drive.file.update",
+      description: "Replace the content of a Google Drive text, Markdown, or CSV file.",
+      risk: "external",
+      inputSchema: z.object({ connectorId, fileId: z.string().min(1).max(500), content: z.string().max(1_000_000), mimeType }).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; fileId: string; content: string; mimeType: "text/plain" | "text/markdown" | "text/csv" };
+        return options.googleConnector!.updateDriveFile(context.userId, value.connectorId, value);
+      },
+    });
+    registry.register({
+      name: "gmail.draft.create",
+      description: "Create a Gmail draft without sending it.",
+      risk: "external",
+      inputSchema: z.object(mailSchema).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; to: string[]; cc?: string[]; subject: string; body: string };
+        return options.googleConnector!.createGmailDraft(context.userId, value.connectorId, value);
+      },
+    });
+    registry.register({
+      name: "gmail.send",
+      description: "Send a plain-text email through Gmail.",
+      risk: "external",
+      inputSchema: z.object(mailSchema).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; to: string[]; cc?: string[]; subject: string; body: string };
+        return options.googleConnector!.sendGmail(context.userId, value.connectorId, value);
+      },
+    });
+    registry.register({
+      name: "google_calendar.event.create",
+      description: "Create a primary Google Calendar event.",
+      risk: "external",
+      inputSchema: z.object(eventSchema).strict().refine((value) => Date.parse(value.end) > Date.parse(value.start), "Event end must be after start"),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; summary: string; description?: string; start: string; end: string; timeZone?: string; attendees?: string[] };
+        return options.googleConnector!.createCalendarEvent(context.userId, value.connectorId, value);
+      },
+    });
+    registry.register({
+      name: "google_calendar.event.update",
+      description: "Update a primary Google Calendar event.",
+      risk: "external",
+      inputSchema: z.object({ ...eventSchema, eventId: z.string().min(1).max(500) }).strict()
+        .refine((value) => Date.parse(value.end) > Date.parse(value.start), "Event end must be after start"),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; eventId: string; summary: string; description?: string; start: string; end: string; timeZone?: string; attendees?: string[] };
+        return options.googleConnector!.updateCalendarEvent(context.userId, value.connectorId, value);
+      },
+    });
+  }
+
+  if (options.mcpConnector) {
+    registry.register({
+      name: "mcp.tools.list",
+      description: "List bounded tool metadata from one of the user's encrypted remote MCP Streamable HTTP connections.",
+      risk: "external",
+      inputSchema: z.object({ connectorId: z.string().uuid() }).strict(),
+      execute: async (input, context) => options.mcpConnector!.listTools(
+        context.userId,
+        (input as { connectorId: string }).connectorId,
+      ),
+    });
+    registry.register({
+      name: "mcp.tool.call",
+      description: "Call one named tool on a remote MCP server. Every call requires explicit approval because remote tool effects are not trusted.",
+      risk: "external",
+      inputSchema: z.object({
+        connectorId: z.string().uuid(),
+        name: z.string().min(1).max(200).regex(/^[A-Za-z0-9_.:\/-]+$/u),
+        arguments: z.record(z.string(), z.unknown()).default({}),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { connectorId: string; name: string; arguments: Record<string, unknown> };
+        return options.mcpConnector!.callTool(context.userId, value.connectorId, value.name, value.arguments);
       },
     });
   }

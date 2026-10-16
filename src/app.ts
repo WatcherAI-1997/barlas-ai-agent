@@ -150,7 +150,20 @@ const connectorCreateSchema = z.object({
   label: z.string().trim().min(1).max(100),
   secret: z.string().min(1).max(20_000),
   metadata: z.record(z.string(), z.unknown()).optional(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  if (value.provider !== "mcp_http") return;
+  const endpoint = value.metadata?.endpoint;
+  if (typeof endpoint !== "string") {
+    context.addIssue({ code: "custom", path: ["metadata", "endpoint"], message: "MCP HTTPS endpoint is required" });
+    return;
+  }
+  try {
+    const url = new URL(endpoint);
+    if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443")) throw new Error();
+  } catch {
+    context.addIssue({ code: "custom", path: ["metadata", "endpoint"], message: "Invalid MCP HTTPS endpoint" });
+  }
+});
 const githubRepositoriesSchema = z.object({
   userId: z.string().min(1).max(128),
   connectorId: z.string().uuid(),

@@ -60,6 +60,11 @@ describe("connector vault", () => {
     expect(await service.secret("user-a", saved.id, "github")).toBe("github-secret-token");
     expect(await service.secret("user-b", saved.id, "github")).toBeNull();
     expect(await service.secret("user-a", saved.id, "gmail")).toBeNull();
+    await expect(service.connection("user-a", saved.id, "github")).resolves.toEqual({
+      record: saved,
+      secret: "github-secret-token",
+    });
+    await expect(service.connection("user-b", saved.id, "github")).resolves.toBeNull();
   });
 
   it("rejects tampering and invalid keys", async () => {

@@ -41,3 +41,22 @@ describe("sandbox tool registration", () => {
     expect(registry.list()).toContainEqual(expect.objectContaining({ name: "code.run", risk: "write" }));
   });
 });
+
+describe("external mutation tool registration", () => {
+  it("marks connector mutations and all remote MCP calls as approval-gated external actions", () => {
+    const registry = createBuiltinToolRegistry({
+      githubConnector: {
+        profile: async () => ({ login: "x", name: null, avatarUrl: "https://example.com/x" }),
+        repositories: async () => [],
+        createBranch: async () => ({ ref: "refs/heads/x", sha: "a".repeat(40) }),
+        commitFile: async () => ({ commitSha: "a".repeat(40), contentPath: "x" }),
+        createPullRequest: async () => ({ number: 1, url: "https://example.com", state: "open" }),
+        createIssue: async () => ({ number: 1, url: "https://example.com", state: "open" }),
+      },
+      mcpConnector: { listTools: async () => [], callTool: async () => ({}) },
+    });
+    for (const name of ["github.branch.create", "github.file.commit", "github.pull_request.create", "github.issue.create", "mcp.tools.list", "mcp.tool.call"]) {
+      expect(registry.list()).toContainEqual(expect.objectContaining({ name, risk: "external" }));
+    }
+  });
+});
