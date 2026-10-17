@@ -78,6 +78,12 @@ describe("production installer", () => {
     for (const section of ["identity", "memory", "integrations", "automations", "security"]) expect(configure).toContain(`\"${section}\"`);
     expect(configure).toContain("Import existing Barlas configuration");
     expect(configure).toContain("Imported $Imported supported settings");
+    expect(configure).toContain("B A R L A S   O S");
+    expect(configure).toContain("by Barlas Bit");
+    expect(configure).toContain("Welcome. Let's prepare your personal intelligence system.");
+    expect(configure).toContain("Quick Setup (recommended)");
+    expect(configure).toContain("BARLAS OS IS READY");
+    expect(configure).toContain("barlas web test");
     expect(cli).toContain("doctor-native.ps1");
     expect(cli).toContain('if ($LocalCommand -eq "voice"');
     expect(cli).toContain('"auth-status"');

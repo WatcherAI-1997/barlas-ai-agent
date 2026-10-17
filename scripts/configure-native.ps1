@@ -205,6 +205,72 @@ function Current([string]$Name, [string]$Fallback = "") {
     return $Fallback
 }
 function Set-Value([string]$Name, [string]$NewValue) { $Settings[$Name] = $NewValue }
+function Test-InteractiveConsole {
+    try { return -not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected -and [Console]::WindowWidth -ge 48 }
+    catch { return $false }
+}
+function Get-ConfiguredChannelCount {
+    $Count = 0
+    if (Current "TELEGRAM_BOT_TOKEN") { $Count++ }
+    if (Current "DISCORD_BOT_TOKEN") { $Count++ }
+    if ((Current "SLACK_BOT_TOKEN") -and (Current "SLACK_APP_TOKEN")) { $Count++ }
+    if ((Current "WHATSAPP_ACCESS_TOKEN") -and (Current "WHATSAPP_PHONE_NUMBER_ID")) { $Count++ }
+    return $Count
+}
+function Write-BarlasOnboardingHeader {
+    if (Test-InteractiveConsole) { Clear-Host }
+    Write-Host ""
+    Write-Host "      O     O       " -ForegroundColor Red
+    Write-Host "         O          " -ForegroundColor Red
+    Write-Host "  B A R L A S   O S " -ForegroundColor White
+    Write-Host "  by Barlas Bit" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  THINK AHEAD. " -ForegroundColor Red -NoNewline
+    Write-Host "ACT BEYOND." -ForegroundColor White
+    Write-Host "  ------------------------------------------------------------" -ForegroundColor DarkGray
+    Write-Host "  Welcome. Let's prepare your personal intelligence system." -ForegroundColor White
+    Write-Host "  I checked this PC and your current Barlas configuration." -ForegroundColor DarkGray
+    Write-Host ""
+
+    $Provider = Current "MODEL_PROVIDER" "not configured"
+    $Model = Current "MODEL_NAME" "select during setup"
+    $ModelLabel = if ($Provider -eq "not configured") { $Provider } else { "$Provider / $Model" }
+    $SearchLabel = if (Current "SEARXNG_BASE_URL") { "SearXNG connected" } else { "built-in web search" }
+    $BrowserLabel = if (Current "BROWSER_WS_ENDPOINT") { "local Chromium ready" } else { "will be checked after setup" }
+    $Channels = Get-ConfiguredChannelCount
+
+    Write-Host "  DETECTED" -ForegroundColor Red
+    Write-Host "  Model       " -ForegroundColor DarkGray -NoNewline; Write-Host $ModelLabel -ForegroundColor White
+    Write-Host "  Search      " -ForegroundColor DarkGray -NoNewline; Write-Host $SearchLabel -ForegroundColor White
+    Write-Host "  Browser     " -ForegroundColor DarkGray -NoNewline; Write-Host $BrowserLabel -ForegroundColor White
+    Write-Host "  Channels    " -ForegroundColor DarkGray -NoNewline; Write-Host "$Channels connected" -ForegroundColor White
+    Write-Host "  Data        " -ForegroundColor DarkGray -NoNewline; Write-Host $RootDir -ForegroundColor White
+    Write-Host "  ------------------------------------------------------------" -ForegroundColor DarkGray
+    Write-Host "  Use Up/Down, PageUp/PageDown, Home/End and Enter." -ForegroundColor DarkGray
+    Write-Host "  Type to filter. Press Esc to keep the recommended choice." -ForegroundColor DarkGray
+}
+function Write-BarlasReadyScreen([string]$SelectedProfile) {
+    $Channels = Get-ConfiguredChannelCount
+    Write-Host ""
+    Write-Host "  +----------------------------------------------------------+" -ForegroundColor Red
+    Write-Host "  |  BARLAS OS IS READY                                     |" -ForegroundColor White
+    Write-Host "  +----------------------------------------------------------+" -ForegroundColor Red
+    Write-Host "  Profile      " -ForegroundColor DarkGray -NoNewline; Write-Host $SelectedProfile -ForegroundColor White
+    Write-Host "  Agent        " -ForegroundColor DarkGray -NoNewline; Write-Host "$(Current 'AGENT_NAME' 'Barlas') / $(Current 'AGENT_STYLE' 'balanced')" -ForegroundColor White
+    Write-Host "  Model        " -ForegroundColor DarkGray -NoNewline; Write-Host "$(Current 'MODEL_PROVIDER') / $(Current 'MODEL_NAME')" -ForegroundColor White
+    Write-Host "  Search       " -ForegroundColor DarkGray -NoNewline; Write-Host $(if (Current "SEARXNG_BASE_URL") { "SearXNG" } else { "built-in" }) -ForegroundColor White
+    Write-Host "  Browser      " -ForegroundColor DarkGray -NoNewline; Write-Host $(if (Current "BROWSER_WS_ENDPOINT") { "connected" } else { "checked by diagnostics" }) -ForegroundColor White
+    Write-Host "  Channels     " -ForegroundColor DarkGray -NoNewline; Write-Host "$Channels connected" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  NEXT" -ForegroundColor Red
+    Write-Host "  barlas" -ForegroundColor Cyan -NoNewline; Write-Host "             start the agent"
+    Write-Host "  barlas web" -ForegroundColor Cyan -NoNewline; Write-Host "         open the control center"
+    Write-Host "  barlas web test" -ForegroundColor Cyan -NoNewline; Write-Host "    verify search and browser"
+    Write-Host "  barlas doctor" -ForegroundColor Cyan -NoNewline; Write-Host "      inspect the installation"
+    Write-Host ""
+    Write-Host "  THINK AHEAD. " -ForegroundColor Red -NoNewline
+    Write-Host "ACT BEYOND." -ForegroundColor White
+}
 function Save-Settings {
     $Temporary = "$EnvFile.tmp.$([Guid]::NewGuid().ToString('N'))"
     try {
@@ -512,25 +578,19 @@ if ($Action -eq "security-audit") {
     return
 }
 
-Write-Host "`n  O  O  " -ForegroundColor Red -NoNewline
-Write-Host "BARLAS" -ForegroundColor White
-Write-Host "    O    " -ForegroundColor Red -NoNewline
-Write-Host "AI AGENT" -ForegroundColor DarkGray
-Write-Host "  THINK AHEAD. " -ForegroundColor Red -NoNewline
-Write-Host "ACT BEYOND." -ForegroundColor White
-Write-Host "  Personal AI setup" -ForegroundColor DarkGray
-Write-Host "  Arrows move | type filters | Enter selects | secrets stay hidden." -ForegroundColor DarkGray
+Write-BarlasOnboardingHeader
 
 if ($Section -eq "all") {
     if (-not $Profile) {
-        Write-Host "`nSetup profiles" -ForegroundColor Cyan
-        Write-Host "  complete   Every important setting, guided step by step"
-        Write-Host "  quick      Essential choices, sensible defaults"
-        Write-Host "  private    Local Ollama, no cloud key, no external channels"
-        Write-Host "  developer  Advanced limits, tools and diagnostics"
-        Write-Host "  server     Higher worker limits with hardened checks"
-        Write-Host "  import     Import a previous Barlas configuration"
-        $Profile = Read-MappedChoice "Setup depth" @("complete", "quick", "private", "developer", "server", "import") @("Complete - all important settings", "Quick - essentials only", "Private - local models and no external channels", "Developer - extended tools and limits", "Server - higher worker limits", "Import - existing Barlas configuration") "complete"
+        Write-Host "`n  CHOOSE YOUR SETUP" -ForegroundColor Red
+        $Profile = Read-MappedChoice "How would you like to set up Barlas OS?" @("quick", "complete", "private", "developer", "server", "import") @(
+            "Quick Setup (recommended) - detect this PC and configure essentials",
+            "Full Setup - review every model, tool, channel and security option",
+            "Private Setup - local Ollama, local data and no external channels",
+            "Developer Setup - advanced limits, tools and diagnostics",
+            "Server Setup - higher worker limits with hardened checks",
+            "Import - restore an existing Barlas configuration"
+        ) "quick"
     }
     if ($Profile -eq "import") { Import-BarlasConfig } else { Apply-Profile $Profile }
 }
@@ -562,3 +622,4 @@ Write-Host "  Slack:         $(if ((Current 'SLACK_BOT_TOKEN') -and (Current 'SL
 Write-Host "  WhatsApp:      $(if ((Current 'WHATSAPP_ACCESS_TOKEN') -and (Current 'WHATSAPP_PHONE_NUMBER_ID')) { 'configured' } else { 'disabled' })"
 Write-Host "`n[OK] Configuration saved securely" -ForegroundColor Green
 Write-Host "The gateway will restart and run final diagnostics." -ForegroundColor DarkGray
+Write-BarlasReadyScreen $(if ($Profile) { $Profile } else { "custom" })
