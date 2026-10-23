@@ -17,6 +17,7 @@ import { speechVoices, type MediaService } from "./media.js";
 import type { ProjectService } from "../projects/service.js";
 import type { DeviceNodeService } from "../nodes/service.js";
 import { commitmentStatuses, type CommitmentStatus, type ContinuityService } from "../continuity/service.js";
+import { evidenceKinds, outcomeStatuses, type EvidenceKind, type OutcomeService, type OutcomeStatus } from "../outcomes/service.js";
 
 export function createBuiltinToolRegistry(options: {
   workspaceRoot?: string;
@@ -31,6 +32,7 @@ export function createBuiltinToolRegistry(options: {
   projectService?: Pick<ProjectService, "detail" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "snapshot" | "restore">;
   deviceNodes?: Pick<DeviceNodeService, "notify">;
   continuity?: Pick<ContinuityService, "create" | "list" | "update">;
+  outcomes?: Pick<OutcomeService, "create" | "list" | "detail" | "addEvidence" | "verify" | "cancel">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
@@ -83,6 +85,90 @@ export function createBuiltinToolRegistry(options: {
         const value = input as { id: string; status: CommitmentStatus; evidence?: string };
         const result = await options.continuity!.update(context.userId, value.id, value.status, value.evidence);
         if (!result) throw new Error("Commitment not found");
+        return result;
+      },
+    });
+  }
+
+  if (options.outcomes) {
+    registry.register({
+      name: "outcomes.list",
+      description: "List outcome records by lifecycle status. Outcomes track whether the owner's desired result was achieved, independently of whether a task or run finished.",
+      risk: "read",
+      inputSchema: z.object({
+        statuses: z.array(z.enum(outcomeStatuses)).min(1).max(outcomeStatuses.length).default(["planned", "in_progress", "verification_pending", "verification_failed"]),
+        limit: z.number().int().min(1).max(100).default(50),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { statuses: OutcomeStatus[]; limit: number };
+        return options.outcomes!.list(context.userId, value.statuses, value.limit);
+      },
+    });
+    registry.register({
+      name: "outcomes.inspect",
+      description: "Inspect one owned outcome with all success criteria and recorded evidence.",
+      risk: "read",
+      inputSchema: z.object({ id: z.string().uuid() }).strict(),
+      execute: async (input, context) => {
+        const result = await options.outcomes!.detail(context.userId, (input as { id: string }).id);
+        if (!result) throw new Error("Outcome not found");
+        return result;
+      },
+    });
+    registry.register({
+      name: "outcomes.create",
+      description: "Define a desired result and its measurable success criteria before substantial execution. This is approval-gated because it creates a durable owner-visible contract for success.",
+      risk: "write",
+      inputSchema: z.object({
+        title: z.string().min(1).max(500),
+        objective: z.string().min(1).max(10_000),
+        criteria: z.array(z.string().min(1).max(2_000)).min(1).max(20),
+        sourceConversationId: z.string().uuid().optional(),
+      }).strict(),
+      execute: async (input, context) => options.outcomes!.create(context.userId, input as {
+        title: string; objective: string; criteria: string[]; sourceConversationId?: string;
+      }),
+    });
+    registry.register({
+      name: "outcomes.evidence.add",
+      description: "Attach pass/fail evidence to one success criterion. Agent observation is retained for context but can never verify a criterion by itself.",
+      risk: "write",
+      inputSchema: z.object({
+        outcomeId: z.string().uuid(),
+        criterionId: z.string().uuid(),
+        kind: z.enum(evidenceKinds),
+        passed: z.boolean(),
+        summary: z.string().min(1).max(10_000),
+        locator: z.string().min(1).max(2_000).optional(),
+        observedAt: z.iso.datetime({ offset: true }).optional(),
+      }).strict(),
+      execute: async (input, context) => {
+        const result = await options.outcomes!.addEvidence(context.userId, input as {
+          outcomeId: string; criterionId: string; kind: EvidenceKind; passed: boolean; summary: string; locator?: string; observedAt?: string;
+        });
+        if (!result) throw new Error("Outcome or criterion not found");
+        return result;
+      },
+    });
+    registry.register({
+      name: "outcomes.verify",
+      description: "Recompute outcome verification from the latest strong evidence for every required criterion. Missing evidence remains pending; negative evidence fails verification.",
+      risk: "write",
+      inputSchema: z.object({ id: z.string().uuid() }).strict(),
+      execute: async (input, context) => {
+        const result = await options.outcomes!.verify(context.userId, (input as { id: string }).id);
+        if (!result) throw new Error("Outcome not found");
+        return result;
+      },
+    });
+    registry.register({
+      name: "outcomes.cancel",
+      description: "Cancel an owned outcome without pretending that it was achieved.",
+      risk: "write",
+      inputSchema: z.object({ id: z.string().uuid() }).strict(),
+      execute: async (input, context) => {
+        const result = await options.outcomes!.cancel(context.userId, (input as { id: string }).id);
+        if (!result) throw new Error("Outcome not found");
         return result;
       },
     });

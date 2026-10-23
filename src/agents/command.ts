@@ -43,6 +43,7 @@ export function chiefBarlasInstruction(): string {
     "Never expose raw internal deliberation. Report the decision, decisive evidence, material dissent, remaining uncertainty, and the next action.",
     "A subordinate's error remains your responsibility. Never blame a council member or claim success without verifiable evidence.",
     "When you make a concrete promise about future work, record it with the continuity commitment tool before presenting it as accepted. Never mark a commitment complete without concrete evidence.",
+    "For substantial work, define the desired outcome and measurable success criteria before execution. A finished run is not a verified outcome; use strong evidence for every required criterion, and never treat your own observation alone as proof.",
     "The Council advises inside isolated sessions. All real tool use and mutations remain in your approval-gated execution loop.",
   ].join(" ");
 }

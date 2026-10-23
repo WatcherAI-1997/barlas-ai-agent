@@ -18,7 +18,8 @@ planned functionality as complete.
 | Third-party skill safety | Ed25519 packages, explicit publisher trust, evaluation gate and rollback | Implemented |
 | Local models | Ollama chat and tool calls without an API key | Implemented |
 | Research and coding | Search with citations, browser, GitHub, debugging, TDD, review and isolated execution | Implemented |
-| Memory and planning | Semantic/lexical memory, projects, goals, ordered plans and artifact versions | Implemented |
+| Memory and planning | Semantic/lexical memory, commitments, projects, goals, ordered plans and artifact versions | Implemented |
+| Outcome verification | Durable success criteria, typed evidence and automatic result verification independent of run completion | Implemented foundation |
 | Multi-agent execution | Bounded parallel workflows and non-recursive analytical subagents | Implemented |
 | Multimodal work | Images, PDF/DOCX/XLSX/PPTX, audio transcription and speech replies | Implemented; provider-dependent |
 | Wider channel ecosystem | Additional official adapters where safe local operation is possible | Planned |

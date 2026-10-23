@@ -40,8 +40,9 @@ import type { ArtifactVersion, GoalStatus, PlanStepStatus, Project, ProjectCheck
 import type { DeviceCommand, DeviceNode, DeviceNodeStore, NodePlatform } from "../nodes/service.js";
 import type { AgentProfile, AgentProfileStore } from "../agents/profiles.js";
 import type { Commitment, CommitmentStatus, CommitmentStore } from "../continuity/service.js";
+import type { EvidenceKind, Outcome, OutcomeCriterion, OutcomeDetail, OutcomeEvidence, OutcomeStatus, OutcomeStore } from "../outcomes/service.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore, DeviceNodeStore, AgentProfileStore, CommitmentStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore, DeviceNodeStore, AgentProfileStore, CommitmentStore, OutcomeStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -85,6 +86,93 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       [input.userId, input.id, input.status, input.evidence ?? null],
     );
     return result.rows[0] ? mapCommitment(result.rows[0]) : null;
+  }
+
+  async createOutcome(input: { userId: string; title: string; objective: string; criteria: string[]; sourceConversationId?: string }): Promise<OutcomeDetail> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const outcomeResult = await client.query<OutcomeRow>(
+        `insert into outcomes (user_id, title, objective, source_conversation_id)
+         values ($1, $2, $3, $4)
+         returning id, user_id, title, objective, status, source_conversation_id, created_at, updated_at, verified_at`,
+        [input.userId, input.title, input.objective, input.sourceConversationId ?? null],
+      );
+      const outcome = mapOutcome(outcomeResult.rows[0]!);
+      const criteria: OutcomeCriterion[] = [];
+      for (const description of input.criteria) {
+        const criterionResult = await client.query<OutcomeCriterionRow>(
+          `insert into outcome_criteria (outcome_id, description) values ($1, $2)
+           returning id, outcome_id, description, required, created_at`, [outcome.id, description],
+        );
+        criteria.push(mapOutcomeCriterion(criterionResult.rows[0]!));
+      }
+      await client.query("commit");
+      return { outcome, criteria, evidence: [] };
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async listOutcomes(userId: string, statuses: OutcomeStatus[], limit: number): Promise<Outcome[]> {
+    if (!statuses.length) return [];
+    const result = await this.pool.query<OutcomeRow>(
+      `select id, user_id, title, objective, status, source_conversation_id, created_at, updated_at, verified_at
+       from outcomes where user_id = $1 and status = any($2::text[])
+       order by updated_at desc, id limit $3`, [userId, statuses, limit],
+    );
+    return result.rows.map(mapOutcome);
+  }
+
+  async getOutcome(userId: string, id: string): Promise<OutcomeDetail | null> {
+    const outcomeResult = await this.pool.query<OutcomeRow>(
+      `select id, user_id, title, objective, status, source_conversation_id, created_at, updated_at, verified_at
+       from outcomes where user_id = $1 and id = $2`, [userId, id],
+    );
+    if (!outcomeResult.rows[0]) return null;
+    const [criteriaResult, evidenceResult] = await Promise.all([
+      this.pool.query<OutcomeCriterionRow>(
+        `select id, outcome_id, description, required, created_at from outcome_criteria
+         where outcome_id = $1 order by created_at, id`, [id],
+      ),
+      this.pool.query<OutcomeEvidenceRow>(
+        `select evidence.id, evidence.outcome_id, evidence.criterion_id, evidence.kind, evidence.passed,
+                evidence.summary, evidence.locator, evidence.observed_at, evidence.created_at
+         from outcome_evidence evidence join outcomes outcome on outcome.id = evidence.outcome_id
+         where outcome.user_id = $1 and evidence.outcome_id = $2
+         order by evidence.observed_at desc, evidence.id desc`, [userId, id],
+      ),
+    ]);
+    return { outcome: mapOutcome(outcomeResult.rows[0]), criteria: criteriaResult.rows.map(mapOutcomeCriterion), evidence: evidenceResult.rows.map(mapOutcomeEvidence) };
+  }
+
+  async addOutcomeEvidence(input: { userId: string; outcomeId: string; criterionId: string; kind: EvidenceKind; passed: boolean; summary: string; locator?: string; observedAt: Date }): Promise<OutcomeEvidence | null> {
+    const result = await this.pool.query<OutcomeEvidenceRow>(
+      `insert into outcome_evidence (outcome_id, criterion_id, kind, passed, summary, locator, observed_at)
+       select criterion.outcome_id, criterion.id, $4, $5, $6, $7, $8
+       from outcome_criteria criterion join outcomes outcome on outcome.id = criterion.outcome_id
+       where outcome.user_id = $1 and outcome.id = $2 and criterion.id = $3 and outcome.status <> 'cancelled'
+       returning id, outcome_id, criterion_id, kind, passed, summary, locator, observed_at, created_at`,
+      [input.userId, input.outcomeId, input.criterionId, input.kind, input.passed, input.summary, input.locator ?? null, input.observedAt],
+    );
+    if (!result.rows[0]) return null;
+    await this.pool.query(
+      `update outcomes set status = 'verification_pending', updated_at = now(), verified_at = null
+       where user_id = $1 and id = $2 and status <> 'cancelled'`, [input.userId, input.outcomeId],
+    );
+    return mapOutcomeEvidence(result.rows[0]);
+  }
+
+  async setOutcomeStatus(userId: string, id: string, status: OutcomeStatus): Promise<Outcome | null> {
+    const result = await this.pool.query<OutcomeRow>(
+      `update outcomes set status = $3, updated_at = now(),
+         verified_at = case when $3 = 'verified' then now() else null end
+       where user_id = $1 and id = $2
+       returning id, user_id, title, objective, status, source_conversation_id, created_at, updated_at, verified_at`,
+      [userId, id, status],
+    );
+    return result.rows[0] ? mapOutcome(result.rows[0]) : null;
   }
 
   async createAgentProfile(input: Omit<AgentProfile, "id" | "createdAt" | "updatedAt">): Promise<AgentProfile> {
@@ -2110,6 +2198,9 @@ interface SkillEvaluationRow {
 
 interface ProjectRow { id: string; user_id: string; name: string; description: string; status: Project["status"]; created_at: Date; updated_at: Date }
 interface CommitmentRow { id: string; user_id: string; title: string; details: string; status: CommitmentStatus; due_at: Date | null; evidence: string | null; source_conversation_id: string | null; created_at: Date; updated_at: Date }
+interface OutcomeRow { id: string; user_id: string; title: string; objective: string; status: OutcomeStatus; source_conversation_id: string | null; created_at: Date; updated_at: Date; verified_at: Date | null }
+interface OutcomeCriterionRow { id: string; outcome_id: string; description: string; required: boolean; created_at: Date }
+interface OutcomeEvidenceRow { id: string; outcome_id: string; criterion_id: string; kind: EvidenceKind; passed: boolean; summary: string; locator: string | null; observed_at: Date; created_at: Date }
 interface AgentProfileRow { id: string; user_id: string; slug: string; name: string; style: AgentProfile["style"]; instructions: string; default_task_class: AgentProfile["defaultTaskClass"]; project_id: string | null; created_at: Date; updated_at: Date }
 interface ProjectResourceRow { project_id: string; resource_type: ProjectResourceType; resource_id: string; label: string; created_at: Date }
 interface ArtifactRow { id: string; project_id: string; path: string; version: number; sha256: string; size_bytes: number; created_at: Date }
@@ -2130,6 +2221,27 @@ function mapCommitment(row: CommitmentRow): Commitment {
     ...(row.evidence ? { evidence: row.evidence } : {}),
     ...(row.source_conversation_id ? { sourceConversationId: row.source_conversation_id } : {}),
     createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
+  };
+}
+
+function mapOutcome(row: OutcomeRow): Outcome {
+  return {
+    id: row.id, userId: row.user_id, title: row.title, objective: row.objective, status: row.status,
+    ...(row.source_conversation_id ? { sourceConversationId: row.source_conversation_id } : {}),
+    createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
+    ...(row.verified_at ? { verifiedAt: row.verified_at.toISOString() } : {}),
+  };
+}
+
+function mapOutcomeCriterion(row: OutcomeCriterionRow): OutcomeCriterion {
+  return { id: row.id, outcomeId: row.outcome_id, description: row.description, required: row.required, createdAt: row.created_at.toISOString() };
+}
+
+function mapOutcomeEvidence(row: OutcomeEvidenceRow): OutcomeEvidence {
+  return {
+    id: row.id, outcomeId: row.outcome_id, criterionId: row.criterion_id, kind: row.kind,
+    passed: row.passed, summary: row.summary, ...(row.locator ? { locator: row.locator } : {}),
+    observedAt: row.observed_at.toISOString(), createdAt: row.created_at.toISOString(),
   };
 }
 

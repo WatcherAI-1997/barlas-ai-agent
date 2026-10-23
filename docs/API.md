@@ -43,6 +43,12 @@ server-side; each plaintext token is shown only once.
 - `POST /v1/memory` — save an explicit long-term memory.
 - `GET /v1/memory/search` — retrieve relevant memories for one user.
 - `GET /v1/tools` — list registered tools and their risk levels.
+- Outcome Mode is exposed to the autonomous runtime through `outcomes.list`,
+  `outcomes.inspect`, `outcomes.create`, `outcomes.evidence.add`,
+  `outcomes.verify`, and `outcomes.cancel`. Inspection is read-only; every
+  mutation enters the normal owner approval queue. Evidence addition
+  automatically recomputes verification and agent observation alone is never
+  sufficient.
 - `GET /v1/extensions` — list built-in extension manifests, capabilities, risk classes, required setting names, and current configuration state without secret values.
 - `POST /v1/nodes/pairing-code` — create a short-lived, one-time code for the authenticated account.
 - `GET /v1/nodes` — list the account's paired device nodes and last heartbeat.

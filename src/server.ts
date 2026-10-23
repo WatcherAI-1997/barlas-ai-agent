@@ -45,6 +45,7 @@ import { runRuntimeShutdownHook } from "./runtime-lifecycle.js";
 import { AgentProfileService } from "./agents/profiles.js";
 import { RuntimeControl } from "./system/runtime-control.js";
 import { ContinuityService } from "./continuity/service.js";
+import { OutcomeService } from "./outcomes/service.js";
 
 const config = loadConfig();
 const runtimeControl = new RuntimeControl();
@@ -133,6 +134,7 @@ const extensionCatalog = createBuiltinExtensionCatalog({
 const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
 const projects = new ProjectService(database, workspace);
 const continuity = new ContinuityService(database);
+const outcomes = new OutcomeService(database);
 const agentProfiles = new AgentProfileService(database);
 const mediaService = openAIServiceApiKey ? new MediaService(
   workspace,
@@ -161,6 +163,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   projectService: projects,
   deviceNodes,
   continuity,
+  outcomes,
 }), database, governance);
 const skillManager = new SkillManager(
   database,
@@ -225,9 +228,10 @@ const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
   contextForSchedule: async (schedule) => {
     const account = await authService.getAccount(schedule.userId);
     const language = languageInstruction(account?.languageCode);
-    const [memories, commitments] = await Promise.all([
+    const [memories, commitments, outcomeContext] = await Promise.all([
       memory.recall(schedule.userId, schedule.objective, 5),
       continuity.context(schedule.userId),
+      outcomes.context(schedule.userId),
     ]);
     return [
       { role: "system" as const, content: [
@@ -242,6 +246,7 @@ const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
       ...(language ? [{ role: "system" as const, content: language }] : []),
       { role: "system" as const, content: chiefBarlasInstruction() },
       ...(commitments ? [{ role: "system" as const, content: commitments }] : []),
+      ...(outcomeContext ? [{ role: "system" as const, content: outcomeContext }] : []),
       ...(memories.length ? [{ role: "system" as const, content: [
         "Use these Barlas AI Agent user memories only when relevant:",
         ...memories.map((item) => `- [${item.category}] ${item.content}`),
@@ -367,6 +372,7 @@ const app = await buildApp({
   maxWorkspaceFileBytes: config.MAX_WORKSPACE_FILE_BYTES,
   projects,
   continuity,
+  outcomes,
   agentProfiles,
   schedules,
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),

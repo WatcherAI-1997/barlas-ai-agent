@@ -98,6 +98,12 @@ autonomy.
   unfinished commitments; overdue items are marked in model context. Creating
   or changing one is approval-gated, and both service validation and a database
   constraint prohibit completion without concrete evidence.
+- Outcome Mode stores an owner's desired result separately from tasks and runs.
+  Every outcome has required measurable criteria and typed evidence. Adding
+  evidence automatically recomputes its state; all criteria need current strong
+  passing evidence before verification, while agent observation alone never
+  suffices. Outcome mutations are approval-gated and active outcomes are
+  injected into interactive, scheduled, and Telegram runtime context.
 - Token counts are captured from provider responses. Cost is an estimate based
   only on explicitly configured model rates and is stored as integer micro-USD.
 - Deployment-wide Prometheus text metrics reuse the bounded dashboard counters,

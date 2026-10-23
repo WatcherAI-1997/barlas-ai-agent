@@ -52,6 +52,7 @@ import { DEFAULT_MAX_WORKSPACE_FILE_BYTES, type FileWorkspace } from "./tools/fi
 import type { ScheduleService } from "./schedules/service.js";
 import type { GoalStatus, PlanStepStatus, ProjectService, ProjectResourceType } from "./projects/service.js";
 import type { ContinuityService } from "./continuity/service.js";
+import type { OutcomeService } from "./outcomes/service.js";
 import { renderPrometheusMetrics } from "./operations/metrics.js";
 import type { ExtensionCatalog } from "./extensions/catalog.js";
 import type { DeviceNodeService } from "./nodes/service.js";
@@ -405,6 +406,7 @@ export interface AppDependencies {
   maxWorkspaceFileBytes?: number;
   projects?: Pick<ProjectService, "create" | "list" | "detail" | "context" | "attach" | "snapshot" | "restore" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "recordRunResult">;
   continuity?: Pick<ContinuityService, "context">;
+  outcomes?: Pick<OutcomeService, "context">;
   agentProfiles?: Pick<AgentProfileService, "create" | "list" | "get" | "delete" | "resolve">;
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
@@ -465,6 +467,15 @@ async function continuityContext(
 ): Promise<Array<{ role: "system"; content: string }>> {
   if (!continuity) return [];
   const content = await continuity.context(userId);
+  return content ? [{ role: "system", content }] : [];
+}
+
+async function outcomeContext(
+  userId: string,
+  outcomes: AppDependencies["outcomes"],
+): Promise<Array<{ role: "system"; content: string }>> {
+  if (!outcomes) return [];
+  const content = await outcomes.context(userId);
   return content ? [{ role: "system", content }] : [];
 }
 
@@ -1329,9 +1340,10 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const identityContext = selectedProfile
       ? [{ role: "system" as const, content: agentProfileInstruction(selectedProfile) }]
       : agentIdentityContext(dependencies.agentIdentity);
-    const [languageContext, commitmentsContext] = await Promise.all([
+    const [languageContext, commitmentsContext, outcomesContext] = await Promise.all([
       preferredLanguageContext(input.userId, dependencies.authService),
       continuityContext(input.userId, dependencies.continuity),
+      outcomeContext(input.userId, dependencies.outcomes),
     ]);
     let projectContext: Array<{ role: "system"; content: string }> = [];
     if (selectedProfile?.projectId) {
@@ -1344,7 +1356,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const result = await dependencies.modelProvider.generate({
         userId: input.userId,
         conversationId,
-        messages: [...identityContext, ...languageContext, ...commitmentsContext, ...projectContext, ...memoryContext, ...conversation.modelMessages],
+        messages: [...identityContext, ...languageContext, ...commitmentsContext, ...outcomesContext, ...projectContext, ...memoryContext, ...conversation.modelMessages],
         taskClass: effectiveTaskClass,
       });
 
@@ -1504,9 +1516,10 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const identityContext = selectedProfile
       ? [{ role: "system" as const, content: agentProfileInstruction(selectedProfile) }]
       : agentIdentityContext(dependencies.agentIdentity);
-    const [languageContext, commitmentsContext] = await Promise.all([
+    const [languageContext, commitmentsContext, outcomesContext] = await Promise.all([
       preferredLanguageContext(userId, dependencies.authService),
       continuityContext(userId, dependencies.continuity),
+      outcomeContext(userId, dependencies.outcomes),
     ]);
     let projectContext: Array<{ role: "system"; content: string }> = [];
     if (selectedProfile?.projectId && parsed.data.projectId && selectedProfile.projectId !== parsed.data.projectId) {
@@ -1562,7 +1575,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const loopInput = {
         userId,
         conversationId,
-        messages: [...identityContext, ...languageContext, ...commitmentsContext, ...projectContext, ...skillContext, ...memoryContext, ...conversation.modelMessages],
+        messages: [...identityContext, ...languageContext, ...commitmentsContext, ...outcomesContext, ...projectContext, ...skillContext, ...memoryContext, ...conversation.modelMessages],
         taskClass: effectiveTaskClass,
         maxSteps: parsed.data.maxSteps,
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
@@ -2347,9 +2360,10 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         role: "system" as const,
         content: ["Use these Barlas AI Agent user memories only when relevant:", ...memories.map((item) => `- [${item.category}] ${item.content}`)].join("\n"),
       }] : [];
-      const [languageContext, commitmentsContext] = await Promise.all([
+      const [languageContext, commitmentsContext, outcomesContext] = await Promise.all([
         preferredLanguageContext(userId, dependencies.authService),
         continuityContext(userId, dependencies.continuity),
+        outcomeContext(userId, dependencies.outcomes),
       ]);
       const identityContext = agentIdentityContext(dependencies.agentIdentity);
       const persistedImmediately = dependencies.database.appendConversationMessages
@@ -2361,7 +2375,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         : false;
       const run = await dependencies.agentRuntime.enqueue({
         userId, conversationId,
-        messages: [...identityContext, ...languageContext, ...commitmentsContext, ...memoryContext, ...conversation.modelMessages],
+        messages: [...identityContext, ...languageContext, ...commitmentsContext, ...outcomesContext, ...memoryContext, ...conversation.modelMessages],
         conversationMessages: persistedImmediately ? [] : conversation.newMessages,
         delivery: { channel: "telegram", chatId: message.chat.id, ...(voiceCommand.requested ? { voice: true } : {}) },
         taskClass: "fast",

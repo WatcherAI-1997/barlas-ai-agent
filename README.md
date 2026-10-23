@@ -320,7 +320,7 @@ See the [security policy](docs/SECURITY.md),
 
 ## Current state
 
-**Private alpha · 155 automated tests · 21 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
+**Private alpha · 219 automated tests · 24 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
 
 The functional agent core, web cabinet, Telegram channel, project system,
 recurring tasks, multimodal tools, sandbox, browser, MCP, encrypted connectors,
