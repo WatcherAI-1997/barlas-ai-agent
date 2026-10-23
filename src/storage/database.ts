@@ -39,10 +39,10 @@ import type { AgentSchedule } from "../schedules/types.js";
 import type { ArtifactVersion, GoalStatus, PlanStepStatus, Project, ProjectCheckpoint, ProjectGoal, ProjectPlanStep, ProjectResource, ProjectResourceType, ProjectStore } from "../projects/service.js";
 import type { DeviceCommand, DeviceNode, DeviceNodeStore, NodePlatform } from "../nodes/service.js";
 import type { AgentProfile, AgentProfileStore } from "../agents/profiles.js";
-import type { Commitment, CommitmentStatus, CommitmentStore } from "../continuity/service.js";
+import type { Commitment, CommitmentReminderStore, CommitmentStatus, CommitmentStore } from "../continuity/service.js";
 import type { EvidenceKind, Outcome, OutcomeCriterion, OutcomeDetail, OutcomeEvidence, OutcomeStatus, OutcomeStore } from "../outcomes/service.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore, DeviceNodeStore, AgentProfileStore, CommitmentStore, OutcomeStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore, DeviceNodeStore, AgentProfileStore, CommitmentStore, CommitmentReminderStore, OutcomeStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -57,12 +57,13 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     await this.pool.query("select 1");
   }
 
-  async createCommitment(input: { userId: string; title: string; details: string; dueAt?: Date; sourceConversationId?: string }): Promise<Commitment> {
+  async createCommitment(input: { userId: string; title: string; details: string; dueAt?: Date; sourceConversationId?: string; reminderAt?: Date; reminderIntervalHours?: number }): Promise<Commitment> {
     const result = await this.pool.query<CommitmentRow>(
-      `insert into commitments (user_id, title, details, due_at, source_conversation_id)
-       values ($1, $2, $3, $4, $5)
-       returning id, user_id, title, details, status, due_at, evidence, source_conversation_id, created_at, updated_at`,
-      [input.userId, input.title, input.details, input.dueAt ?? null, input.sourceConversationId ?? null],
+      `insert into commitments (user_id, title, details, due_at, source_conversation_id, next_reminder_at, reminder_interval_hours)
+       values ($1, $2, $3, $4, $5, $6, $7)
+       returning id, user_id, title, details, status, due_at, evidence, source_conversation_id,
+         next_reminder_at, last_reminded_at, reminder_interval_hours, reminder_count, created_at, updated_at`,
+      [input.userId, input.title, input.details, input.dueAt ?? null, input.sourceConversationId ?? null, input.reminderAt ?? null, input.reminderIntervalHours ?? null],
     );
     return mapCommitment(result.rows[0]!);
   }
@@ -70,7 +71,8 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
   async listCommitments(userId: string, statuses: CommitmentStatus[], limit: number): Promise<Commitment[]> {
     if (!statuses.length) return [];
     const result = await this.pool.query<CommitmentRow>(
-      `select id, user_id, title, details, status, due_at, evidence, source_conversation_id, created_at, updated_at
+      `select id, user_id, title, details, status, due_at, evidence, source_conversation_id,
+         next_reminder_at, last_reminded_at, reminder_interval_hours, reminder_count, created_at, updated_at
        from commitments where user_id = $1 and status = any($2::text[])
        order by due_at asc nulls last, created_at asc limit $3`,
       [userId, statuses, limit],
@@ -80,12 +82,72 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async updateCommitment(input: { userId: string; id: string; status: CommitmentStatus; evidence?: string }): Promise<Commitment | null> {
     const result = await this.pool.query<CommitmentRow>(
-      `update commitments set status = $3, evidence = coalesce($4, evidence), updated_at = now()
+      `update commitments set status = $3, evidence = coalesce($4, evidence), updated_at = now(),
+         next_reminder_at = case when $3 in ('completed', 'cancelled') then null else next_reminder_at end,
+         reminder_interval_hours = case when $3 in ('completed', 'cancelled') then null else reminder_interval_hours end,
+         reminder_lease_owner = case when $3 in ('completed', 'cancelled') then null else reminder_lease_owner end,
+         reminder_lease_expires_at = case when $3 in ('completed', 'cancelled') then null else reminder_lease_expires_at end
        where user_id = $1 and id = $2
-       returning id, user_id, title, details, status, due_at, evidence, source_conversation_id, created_at, updated_at`,
+       returning id, user_id, title, details, status, due_at, evidence, source_conversation_id,
+         next_reminder_at, last_reminded_at, reminder_interval_hours, reminder_count, created_at, updated_at`,
       [input.userId, input.id, input.status, input.evidence ?? null],
     );
     return result.rows[0] ? mapCommitment(result.rows[0]) : null;
+  }
+
+  async configureCommitmentReminder(input: { userId: string; id: string; reminderAt?: Date; reminderIntervalHours?: number }): Promise<Commitment | null> {
+    const result = await this.pool.query<CommitmentRow>(
+      `update commitments set next_reminder_at = $3, reminder_interval_hours = $4,
+         reminder_lease_owner = null, reminder_lease_expires_at = null, updated_at = now()
+       where user_id = $1 and id = $2 and status in ('open', 'in_progress', 'waiting')
+       returning id, user_id, title, details, status, due_at, evidence, source_conversation_id,
+         next_reminder_at, last_reminded_at, reminder_interval_hours, reminder_count, created_at, updated_at`,
+      [input.userId, input.id, input.reminderAt ?? null, input.reminderIntervalHours ?? null],
+    );
+    return result.rows[0] ? mapCommitment(result.rows[0]) : null;
+  }
+
+  async claimDueCommitmentReminders(input: { workerId: string; limit: number; leaseSeconds: number }): Promise<Commitment[]> {
+    const result = await this.pool.query<CommitmentRow>(
+      `with due as (
+         select id from commitments
+         where status in ('open', 'in_progress', 'waiting') and next_reminder_at <= now()
+           and (reminder_lease_expires_at is null or reminder_lease_expires_at <= now())
+         order by next_reminder_at, id for update skip locked limit $2
+       )
+       update commitments commitment set reminder_lease_owner = $1,
+         reminder_lease_expires_at = now() + make_interval(secs => $3)
+       from due where commitment.id = due.id
+       returning commitment.id, commitment.user_id, commitment.title, commitment.details, commitment.status,
+         commitment.due_at, commitment.evidence, commitment.source_conversation_id, commitment.next_reminder_at,
+         commitment.last_reminded_at, commitment.reminder_interval_hours, commitment.reminder_count,
+         commitment.created_at, commitment.updated_at`,
+      [input.workerId, input.limit, input.leaseSeconds],
+    );
+    return result.rows.map(mapCommitment);
+  }
+
+  async completeCommitmentReminder(input: { id: string; userId: string; workerId: string }): Promise<boolean> {
+    const result = await this.pool.query(
+      `update commitments set last_reminded_at = now(), reminder_count = reminder_count + 1,
+         next_reminder_at = now() + make_interval(hours => reminder_interval_hours),
+         reminder_lease_owner = null, reminder_lease_expires_at = null, updated_at = now()
+       where id = $1 and user_id = $2 and reminder_lease_owner = $3
+         and status in ('open', 'in_progress', 'waiting')`,
+      [input.id, input.userId, input.workerId],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  async failCommitmentReminder(input: { id: string; userId: string; workerId: string; retryAt: Date }): Promise<boolean> {
+    const result = await this.pool.query(
+      `update commitments set next_reminder_at = $4, reminder_lease_owner = null,
+         reminder_lease_expires_at = null, updated_at = now()
+       where id = $1 and user_id = $2 and reminder_lease_owner = $3
+         and status in ('open', 'in_progress', 'waiting')`,
+      [input.id, input.userId, input.workerId, input.retryAt],
+    );
+    return (result.rowCount ?? 0) === 1;
   }
 
   async createOutcome(input: { userId: string; title: string; objective: string; criteria: string[]; sourceConversationId?: string }): Promise<OutcomeDetail> {
@@ -2197,7 +2259,7 @@ interface SkillEvaluationRow {
 }
 
 interface ProjectRow { id: string; user_id: string; name: string; description: string; status: Project["status"]; created_at: Date; updated_at: Date }
-interface CommitmentRow { id: string; user_id: string; title: string; details: string; status: CommitmentStatus; due_at: Date | null; evidence: string | null; source_conversation_id: string | null; created_at: Date; updated_at: Date }
+interface CommitmentRow { id: string; user_id: string; title: string; details: string; status: CommitmentStatus; due_at: Date | null; evidence: string | null; source_conversation_id: string | null; next_reminder_at: Date | null; last_reminded_at: Date | null; reminder_interval_hours: number | null; reminder_count: number; created_at: Date; updated_at: Date }
 interface OutcomeRow { id: string; user_id: string; title: string; objective: string; status: OutcomeStatus; source_conversation_id: string | null; created_at: Date; updated_at: Date; verified_at: Date | null }
 interface OutcomeCriterionRow { id: string; outcome_id: string; description: string; required: boolean; created_at: Date }
 interface OutcomeEvidenceRow { id: string; outcome_id: string; criterion_id: string; kind: EvidenceKind; passed: boolean; summary: string; locator: string | null; observed_at: Date; created_at: Date }
@@ -2220,6 +2282,10 @@ function mapCommitment(row: CommitmentRow): Commitment {
     ...(row.due_at ? { dueAt: row.due_at.toISOString() } : {}),
     ...(row.evidence ? { evidence: row.evidence } : {}),
     ...(row.source_conversation_id ? { sourceConversationId: row.source_conversation_id } : {}),
+    ...(row.next_reminder_at ? { nextReminderAt: row.next_reminder_at.toISOString() } : {}),
+    ...(row.last_reminded_at ? { lastRemindedAt: row.last_reminded_at.toISOString() } : {}),
+    ...(row.reminder_interval_hours ? { reminderIntervalHours: row.reminder_interval_hours } : {}),
+    reminderCount: row.reminder_count,
     createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
   };
 }

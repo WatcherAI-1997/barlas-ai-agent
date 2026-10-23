@@ -98,6 +98,11 @@ autonomy.
   unfinished commitments; overdue items are marked in model context. Creating
   or changing one is approval-gated, and both service validation and a database
   constraint prohibit completion without concrete evidence.
+- Owners can opt an unfinished commitment into repeating Telegram reminders.
+  Reminder delivery uses leased rows with skip-locked claims, acknowledges only
+  after successful delivery, retries failures without incrementing the count,
+  escalates language after seven overdue days, and stops automatically on
+  completion or cancellation. Reminder configuration is approval-gated.
 - Outcome Mode stores an owner's desired result separately from tasks and runs.
   Every outcome has required measurable criteria and typed evidence. Adding
   evidence automatically recomputes its state; all criteria need current strong

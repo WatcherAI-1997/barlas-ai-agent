@@ -23,7 +23,16 @@ describe("native embedded database", () => {
       const result = await database.query<{ count: string }>("select count(*)::text as count from information_schema.tables where table_schema = 'public'");
       expect(Number(result.rows[0]?.count)).toBeGreaterThan(20);
       const migrations = await database.query<{ count: string }>("select count(*)::text as count from _barlas_native_migrations");
-      expect(Number(migrations.rows[0]?.count)).toBe(24);
+      expect(Number(migrations.rows[0]?.count)).toBe(25);
+      const reminder = await database.query<{ reminder_count: number }>(
+        "insert into commitments (user_id, title, next_reminder_at, reminder_interval_hours) values ($1, $2, now(), 24) returning reminder_count",
+        ["owner", "Verify reminders"],
+      );
+      expect(reminder.rows[0]?.reminder_count).toBe(0);
+      await expect(database.query(
+        "insert into commitments (user_id, title, next_reminder_at, reminder_interval_hours) values ($1, $2, now(), 0)",
+        ["owner", "Invalid reminder"],
+      )).rejects.toThrow();
     } finally { await database.close(); }
   });
 

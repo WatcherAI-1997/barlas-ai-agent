@@ -43,6 +43,10 @@ server-side; each plaintext token is shown only once.
 - `POST /v1/memory` — save an explicit long-term memory.
 - `GET /v1/memory/search` — retrieve relevant memories for one user.
 - `GET /v1/tools` — list registered tools and their risk levels.
+- Continuity reminders are configured through the approval-gated
+  `continuity.commitments.reminder.configure` tool. They use an explicit first
+  reminder time and a bounded 1–168 hour repeat interval; omitting the time
+  disables delivery. Reminders stop on completion or cancellation.
 - Outcome Mode is exposed to the autonomous runtime through `outcomes.list`,
   `outcomes.inspect`, `outcomes.create`, `outcomes.evidence.add`,
   `outcomes.verify`, and `outcomes.cancel`. Inspection is read-only; every

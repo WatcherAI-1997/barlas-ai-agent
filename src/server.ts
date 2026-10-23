@@ -45,6 +45,7 @@ import { runRuntimeShutdownHook } from "./runtime-lifecycle.js";
 import { AgentProfileService } from "./agents/profiles.js";
 import { RuntimeControl } from "./system/runtime-control.js";
 import { ContinuityService } from "./continuity/service.js";
+import { ContinuityReminderWorker } from "./continuity/worker.js";
 import { OutcomeService } from "./outcomes/service.js";
 
 const config = loadConfig();
@@ -218,6 +219,28 @@ const whatsapp = config.WHATSAPP_ACCESS_TOKEN && config.WHATSAPP_PHONE_NUMBER_ID
       ),
     }
   : undefined;
+const continuityReminderWorker = telegram ? new ContinuityReminderWorker(
+  database,
+  async (commitment, text) => {
+    const link = await telegramLinks.get(commitment.userId);
+    if (!link) throw new Error("Telegram account is not linked for commitment reminder delivery");
+    await telegram.client.sendMessage(link.telegramChatId, text);
+    await database.appendAudit({
+      userId: commitment.userId,
+      eventType: "commitment.reminder.sent",
+      resourceType: "commitment",
+      resourceId: commitment.id,
+      details: { reminderNumber: commitment.reminderCount + 1, channel: "telegram" },
+    });
+  },
+  {
+    isPaused: () => runtimeControl.isPaused(),
+    pollIntervalMs: config.JOB_WORKER_POLL_MS,
+    batchSize: config.JOB_WORKER_BATCH_SIZE,
+    leaseSeconds: config.JOB_LEASE_SECONDS,
+    onError: (error) => console.error("Barlas AI Agent continuity reminder error", error),
+  },
+) : undefined;
 const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
   isPaused: () => runtimeControl.isPaused(),
   pollIntervalMs: config.JOB_WORKER_POLL_MS,
@@ -444,6 +467,7 @@ const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   await jobWorker.stop();
   await agentRunWorker.stop();
   await scheduleWorker.stop();
+  await continuityReminderWorker?.stop();
   await app.close();
   await runRuntimeShutdownHook();
   process.exitCode = 0;
@@ -459,3 +483,4 @@ await slackSocket?.start();
 if (config.JOB_WORKER_ENABLED) jobWorker.start();
 if (config.AGENT_RUN_WORKER_ENABLED) agentRunWorker.start();
 if (config.JOB_WORKER_ENABLED) scheduleWorker.start();
+if (config.JOB_WORKER_ENABLED) continuityReminderWorker?.start();

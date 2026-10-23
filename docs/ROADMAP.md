@@ -15,7 +15,8 @@
 - Persistent conversations and explicit long-term memory. *(implemented with optional semantic embeddings and lexical fallback)*
 - Continuity ledger for Barlas's own promises, including deadlines, overdue
   context injection, approval-gated changes, and evidence-required completion.
-  *(implemented foundation; reminder policy pending)*
+  *(implemented foundation, including opt-in leased Telegram reminders with
+  bounded retry and overdue escalation)*
 - Outcome Mode with durable measurable success criteria, typed evidence,
   automatic verification, and a strict distinction between a finished run and
   an achieved result. *(implemented foundation)*

@@ -31,7 +31,7 @@ export function createBuiltinToolRegistry(options: {
   mediaService?: Pick<MediaService, "analyzeImage" | "analyzePdf" | "transcribeAudio" | "createSpeech">;
   projectService?: Pick<ProjectService, "detail" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "snapshot" | "restore">;
   deviceNodes?: Pick<DeviceNodeService, "notify">;
-  continuity?: Pick<ContinuityService, "create" | "list" | "update">;
+  continuity?: Pick<ContinuityService, "create" | "list" | "update" | "configureReminder">;
   outcomes?: Pick<OutcomeService, "create" | "list" | "detail" | "addEvidence" | "verify" | "cancel">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
@@ -66,10 +66,12 @@ export function createBuiltinToolRegistry(options: {
         title: z.string().min(1).max(500),
         details: z.string().max(10_000).default(""),
         dueAt: z.iso.datetime({ offset: true }).optional(),
+        reminderAt: z.iso.datetime({ offset: true }).optional(),
+        reminderIntervalHours: z.number().int().min(1).max(168).optional(),
         sourceConversationId: z.string().uuid().optional(),
       }).strict(),
       execute: async (input, context) => options.continuity!.create(context.userId, input as {
-        title: string; details?: string; dueAt?: string; sourceConversationId?: string;
+        title: string; details?: string; dueAt?: string; reminderAt?: string; reminderIntervalHours?: number; sourceConversationId?: string;
       }),
     });
     registry.register({
@@ -85,6 +87,22 @@ export function createBuiltinToolRegistry(options: {
         const value = input as { id: string; status: CommitmentStatus; evidence?: string };
         const result = await options.continuity!.update(context.userId, value.id, value.status, value.evidence);
         if (!result) throw new Error("Commitment not found");
+        return result;
+      },
+    });
+    registry.register({
+      name: "continuity.commitments.reminder.configure",
+      description: "Enable, reschedule, or disable repeat reminders for an unfinished commitment. Providing reminderAt enables reminders; omitting it disables them. Delivery is approval-gated and repeats until completion or cancellation.",
+      risk: "write",
+      inputSchema: z.object({
+        id: z.string().uuid(),
+        reminderAt: z.iso.datetime({ offset: true }).optional(),
+        reminderIntervalHours: z.number().int().min(1).max(168).optional(),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { id: string; reminderAt?: string; reminderIntervalHours?: number };
+        const result = await options.continuity!.configureReminder(context.userId, value.id, value);
+        if (!result) throw new Error("Unfinished commitment not found");
         return result;
       },
     });
