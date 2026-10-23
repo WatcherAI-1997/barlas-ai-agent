@@ -33,6 +33,7 @@ import {
   supportedLanguages,
   type SupportedLanguageCode,
 } from "./i18n/languages.js";
+import { barlasCouncil, chiefBarlasInstruction } from "./agents/command.js";
 import {
   OrganizationAuthorizationError,
   type OrganizationService,
@@ -471,6 +472,7 @@ function agentIdentityContext(
     role: "system",
     content: [
       `You are ${identity.name}, the user's Barlas AI agent.`,
+      chiefBarlasInstruction(),
       styleInstructions[identity.style],
       identity.instructions?.trim(),
     ].filter(Boolean).join("\n"),
@@ -855,6 +857,15 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     await dependencies.database.appendAudit({ userId, eventType: "project.created", resourceType: "project", resourceId: project.id, details: { name: project.name } });
     return reply.code(201).send({ project });
   });
+
+  app.get("/v1/agents/council", async () => ({
+    chief: {
+      id: "chief",
+      name: "Chief Barlas",
+      mandate: "Single accountable voice that serves the owner, commands the Council, reconciles dissent, and owns the final result.",
+    },
+    members: barlasCouncil,
+  }));
 
   app.post("/v1/agents", async (request, reply) => {
     if (!dependencies.agentProfiles) return reply.notFound();

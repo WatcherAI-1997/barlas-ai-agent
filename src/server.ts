@@ -37,6 +37,7 @@ import { MediaService, OpenAIMediaModel } from "./tools/media.js";
 import { ScheduleService } from "./schedules/service.js";
 import { ScheduleWorker } from "./schedules/worker.js";
 import { languageInstruction } from "./i18n/languages.js";
+import { chiefBarlasInstruction } from "./agents/command.js";
 import { createBuiltinExtensionCatalog } from "./extensions/catalog.js";
 import { DeviceNodeService } from "./nodes/service.js";
 import { createModelProvider } from "./providers/factory.js";
@@ -233,6 +234,7 @@ const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
         config.AGENT_INSTRUCTIONS,
       ].filter(Boolean).join("\n") },
       ...(language ? [{ role: "system" as const, content: language }] : []),
+      { role: "system" as const, content: chiefBarlasInstruction() },
       ...(memories.length ? [{ role: "system" as const, content: [
         "Use these Barlas AI Agent user memories only when relevant:",
         ...memories.map((item) => `- [${item.category}] ${item.content}`),

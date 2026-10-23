@@ -62,3 +62,14 @@ export function languageInstruction(code: string | null | undefined): string | n
     "Preserve code, commands, file paths, identifiers, and quoted text when translation would change their meaning.",
   ].join(" ");
 }
+
+export function setupLanguageInstruction(code: string | null | undefined): string | null {
+  const language = getLanguage(code);
+  if (!language) return null;
+  return [
+    `The Barlas setup language is ${language.name} (${language.nativeName}; ${language.code}).`,
+    "Present all subsequent onboarding explanations, choices, validation guidance, status messages, and final instructions in that language.",
+    "Keep provider names, model identifiers, commands, paths, environment variables, and security tokens unchanged.",
+    "For a community-review language without standardized modern technical terminology, prefer clear native wording and retain the unambiguous technical term in parentheses.",
+  ].join(" ");
+}

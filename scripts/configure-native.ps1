@@ -11,6 +11,8 @@ param(
 $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $EnvFile = Join-Path $RootDir "deploy\native.env"
+$SupportedLanguageCodes = @("tr", "az", "azb", "tk", "gag", "qxq", "kmz", "klj", "uz", "ug", "ili", "slr", "ybe", "kk", "ky", "kaa", "nog", "tt", "ba", "crh", "kum", "krc", "kdr", "uum", "cv", "sah", "dlg", "tyv", "kim", "alt", "kjh", "cjs", "clw", "fuy", "sty", "mn", "ru", "en")
+$SupportedLanguageNames = @("Türkçe", "Azərbaycanca", "تۆرکجه", "Türkmençe", "Gagauzça", "قشقایی دیلی", "ترکی خراسانی", "خلجی", "O‘zbekcha", "ئۇيغۇرچە", "ئىلى تۈركى", "Salırça", "Yughur", "Қазақша", "Кыргызча", "Qaraqalpaqsha", "Ногайша", "Татарча", "Башҡортса", "Qırımtatarca", "Къумукъча", "Къарачай-малкъар тил", "Karaj tili", "Урум тили", "Чӑвашла", "Саха тыла", "Дулҕан тыла", "Тыва дыл", "Тоъфа дыл", "Алтай тил", "Хакас тілі", "Шор тили", "Ӧс тили", "Fuyu Gïrgïs", "Себер татар теле", "Монгол хэл", "Русский", "English")
 $AllowedKeys = @(
     "PORT", "BARLAS_HTTP_PORT", "OWNER_EMAIL", "OWNER_DISPLAY_NAME", "OWNER_LANGUAGE",
     "MODEL_PROVIDER", "MODEL_NAME", "MODEL_API_KEY", "MODEL_BASE_URL", "OLLAMA_BASE_URL", "DEEP_MODEL_NAME", "MEDIA_API_KEY", "VISION_MODEL",
@@ -205,6 +207,13 @@ function Current([string]$Name, [string]$Fallback = "") {
     return $Fallback
 }
 function Set-Value([string]$Name, [string]$NewValue) { $Settings[$Name] = $NewValue }
+function Select-SetupLanguage {
+    $Default = Current "OWNER_LANGUAGE" "ru"
+    if ($Default -notin $SupportedLanguageCodes) { $Default = "ru" }
+    $Selected = Read-MappedChoice "Tilni tanlang / Выберите язык / Choose language" $SupportedLanguageCodes $SupportedLanguageNames $Default
+    Set-Value "OWNER_LANGUAGE" $Selected
+    return $Selected
+}
 function Test-InteractiveConsole {
     try { return -not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected -and [Console]::WindowWidth -ge 48 }
     catch { return $false }
@@ -294,7 +303,7 @@ function Configure-General {
     } "Enter a valid email address."
     Set-Value "OWNER_EMAIL" $Email
     Set-Value "OWNER_DISPLAY_NAME" (Read-Plain "Owner display name" (Current "OWNER_DISPLAY_NAME" "Barlas Owner"))
-    Set-Value "OWNER_LANGUAGE" (Read-Plain "Language code" (Current "OWNER_LANGUAGE" "ru"))
+    Write-Host "Language: $(Current 'OWNER_LANGUAGE' 'ru')" -ForegroundColor DarkGray
 }
 function Configure-Identity {
     Write-Step 2 10 "Agent identity"
@@ -578,6 +587,11 @@ if ($Action -eq "security-audit") {
     return
 }
 
+if ($Action -eq "wizard" -and $Section -eq "all") {
+    $SetupLanguage = Select-SetupLanguage
+    $LanguageIndex = [Array]::IndexOf($SupportedLanguageCodes, $SetupLanguage)
+    Write-Host "  $($SupportedLanguageNames[$LanguageIndex]) [$SetupLanguage]" -ForegroundColor Green
+}
 Write-BarlasOnboardingHeader
 
 if ($Section -eq "all") {

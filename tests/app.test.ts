@@ -245,6 +245,21 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("publishes the fixed internal Barlas Council roster", async () => {
+    const app = await buildApp({ apiToken, ...dependencies() });
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/agents/council",
+      headers: { authorization: `Bearer ${apiToken}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().chief).toMatchObject({ id: "chief", name: "Chief Barlas" });
+    expect(response.json().members.map((member: { id: string }) => member.id)).toEqual([
+      "strategist", "researcher", "executor", "critic", "keeper", "guardian", "dispatcher",
+    ]);
+    await app.close();
+  });
+
   it("serves the branded web cabinet with strict browser security headers", async () => {
     const deps = dependencies();
     const app = await buildApp({ apiToken, ...deps, webRoot: resolve("web") });

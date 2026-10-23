@@ -447,7 +447,7 @@ async function runtimeControl(ctx: CliContext, actionName: "status" | "pause" | 
 }
 
 const completionCommands = [
-  "agent", "agents", "approvals", "approve", "audit", "backup", "channels", "chat", "completion",
+  "agent", "agents", "approvals", "approve", "audit", "backup", "channels", "chat", "completion", "council",
   "config", "configure", "cron", "daemon", "dashboard", "devices", "doctor", "extensions", "gateway",
   "health", "integrations", "jobs", "logs", "memory", "models", "node", "nodes", "onboard", "pause",
   "plugins", "projects", "reject", "repair", "resume", "runs", "schedules", "security", "sessions",
@@ -544,6 +544,15 @@ async function ask(ctx: CliContext, prompt: string, conversationId?: string, age
 async function agents(ctx: CliContext): Promise<void> {
   const result = await ctx.api.request<{ profiles: JsonObject[] }>(`/v1/agents?userId=${encodeURIComponent(ctx.userId)}`);
   output.write(`${renderRows(result.profiles, ["id", "slug", "name", "style", "defaultTaskClass", "projectId"])}\n`);
+}
+
+async function council(ctx: CliContext): Promise<void> {
+  const result = await ctx.api.request<{
+    chief: JsonObject;
+    members: JsonObject[];
+  }>("/v1/agents/council");
+  output.write(`Глава: ${value(result.chief.name)}\n${value(result.chief.mandate)}\n\n`);
+  output.write(`${renderRows(result.members, ["id", "name", "taskClass", "character", "mandate"])}\n`);
 }
 
 async function createAgentProfile(ctx: CliContext, args: string[]): Promise<void> {
@@ -669,6 +678,7 @@ function help(): void {
   agent <запрос> | ask <запрос>     автономная задача
   agent <запрос> --profile <id>     задача отдельному агенту
   agents                            список отдельных агентов
+  council                           Глава Barlas и внутренний Совет
   agents create SLUG NAME [...]     создать агента и привязать workspace
   agents delete <id>                удалить агента
   integrations                      подключения без раскрытия секретов
@@ -863,6 +873,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (command === "agents" && args[1] === "create") return createAgentProfile(ctx, args);
   if (command === "agents" && args[1] === "delete") return deleteAgentProfile(ctx, args[2] ?? "");
   if (command === "agents") return agents(ctx);
+  if (command === "council") return council(ctx);
   if (command === "integrations" && args[1] === "add") return addIntegration(ctx, args);
   if (command === "integrations" && args[1] === "test") return testIntegration(ctx, args[2] ?? "");
   if (command === "integrations" && args[1] === "delete") return deleteIntegration(ctx, args[2] ?? "");

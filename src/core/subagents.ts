@@ -1,20 +1,23 @@
 import { randomUUID } from "node:crypto";
 
 import type { ModelProvider } from "./models.js";
+import { councilRoleInstruction, getCouncilRole, type CouncilRoleId } from "../agents/command.js";
 
-const MAX_SUBAGENTS = 3;
+const MAX_SUBAGENTS = 5;
 const MAX_RESULT_CHARS = 30_000;
 
 export interface DelegatedTask {
   name: string;
   instruction: string;
   context?: string;
+  role?: CouncilRoleId;
 }
 
 export interface DelegationResult {
   objective: string;
   results: Array<{
     name: string;
+    role?: CouncilRoleId;
     text: string;
     provider: string;
     model: string;
@@ -40,16 +43,17 @@ export class SubagentCoordinator {
     if (names.size !== input.tasks.length) throw new Error("Delegated task names must be unique");
 
     const results = await Promise.all(input.tasks.map(async (task) => {
+      const role = task.role ? getCouncilRole(task.role) : undefined;
       const result = await this.model.generate({
         userId: input.userId,
         conversationId: randomUUID(),
-        taskClass: input.taskClass ?? "deep",
+        taskClass: input.taskClass ?? role?.taskClass ?? "deep",
         maxOutputTokens: 2_048,
         messages: [
           {
             role: "system",
             content: [
-              "You are an isolated Barlas AI Agent subagent.",
+              role ? councilRoleInstruction(role) : "You are an isolated Barlas AI Agent specialist reporting to the Chief of Barlas.",
               "Complete only the assigned analytical task from supplied context.",
               "You have no tools, cannot delegate, and must not claim external actions.",
               "Separate verified facts, assumptions, uncertainties, and recommended next steps.",
@@ -67,6 +71,7 @@ export class SubagentCoordinator {
       });
       return {
         name: task.name,
+        ...(task.role ? { role: task.role } : {}),
         text: result.text.slice(0, MAX_RESULT_CHARS),
         provider: result.provider,
         model: result.model,

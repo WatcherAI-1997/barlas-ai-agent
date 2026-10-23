@@ -6,6 +6,7 @@ $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BarlasHome = Join-Path $env:LOCALAPPDATA "Barlas"
 $EnvFile = Join-Path $RootDir "deploy\native.env"
 $SupportedLanguageCodes = @("tr", "az", "azb", "tk", "gag", "qxq", "kmz", "klj", "uz", "ug", "ili", "slr", "ybe", "kk", "ky", "kaa", "nog", "tt", "ba", "crh", "kum", "krc", "kdr", "uum", "cv", "sah", "dlg", "tyv", "kim", "alt", "kjh", "cjs", "clw", "fuy", "sty", "mn", "ru", "en")
+$SupportedLanguageNames = @("Türkçe", "Azərbaycanca", "تۆرکجه", "Türkmençe", "Gagauzça", "قشقایی دیلی", "ترکی خراسانی", "خلجی", "O‘zbekcha", "ئۇيغۇرچە", "ئىلى تۈركى", "Salırça", "Yughur", "Қазақша", "Кыргызча", "Qaraqalpaqsha", "Ногайша", "Татарча", "Башҡортса", "Qırımtatarca", "Къумукъча", "Къарачай-малкъар тил", "Karaj tili", "Урум тили", "Чӑвашла", "Саха тыла", "Дулҕан тыла", "Тыва дыл", "Тоъфа дыл", "Алтай тил", "Хакас тілі", "Шор тили", "Ӧс тили", "Fuyu Gïrgïs", "Себер татар теле", "Монгол хэл", "Русский", "English")
 
 function Read-Value([string]$Name, [string]$Label, [string]$Default = "", [switch]$Secret) {
     $Existing = [Environment]::GetEnvironmentVariable($Name)
@@ -177,15 +178,8 @@ function Read-OwnerLanguage {
         if ($NonInteractive) { throw "OWNER_LANGUAGE is unsupported" }
         Write-Host "Ignoring unsupported OWNER_LANGUAGE value and asking again." -ForegroundColor Yellow
     }
-    if ($NonInteractive) { return "" }
-    $Choice = Read-MenuChoice "" "Interface language" @("ru", "en", "later", "other") @("Russian", "English", "Choose later in the web cabinet", "Another language code") "ru"
-    if ($Choice -eq "later") { return "" }
-    if ($Choice -ne "other") { return $Choice }
-    while ($true) {
-        $Code = (Read-Host "Language code").Trim().ToLowerInvariant()
-        if ($Code -in $SupportedLanguageCodes) { return $Code }
-        Write-Host "Unsupported code. Examples: ru, en, tr, az, uz, kk, ky, tt, mn." -ForegroundColor Yellow
-    }
+    if ($NonInteractive) { return "en" }
+    return Read-MenuChoice "" "Tilni tanlang / Выберите язык / Choose language" $SupportedLanguageCodes $SupportedLanguageNames "ru"
 }
 
 function Read-ModelSelection([string]$Provider, [string]$Title, [string]$Default) {
@@ -248,6 +242,10 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     Write-Host "  THINK AHEAD. " -ForegroundColor Red -NoNewline
     Write-Host "ACT BEYOND." -ForegroundColor White
     Write-Host "  Use arrows to move, type to filter, and press Enter to select." -ForegroundColor DarkGray
+    # Language is the first setup decision and is persisted for every later surface.
+    $OwnerLanguage = Read-OwnerLanguage
+    $LanguageIndex = [Array]::IndexOf($SupportedLanguageCodes, $OwnerLanguage)
+    Write-Host "  $($SupportedLanguageNames[$LanguageIndex]) [$OwnerLanguage]" -ForegroundColor Green
     $SetupMode = Read-MenuChoice "BARLAS_SETUP_MODE" "Setup experience" @("complete", "quick") @("Complete - configure the full agent now", "Quick - essential settings with safe defaults") "complete"
     $Port = Read-ValidatedValue "BARLAS_HTTP_PORT" "Local web port" "17840" {
         param($Value)
@@ -260,7 +258,6 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     $OwnerDisplayName = Read-ValidatedValue "OWNER_DISPLAY_NAME" "First owner display name" "Barlas Owner" {
         param($Value) -not [string]::IsNullOrWhiteSpace([string]$Value) -and ([string]$Value).Length -le 80
     } "Enter a display name up to 80 characters."
-    $OwnerLanguage = Read-OwnerLanguage
     $ProviderAliases = @{ "openai account" = "codex_cli"; "openai oauth" = "codex_cli"; "cli oauth" = "codex_cli"; "openai api" = "openai"; "openai codex" = "codex_cli"; "anthropic api" = "anthropic"; "local ollama" = "ollama"; "compatible" = "openai_compatible"; "custom api" = "openai_compatible" }
     $ModelProvider = Read-MenuChoice "MODEL_PROVIDER" "Model access" @("codex_cli", "openai", "anthropic", "ollama", "openai_compatible") @("OpenAI account - browser sign-in, no API key", "OpenAI API - usage-based key", "Anthropic API - usage-based key", "Ollama - local and private", "Compatible API - hosted or self-hosted endpoint") "codex_cli" $ProviderAliases
     if ($ModelProvider -eq "codex_cli") {

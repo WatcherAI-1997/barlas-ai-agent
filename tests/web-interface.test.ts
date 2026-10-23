@@ -26,6 +26,7 @@ describe("Barlas web interface", () => {
       'id="microphone-test-start"',
       'aria-pressed="false"',
       "barlas-ai-agent-github-hero.png",
+      'id="council"',
     ]) expect(html).toContain(marker);
     expect(html).not.toMatch(/<script[^>]*>[^<]+<\/script>/u);
 
@@ -52,6 +53,7 @@ describe("Barlas web interface", () => {
       'consent: "true"',
       '"ArrowUp", "ArrowDown", "Home", "End"',
       "async function syncConversations()",
+      'api("/v1/agents/council")',
       "setInterval(() => { void syncConversations(); }, 1_500)",
     ]) expect(script).toContain(marker);
     expect(script).not.toContain("alert(");

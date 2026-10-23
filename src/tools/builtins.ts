@@ -8,6 +8,7 @@ import { SafeWebReader } from "./safe-web.js";
 import { DocumentReader, DocumentWriter } from "./documents.js";
 import type { ManagedBrowser } from "./managed-browser.js";
 import type { SubagentCoordinator } from "../core/subagents.js";
+import { councilRoleIds, type CouncilRoleId } from "../agents/command.js";
 import type { CodeSandboxClient } from "./code-sandbox.js";
 import type { GitHubConnector } from "../connectors/github.js";
 import type { GoogleConnector } from "../connectors/google.js";
@@ -157,23 +158,24 @@ export function createBuiltinToolRegistry(options: {
   if (options.subagentCoordinator) {
     registry.register({
       name: "agent.delegate",
-      description: "Run up to three independent analytical subagents in parallel, without tools or recursive delegation, and return their bounded findings.",
+      description: "Convene up to five independent members of the internal Barlas Council in parallel. Each has a distinct character and mandate but no tools or recursive delegation. The Chief remains accountable for the final decision.",
       risk: "read",
       inputSchema: z.object({
         objective: z.string().min(1).max(20_000),
-        taskClass: z.enum(["fast", "deep", "private"]).default("deep"),
+        taskClass: z.enum(["fast", "deep", "private"]).optional(),
         tasks: z.array(z.object({
           name: z.string().min(1).max(100),
           instruction: z.string().min(1).max(10_000),
           context: z.string().max(30_000).optional(),
-        }).strict()).min(1).max(3),
+          role: z.enum(councilRoleIds).optional(),
+        }).strict()).min(1).max(5),
       }).strict(),
       execute: async (input, context) => options.subagentCoordinator!.delegate({
         userId: context.userId,
         ...(input as {
           objective: string;
-          taskClass: "fast" | "deep" | "private";
-          tasks: Array<{ name: string; instruction: string; context?: string }>;
+          taskClass?: "fast" | "deep" | "private";
+          tasks: Array<{ name: string; instruction: string; context?: string; role?: CouncilRoleId }>;
         }),
       }),
     });

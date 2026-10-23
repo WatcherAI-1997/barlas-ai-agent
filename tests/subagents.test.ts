@@ -39,7 +39,7 @@ describe("autonomous subagent delegation", () => {
     expect(model.generate).toHaveBeenCalledTimes(3);
   });
 
-  it("rejects duplicate names and more than three tasks", async () => {
+  it("rejects duplicate names and more than five tasks", async () => {
     const coordinator = new SubagentCoordinator({ name: "test", generate: vi.fn() });
     await expect(coordinator.delegate({
       userId: "user-1", objective: "x",
@@ -47,7 +47,30 @@ describe("autonomous subagent delegation", () => {
     })).rejects.toThrow(/unique/u);
     await expect(coordinator.delegate({
       userId: "user-1", objective: "x",
-      tasks: Array.from({ length: 4 }, (_value, index) => ({ name: `task-${index}`, instruction: "work" })),
-    })).rejects.toThrow(/1 to 3/u);
+      tasks: Array.from({ length: 6 }, (_value, index) => ({ name: `task-${index}`, instruction: "work" })),
+    })).rejects.toThrow(/1 to 5/u);
+  });
+
+  it("gives named council members distinct characters and authority boundaries", async () => {
+    const model: ModelProvider = {
+      name: "test",
+      generate: vi.fn(async (request) => ({
+        text: request.messages[0]?.content ?? "",
+        provider: "test",
+        model: "test-model",
+      })),
+    };
+    const result = await new SubagentCoordinator(model).delegate({
+      userId: "owner",
+      objective: "Review a launch",
+      tasks: [
+        { name: "plan", role: "strategist", instruction: "Plan it" },
+        { name: "safety", role: "guardian", instruction: "Check it" },
+      ],
+    });
+    expect(result.results).toEqual([
+      expect.objectContaining({ role: "strategist", text: expect.stringContaining("long-range") }),
+      expect.objectContaining({ role: "guardian", text: expect.stringContaining("consent") }),
+    ]);
   });
 });

@@ -31,6 +31,12 @@ describe("production installer", () => {
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
     const cli = await readFile(join(root, "barlas.ps1"), "utf8");
 
+    expect(installer).toContain("$SupportedLanguageNames");
+    expect(installer).toContain('"Монгол хэл", "Русский", "English"');
+    expect(installer.indexOf("$OwnerLanguage = Read-OwnerLanguage")).toBeLessThan(installer.indexOf('$SetupMode = Read-MenuChoice'));
+    expect(configure).toContain("Select-SetupLanguage");
+    expect(configure).toContain("$SupportedLanguageNames");
+
     for (const required of [
       'BARLAS_INSTALL_MODE = "native"',
       "Protect-SecretFile",

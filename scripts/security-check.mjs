@@ -159,7 +159,7 @@ for (const required of ["latest evaluation", "validateTools", "1 to 5 cases", "w
 }
 const subagents = await readFile("src/core/subagents.ts", "utf8");
 for (const required of [
-  "MAX_SUBAGENTS = 3",
+  "MAX_SUBAGENTS = 5",
   "maxOutputTokens: 2_048",
   "You have no tools, cannot delegate",
   "Promise.all",

@@ -5,6 +5,7 @@ import {
   getLanguage,
   isSupportedLanguage,
   languageInstruction,
+  setupLanguageInstruction,
   supportedLanguages,
 } from "../src/i18n/languages.js";
 
@@ -16,6 +17,7 @@ describe("Barlas AI Agent languages", () => {
       "tr", "az", "tk", "uz", "ug", "kk", "ky", "kaa", "tt", "ba", "crh", "cv",
       "sah", "tyv", "alt", "kjh", "cjs", "kum", "krc", "nog", "mn", "ru", "en",
     ] as const) expect(codes.has(code)).toBe(true);
+    expect(supportedLanguages).toHaveLength(38);
   });
 
   it("preserves writing direction and creates an agent instruction", () => {
@@ -24,6 +26,8 @@ describe("Barlas AI Agent languages", () => {
     expect(languageInstruction("kk")).toContain("Kazakh");
     expect(languageInstruction("mn")).toContain("Mongolian");
     expect(languageInstruction("unknown")).toBeNull();
+    expect(setupLanguageInstruction("ug")).toContain("all subsequent onboarding");
+    expect(setupLanguageInstruction("unknown")).toBeNull();
     expect(isSupportedLanguage("uz")).toBe(true);
     expect(isSupportedLanguage("de")).toBe(false);
   });

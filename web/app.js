@@ -605,6 +605,10 @@ async function loadAgentOptions() {
 async function loadAgents() {
   await loadProjectOptions();
   await loadAgentOptions();
+  const council = await api("/v1/agents/council");
+  renderList("#council", [council.chief, ...council.members], (member, index) => index === 0
+    ? card(member.name, "Глава · единая ответственность", member.mandate)
+    : card(member.name, `${member.id} · ${member.taskClass}`, `${member.character}\n${member.mandate}\nГраница: ${member.boundaries}`));
   renderList("#agents", state.agents, (agent) => {
     const project = state.projects.find((item) => item.id === agent.projectId);
     const node = card(agent.name, `${agent.slug} · ${agent.style} · ${agent.defaultTaskClass}`, project ? `Workspace: ${project.name}` : "Без отдельного workspace");

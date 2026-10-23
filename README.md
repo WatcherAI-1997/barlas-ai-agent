@@ -50,7 +50,7 @@ preserve project state.
 | 🧠 | **Persistent intelligence** | Conversations, explicit memory, semantic recall, user language, and project context survive across sessions. |
 | ⚙️ | **Autonomous execution** | Durable multi-step runs, background workers, retries, recovery, cancellation, schedules, and live progress. |
 | 🧩 | **Skills that evolve safely** | Versioned skills, acceptance tests, activation gates, strict tool permissions, and rollback. |
-| 🕸️ | **Parallel subagents** | The main agent can delegate bounded analytical work to isolated, non-recursive subagents. |
+| 🕸️ | **Barlas Command** | One accountable Chief delegates bounded analysis to a Council of distinct strategists, researchers, executors, critics, keepers, guardians, and dispatchers. |
 | 🖥️ | **Real tools** | Files, documents, web research, JavaScript browser, offline Python/Node/Git/npm sandbox, MCP, and connected services. |
 | 👁️ | **Multimodal understanding** | Images, scanned PDFs, audio transcription, speech generation, and Unicode document workflows. |
 | 🎙️ | **Telegram voice mode** | `/voice` and `/call` return an agent answer as a bounded Telegram voice message through the official Bot API. |
@@ -79,6 +79,10 @@ Every autonomous run is persisted before the first model call. A restart,
 expired worker lease, Telegram approval, or temporary provider failure does not
 erase the task or silently convert an unfinished action into success.
 
+The owner sits above Barlas Command. The Chief is the only accountable voice;
+Council members have distinct characters and mandates, but no direct tools or
+recursive delegation. Real actions stay in the Chief's approval-gated loop.
+
 ## 🚀 Quick install
 
 ### Windows 10/11
@@ -88,6 +92,11 @@ Open PowerShell and run one command:
 ```powershell
 irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-windows.ps1 | iex
 ```
+
+The first personal-setup decision is language. The installer presents the full
+38-language catalogue (35 Turkic languages plus Mongolian, Russian, and
+English), stores the selection, and carries it into the account and agent
+behavior.
 
 No GitHub login, Git, Node.js, Docker, WSL, domain, or Bash shell is required.
 The bootstrap installs a private portable Node.js runtime, an embedded
