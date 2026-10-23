@@ -28,8 +28,10 @@ import type { GoogleConnector } from "./connectors/google.js";
 import { connectorProviders, type ConnectorService } from "./connectors/vault.js";
 import type { SemanticMemory } from "./memory/semantic.js";
 import {
+  getSetupPhrasePack,
   isSupportedLanguage,
   languageInstruction,
+  setupTranslationStatus,
   supportedLanguages,
   type SupportedLanguageCode,
 } from "./i18n/languages.js";
@@ -607,7 +609,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     }
   });
 
-  app.get("/languages", async () => ({ languages: supportedLanguages }));
+  app.get("/languages", async () => ({
+    languages: supportedLanguages.map((language) => ({
+      ...language,
+      setupTranslationStatus: setupTranslationStatus(language.code),
+      setupPhrases: getSetupPhrasePack(language.code),
+    })),
+  }));
 
   app.post("/nodes/pair", async (request, reply) => {
     if (!dependencies.deviceNodes) return reply.notFound();

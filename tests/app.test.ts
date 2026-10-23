@@ -223,6 +223,14 @@ describe("Barlas AI Agent API", () => {
     const catalogue = await app.inject({ method: "GET", url: "/languages" });
     expect(catalogue.statusCode).toBe(200);
     expect(catalogue.json().languages.length).toBeGreaterThanOrEqual(35);
+    expect(catalogue.json().languages.find((language: { code: string }) => language.code === "uz")).toMatchObject({
+      setupTranslationStatus: "verified",
+      setupPhrases: { title: "Tilni tanlang" },
+    });
+    expect(catalogue.json().languages.find((language: { code: string }) => language.code === "kk")).toMatchObject({
+      setupTranslationStatus: "fallback",
+      setupPhrases: { title: "Choose your language" },
+    });
 
     const response = await app.inject({
       method: "PATCH",

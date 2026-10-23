@@ -3,10 +3,15 @@ import { readFileSync } from "node:fs";
 
 import {
   getLanguage,
+  getSetupPhrasePack,
+  getSetupLanguage,
   isSupportedLanguage,
+  isVerifiedSetupLanguage,
   languageInstruction,
+  setupTranslationStatus,
   setupLanguageInstruction,
   supportedLanguages,
+  verifiedSetupLanguages,
 } from "../src/i18n/languages.js";
 
 describe("Barlas AI Agent languages", () => {
@@ -30,6 +35,19 @@ describe("Barlas AI Agent languages", () => {
     expect(setupLanguageInstruction("unknown")).toBeNull();
     expect(isSupportedLanguage("uz")).toBe(true);
     expect(isSupportedLanguage("de")).toBe(false);
+  });
+
+  it("reports installer translation coverage without disguising fallbacks", () => {
+    expect(verifiedSetupLanguages).toEqual(["en", "ru", "uz"]);
+    expect(isVerifiedSetupLanguage("ru")).toBe(true);
+    expect(isVerifiedSetupLanguage("kk")).toBe(false);
+    expect(getSetupLanguage("uz")).toBe("uz");
+    expect(getSetupLanguage("kk")).toBe("en");
+    expect(getSetupPhrasePack("uz").title).toBe("Tilni tanlang");
+    expect(getSetupPhrasePack("kk").title).toBe("Choose your language");
+    expect(setupTranslationStatus("en")).toBe("verified");
+    expect(setupTranslationStatus("tr")).toBe("fallback");
+    expect(setupTranslationStatus("de")).toBe("unsupported");
   });
 
   it("publishes a GitHub product description for every selectable language", () => {

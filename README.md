@@ -96,7 +96,10 @@ irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/instal
 The first personal-setup decision is language. The installer presents the full
 38-language catalogue (35 Turkic languages plus Mongolian, Russian, and
 English), stores the selection, and carries it into the account and agent
-behavior.
+behavior. Setup interface phrase packs are verified for English, Russian, and
+Uzbek. Other selections continue with a clearly marked English setup fallback
+until their community-reviewed phrase packs are available; the agent response
+language still follows the selected language.
 
 No GitHub login, Git, Node.js, Docker, WSL, domain, or Bash shell is required.
 The bootstrap installs a private portable Node.js runtime, an embedded

@@ -260,6 +260,9 @@ into a browser through a URL fragment that is stripped immediately.
 `GET /languages` returns the supported language catalogue without requiring a
 session. It includes the broad modern Turkic language family, Mongolian, plus
 Russian and English fallbacks, along with native names and writing direction.
+Each entry also reports `setupTranslationStatus` (`verified` or `fallback`) and
+the exact `setupPhrases` shown by the first-login language screen. A fallback is
+always labelled in the UI and never presented as a verified translation.
 
 Authenticated users set or change their preference with
 `PATCH /v1/me/preferences` and `{ "languageCode": "uz" }`. The preference is

@@ -112,6 +112,21 @@ function fillLanguageSelect(selector, selected, includeUnset = false) {
   if (selected) select.value = selected;
 }
 
+function applySetupLanguage(code) {
+  const language = state.languages.find((item) => item.code === code) || state.languages.find((item) => item.code === "en");
+  if (!language) return;
+  const phrases = language.setupPhrases;
+  const fallback = language.setupTranslationStatus !== "verified";
+  $("#language-setup-title").textContent = phrases.title;
+  $("#language-setup-description").textContent = phrases.description;
+  $("#language-setup-label").textContent = phrases.languageLabel;
+  $("#language-setup-submit").textContent = phrases.continueLabel;
+  $("#language-setup-fallback").textContent = fallback ? phrases.fallbackNotice : "";
+  $("#language-setup-fallback").classList.toggle("hidden", !fallback);
+  document.documentElement.lang = fallback ? "en" : language.code;
+  document.documentElement.dir = fallback ? "ltr" : language.direction;
+}
+
 function applyLanguage(account) {
   const language = state.languages.find((item) => item.code === account?.languageCode);
   if (!language) return;
@@ -127,7 +142,9 @@ async function showApp(account) {
   if (!account.languageConfigured) {
     $("#app-view").classList.add("hidden");
     $("#language-view").classList.remove("hidden");
-    fillLanguageSelect("#language-setup-select", localStorage.getItem("barlasLanguage") || "");
+    const storedLanguage = localStorage.getItem("barlasLanguage") || "en";
+    fillLanguageSelect("#language-setup-select", storedLanguage);
+    applySetupLanguage($("#language-setup-select").value);
     return;
   }
   $("#language-view").classList.add("hidden");
@@ -209,6 +226,11 @@ $("#language-setup-form").addEventListener("submit", async (event) => {
     });
     await showApp(data.account);
   } catch (error) { $("#language-setup-error").textContent = error.message; }
+});
+
+$("#language-setup-select").addEventListener("change", (event) => {
+  localStorage.setItem("barlasLanguage", event.target.value);
+  applySetupLanguage(event.target.value);
 });
 
 $("#logout").addEventListener("click", async () => {
