@@ -16,6 +16,7 @@ import type { McpConnector } from "../connectors/mcp.js";
 import { speechVoices, type MediaService } from "./media.js";
 import type { ProjectService } from "../projects/service.js";
 import type { DeviceNodeService } from "../nodes/service.js";
+import { commitmentStatuses, type CommitmentStatus, type ContinuityService } from "../continuity/service.js";
 
 export function createBuiltinToolRegistry(options: {
   workspaceRoot?: string;
@@ -29,6 +30,7 @@ export function createBuiltinToolRegistry(options: {
   mediaService?: Pick<MediaService, "analyzeImage" | "analyzePdf" | "transcribeAudio" | "createSpeech">;
   projectService?: Pick<ProjectService, "detail" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "snapshot" | "restore">;
   deviceNodes?: Pick<DeviceNodeService, "notify">;
+  continuity?: Pick<ContinuityService, "create" | "list" | "update">;
 } = {}): ToolRegistry {
   const registry = new ToolRegistry();
 
@@ -39,6 +41,52 @@ export function createBuiltinToolRegistry(options: {
     inputSchema: z.object({}).strict(),
     execute: async () => ({ now: new Date().toISOString() }),
   });
+
+  if (options.continuity) {
+    registry.register({
+      name: "continuity.commitments.list",
+      description: "List the owner's unfinished, completed, or cancelled commitments. Use before answering what remains, what is overdue, or whether a promise was fulfilled.",
+      risk: "read",
+      inputSchema: z.object({
+        statuses: z.array(z.enum(commitmentStatuses)).min(1).max(commitmentStatuses.length).default(["open", "in_progress", "waiting"]),
+        limit: z.number().int().min(1).max(100).default(50),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { statuses: CommitmentStatus[]; limit: number };
+        return options.continuity!.list(context.userId, value.statuses, value.limit);
+      },
+    });
+    registry.register({
+      name: "continuity.commitments.create",
+      description: "Record a concrete promise made by Barlas so it cannot be forgotten. Create it before telling the owner that future work will be done.",
+      risk: "write",
+      inputSchema: z.object({
+        title: z.string().min(1).max(500),
+        details: z.string().max(10_000).default(""),
+        dueAt: z.iso.datetime({ offset: true }).optional(),
+        sourceConversationId: z.string().uuid().optional(),
+      }).strict(),
+      execute: async (input, context) => options.continuity!.create(context.userId, input as {
+        title: string; details?: string; dueAt?: string; sourceConversationId?: string;
+      }),
+    });
+    registry.register({
+      name: "continuity.commitments.update",
+      description: "Change a commitment's state. Completion is rejected unless concrete evidence or a verifiable result is recorded.",
+      risk: "write",
+      inputSchema: z.object({
+        id: z.string().uuid(),
+        status: z.enum(commitmentStatuses),
+        evidence: z.string().max(10_000).optional(),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { id: string; status: CommitmentStatus; evidence?: string };
+        const result = await options.continuity!.update(context.userId, value.id, value.status, value.evidence);
+        if (!result) throw new Error("Commitment not found");
+        return result;
+      },
+    });
+  }
 
   registry.register({
     name: "text.statistics",

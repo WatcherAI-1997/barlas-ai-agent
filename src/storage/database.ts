@@ -39,8 +39,9 @@ import type { AgentSchedule } from "../schedules/types.js";
 import type { ArtifactVersion, GoalStatus, PlanStepStatus, Project, ProjectCheckpoint, ProjectGoal, ProjectPlanStep, ProjectResource, ProjectResourceType, ProjectStore } from "../projects/service.js";
 import type { DeviceCommand, DeviceNode, DeviceNodeStore, NodePlatform } from "../nodes/service.js";
 import type { AgentProfile, AgentProfileStore } from "../agents/profiles.js";
+import type { Commitment, CommitmentStatus, CommitmentStore } from "../continuity/service.js";
 
-export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore, DeviceNodeStore, AgentProfileStore {
+export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRunStore, TelegramLinkStore, ConnectorStore, SemanticMemoryStore, OrganizationStore, SkillStore, ProjectStore, DeviceNodeStore, AgentProfileStore, CommitmentStore {
   private readonly pool: Pool;
 
   constructor(connectionString: string) {
@@ -53,6 +54,37 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async ping(): Promise<void> {
     await this.pool.query("select 1");
+  }
+
+  async createCommitment(input: { userId: string; title: string; details: string; dueAt?: Date; sourceConversationId?: string }): Promise<Commitment> {
+    const result = await this.pool.query<CommitmentRow>(
+      `insert into commitments (user_id, title, details, due_at, source_conversation_id)
+       values ($1, $2, $3, $4, $5)
+       returning id, user_id, title, details, status, due_at, evidence, source_conversation_id, created_at, updated_at`,
+      [input.userId, input.title, input.details, input.dueAt ?? null, input.sourceConversationId ?? null],
+    );
+    return mapCommitment(result.rows[0]!);
+  }
+
+  async listCommitments(userId: string, statuses: CommitmentStatus[], limit: number): Promise<Commitment[]> {
+    if (!statuses.length) return [];
+    const result = await this.pool.query<CommitmentRow>(
+      `select id, user_id, title, details, status, due_at, evidence, source_conversation_id, created_at, updated_at
+       from commitments where user_id = $1 and status = any($2::text[])
+       order by due_at asc nulls last, created_at asc limit $3`,
+      [userId, statuses, limit],
+    );
+    return result.rows.map(mapCommitment);
+  }
+
+  async updateCommitment(input: { userId: string; id: string; status: CommitmentStatus; evidence?: string }): Promise<Commitment | null> {
+    const result = await this.pool.query<CommitmentRow>(
+      `update commitments set status = $3, evidence = coalesce($4, evidence), updated_at = now()
+       where user_id = $1 and id = $2
+       returning id, user_id, title, details, status, due_at, evidence, source_conversation_id, created_at, updated_at`,
+      [input.userId, input.id, input.status, input.evidence ?? null],
+    );
+    return result.rows[0] ? mapCommitment(result.rows[0]) : null;
   }
 
   async createAgentProfile(input: Omit<AgentProfile, "id" | "createdAt" | "updatedAt">): Promise<AgentProfile> {
@@ -2077,6 +2109,7 @@ interface SkillEvaluationRow {
 }
 
 interface ProjectRow { id: string; user_id: string; name: string; description: string; status: Project["status"]; created_at: Date; updated_at: Date }
+interface CommitmentRow { id: string; user_id: string; title: string; details: string; status: CommitmentStatus; due_at: Date | null; evidence: string | null; source_conversation_id: string | null; created_at: Date; updated_at: Date }
 interface AgentProfileRow { id: string; user_id: string; slug: string; name: string; style: AgentProfile["style"]; instructions: string; default_task_class: AgentProfile["defaultTaskClass"]; project_id: string | null; created_at: Date; updated_at: Date }
 interface ProjectResourceRow { project_id: string; resource_type: ProjectResourceType; resource_id: string; label: string; created_at: Date }
 interface ArtifactRow { id: string; project_id: string; path: string; version: number; sha256: string; size_bytes: number; created_at: Date }
@@ -2088,6 +2121,16 @@ interface DeviceCommandRow { id: string; node_id: string; kind: "notify"; payloa
 
 function mapProject(row: ProjectRow): Project {
   return { id: row.id, userId: row.user_id, name: row.name, description: row.description, status: row.status, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
+}
+
+function mapCommitment(row: CommitmentRow): Commitment {
+  return {
+    id: row.id, userId: row.user_id, title: row.title, details: row.details, status: row.status,
+    ...(row.due_at ? { dueAt: row.due_at.toISOString() } : {}),
+    ...(row.evidence ? { evidence: row.evidence } : {}),
+    ...(row.source_conversation_id ? { sourceConversationId: row.source_conversation_id } : {}),
+    createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
+  };
 }
 
 function mapAgentProfile(row: AgentProfileRow): AgentProfile {

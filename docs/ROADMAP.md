@@ -13,6 +13,9 @@
   native bot-initiated calls are not supported by Telegram)*
 - One-time Telegram-to-account linking and shared identity. *(implemented)*
 - Persistent conversations and explicit long-term memory. *(implemented with optional semantic embeddings and lexical fallback)*
+- Continuity ledger for Barlas's own promises, including deadlines, overdue
+  context injection, approval-gated changes, and evidence-required completion.
+  *(implemented foundation; automatic outcome verification and reminder policy pending)*
 - Web research, files, documents, terminal tools, and task execution. *(SearXNG search, SSRF-protected page reader, isolated Playwright interaction, Markdown/TXT/CSV/DOCX creation, PDF/DOCX extraction, isolated files, restricted inspection, and approval-gated offline Python/Node/Git/npm sandbox implemented)*
 - Model switching and routing. *(fast/deep/private foundation implemented)*
 - Approval gates, audit trail, and usage limits. *(implemented foundation)*

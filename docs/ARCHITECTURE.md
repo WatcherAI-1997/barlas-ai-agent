@@ -93,6 +93,11 @@ autonomy.
   operational dashboard all reuse the same account ownership checks. Job state
   transitions are conditional SQL updates, preventing cancellation of an
   already running task or retry of a task that has not failed.
+- Barlas commitments are durable owner-scoped records, separate from informal
+  memory and scheduled jobs. Every active conversation and scheduled run sees
+  unfinished commitments; overdue items are marked in model context. Creating
+  or changing one is approval-gated, and both service validation and a database
+  constraint prohibit completion without concrete evidence.
 - Token counts are captured from provider responses. Cost is an estimate based
   only on explicitly configured model rates and is stored as integer micro-USD.
 - Deployment-wide Prometheus text metrics reuse the bounded dashboard counters,

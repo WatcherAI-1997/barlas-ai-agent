@@ -44,6 +44,7 @@ import { createModelProvider } from "./providers/factory.js";
 import { runRuntimeShutdownHook } from "./runtime-lifecycle.js";
 import { AgentProfileService } from "./agents/profiles.js";
 import { RuntimeControl } from "./system/runtime-control.js";
+import { ContinuityService } from "./continuity/service.js";
 
 const config = loadConfig();
 const runtimeControl = new RuntimeControl();
@@ -131,6 +132,7 @@ const extensionCatalog = createBuiltinExtensionCatalog({
 });
 const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
 const projects = new ProjectService(database, workspace);
+const continuity = new ContinuityService(database);
 const agentProfiles = new AgentProfileService(database);
 const mediaService = openAIServiceApiKey ? new MediaService(
   workspace,
@@ -158,6 +160,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   ...(mediaService ? { mediaService } : {}),
   projectService: projects,
   deviceNodes,
+  continuity,
 }), database, governance);
 const skillManager = new SkillManager(
   database,
@@ -222,7 +225,10 @@ const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
   contextForSchedule: async (schedule) => {
     const account = await authService.getAccount(schedule.userId);
     const language = languageInstruction(account?.languageCode);
-    const memories = await memory.recall(schedule.userId, schedule.objective, 5);
+    const [memories, commitments] = await Promise.all([
+      memory.recall(schedule.userId, schedule.objective, 5),
+      continuity.context(schedule.userId),
+    ]);
     return [
       { role: "system" as const, content: [
         `You are ${config.AGENT_NAME}, the user's Barlas AI agent.`,
@@ -235,6 +241,7 @@ const scheduleWorker = new ScheduleWorker(database, agentRuntime, {
       ].filter(Boolean).join("\n") },
       ...(language ? [{ role: "system" as const, content: language }] : []),
       { role: "system" as const, content: chiefBarlasInstruction() },
+      ...(commitments ? [{ role: "system" as const, content: commitments }] : []),
       ...(memories.length ? [{ role: "system" as const, content: [
         "Use these Barlas AI Agent user memories only when relevant:",
         ...memories.map((item) => `- [${item.category}] ${item.content}`),
@@ -359,6 +366,7 @@ const app = await buildApp({
   workspace,
   maxWorkspaceFileBytes: config.MAX_WORKSPACE_FILE_BYTES,
   projects,
+  continuity,
   agentProfiles,
   schedules,
   ...(connectors && githubConnector && googleConnector ? { connectors, githubConnector, googleConnector } : {}),

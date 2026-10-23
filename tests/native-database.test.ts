@@ -23,7 +23,7 @@ describe("native embedded database", () => {
       const result = await database.query<{ count: string }>("select count(*)::text as count from information_schema.tables where table_schema = 'public'");
       expect(Number(result.rows[0]?.count)).toBeGreaterThan(20);
       const migrations = await database.query<{ count: string }>("select count(*)::text as count from _barlas_native_migrations");
-      expect(Number(migrations.rows[0]?.count)).toBe(22);
+      expect(Number(migrations.rows[0]?.count)).toBe(23);
     } finally { await database.close(); }
   });
 
