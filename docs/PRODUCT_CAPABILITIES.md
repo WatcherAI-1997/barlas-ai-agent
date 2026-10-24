@@ -14,7 +14,7 @@ planned functionality as complete.
 | Extension discovery | Typed capability, risk and configuration catalog | Implemented |
 | Continuous terminal agent | Persistent conversations, sessions and slash commands | Implemented |
 | Autonomous tool loop | Durable bounded runs, recovery, cancellation and approval continuation | Implemented |
-| Skills | 63 built-in workflows: five Barlas-native plus safe adaptations representing all 58 workflows in the reviewed Nous Research catalog; versioned custom skills remain supported | Implemented |
+| Skills | 63 built-in workflows with runtime `ready`/`degraded`/`unavailable` assessment, hard capability gates, missing-tool disclosure, and versioned custom skills | Implemented |
 | Third-party skill safety | Ed25519 packages, explicit publisher trust, evaluation gate and rollback | Implemented |
 | skills.sh / Agent Skills compatibility | Reviewed `SKILL.md` or directory import with deterministic package digest, bounded text references, explicit executable/asset exclusions, zero tools by default and inactive-candidate gate | Implemented |
 | Local models | Ollama chat and tool calls without an API key | Implemented |

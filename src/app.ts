@@ -48,6 +48,7 @@ import { agentJobSchema } from "./jobs/agent-handler.js";
 import { workflowJobSchema } from "./jobs/workflow-handler.js";
 import type { SkillRegistry } from "./skills/registry.js";
 import type { SkillManager } from "./skills/manager.js";
+import { assessSkillCapabilities, runtimeCapabilities } from "./skills/capabilities.js";
 import { parseSignedSkillPackageValue, verifySkillPackage } from "./skills/package.js";
 import type { AgentStore } from "./storage/types.js";
 import type { ToolExecutor } from "./tools/executor.js";
@@ -563,6 +564,12 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
   const seenWhatsAppMessages = new Set<string>();
   const rawWhatsAppBodies = new WeakMap<FastifyRequest, Buffer>();
   const maxWorkspaceFileBytes = dependencies.maxWorkspaceFileBytes ?? DEFAULT_MAX_WORKSPACE_FILE_BYTES;
+  const currentCapabilities = () => dependencies.toolExecutor
+    ? runtimeCapabilities(
+        dependencies.toolExecutor.listTools().map((tool) => tool.name),
+        dependencies.extensionCatalog?.list() ?? [],
+      )
+    : undefined;
   await app.register(sensible);
   await app.register(multipart, {
     limits: { fileSize: maxWorkspaceFileBytes + 1, files: 1, fields: 0, parts: 1 },
@@ -1748,11 +1755,24 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       if (!dependencies.skillRegistry.isActive(skill.id, skill.version)) {
         return reply.badRequest("Only an active evaluated skill can be used");
       }
+      const capabilities = currentCapabilities();
+      const capabilityProfile = capabilities ? assessSkillCapabilities(skill, capabilities) : undefined;
+      if (capabilityProfile?.readiness === "unavailable") {
+        const missing = [...capabilityProfile.missingCapabilities, ...capabilityProfile.missingTools];
+        return reply.badRequest(`Skill is unavailable on this installation: ${missing.join(", ")}`);
+      }
       const skillTools = new Set(skill.allowedTools);
       if (allowedTools?.some((tool) => !skillTools.has(tool))) {
         return reply.badRequest("Requested tools exceed the selected skill permissions");
       }
-      allowedTools = allowedTools ?? skill.allowedTools;
+      if (allowedTools && capabilityProfile) {
+        const available = new Set(capabilityProfile.availableTools);
+        const unavailable = allowedTools.filter((tool) => !available.has(tool));
+        if (unavailable.length > 0) {
+          return reply.badRequest(`Requested tools are unavailable on this installation: ${unavailable.join(", ")}`);
+        }
+      }
+      allowedTools = allowedTools ?? (capabilityProfile?.availableTools ?? skill.allowedTools);
       selectedSkill = { id: skill.id, version: skill.version };
       skillContext = [{
         role: "system",
@@ -1760,6 +1780,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
           `Apply Barlas AI Agent skill ${skill.id}@${skill.version}.`,
           skill.instructions,
           `This skill permits only these tools: ${skill.allowedTools.join(", ") || "none"}.`,
+          ...(capabilityProfile?.readiness === "degraded"
+            ? [`Unavailable optional tools: ${capabilityProfile.missingTools.join(", ")}. Do not claim actions that require them.`]
+            : []),
         ].join(" "),
       }];
     }
@@ -2009,7 +2032,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
 
   app.get("/v1/skills", async (_request, reply) => {
     if (!dependencies.skillRegistry) return reply.notFound();
-    return { skills: dependencies.skillRegistry.list() };
+    const capabilities = currentCapabilities();
+    return {
+      skills: dependencies.skillRegistry.list().map((skill) => ({
+        ...skill,
+        ...(capabilities ? assessSkillCapabilities(skill, capabilities) : {}),
+      })),
+    };
   });
 
   app.post("/v1/skills", async (request, reply) => {

@@ -268,7 +268,7 @@ async function installSkillFromCatalog(
 
 async function skills(ctx: CliContext): Promise<void> {
   const result = await ctx.api.request<{ skills: JsonObject[] }>("/v1/skills");
-  output.write(`${renderRows(result.skills, ["id", "version", "name", "active", "allowedTools"])}\n`);
+  output.write(`${renderRows(result.skills, ["id", "version", "active", "readiness", "missingCapabilities", "missingTools"])}\n`);
 }
 
 function option(args: string[], name: string): string | undefined {

@@ -665,6 +665,97 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("reports runtime skill readiness and rejects unavailable capabilities", async () => {
+    const deps = dependencies();
+    const skillRegistry = new SkillRegistry();
+    skillRegistry.register({
+      id: "development.local-runner",
+      version: "1.0.0",
+      description: "Local runner",
+      instructions: "Use the configured runner only.",
+      allowedTools: ["files.read", "code.run"],
+      requiredCapabilities: ["runner.local"],
+    });
+    skillRegistry.register({
+      id: "research.degraded",
+      version: "1.0.0",
+      description: "Degraded research",
+      instructions: "Use available evidence.",
+      allowedTools: ["files.read", "code.run"],
+    });
+    const agentLoop = { run: vi.fn(async () => ({
+      status: "completed" as const,
+      text: "Done",
+      steps: 1,
+      toolExecutions: 0,
+      approvalIds: [],
+      result: { text: "Done", provider: "test", model: "test-model" },
+    })) };
+    const toolExecutor = {
+      listTools: vi.fn(() => [{ name: "files.read", description: "Read", risk: "read" as const }]),
+      execute: vi.fn(),
+      decide: vi.fn(),
+    };
+    const app = await buildApp({ apiToken, ...deps, agentLoop, skillRegistry, toolExecutor });
+    const headers = { authorization: `Bearer ${apiToken}` };
+
+    const listed = await app.inject({ method: "GET", url: "/v1/skills", headers });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().skills.find((item: { id: string }) => item.id === "development.local-runner")).toMatchObject({
+      readiness: "unavailable",
+      usable: false,
+      availableTools: ["files.read"],
+      missingTools: ["code.run"],
+      missingCapabilities: ["runner.local"],
+    });
+
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/v1/agent/run",
+      headers,
+      payload: {
+        userId: "user-1",
+        messages: [{ role: "user", content: "Run it" }],
+        skillId: "development.local-runner",
+      },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().message).toContain("runner.local");
+    expect(agentLoop.run).not.toHaveBeenCalled();
+
+    const degraded = await app.inject({
+      method: "POST",
+      url: "/v1/agent/run",
+      headers,
+      payload: {
+        userId: "user-1",
+        messages: [{ role: "user", content: "Research it" }],
+        skillId: "research.degraded",
+      },
+    });
+    expect(degraded.statusCode).toBe(200);
+    expect(agentLoop.run).toHaveBeenCalledWith(expect.objectContaining({
+      allowedTools: ["files.read"],
+      messages: expect.arrayContaining([
+        expect.objectContaining({ role: "system", content: expect.stringContaining("Unavailable optional tools: code.run") }),
+      ]),
+    }));
+    const unavailableTool = await app.inject({
+      method: "POST",
+      url: "/v1/agent/run",
+      headers,
+      payload: {
+        userId: "user-1",
+        messages: [{ role: "user", content: "Run code" }],
+        skillId: "research.degraded",
+        allowedTools: ["code.run"],
+      },
+    });
+    expect(unavailableTool.statusCode).toBe(400);
+    expect(unavailableTool.json().message).toContain("code.run");
+    await app.close();
+  });
+
   it("exposes the owner skill candidate, evaluation, and activation lifecycle", async () => {
     const deps = dependencies();
     const installed = {

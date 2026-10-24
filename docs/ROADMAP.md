@@ -40,6 +40,10 @@
   owner activation, strict two-signal trusted-monitor threshold, expiring
   authority, runtime context, audit, CLI, and cabinet controls implemented)*
 - Versioned skills with evaluation and rollback. *(persistent owner-installed candidates, Ed25519-signed third-party packages with explicit fingerprint trust, bounded automated acceptance evaluation, activation gate, exact selection, tool-permission enforcement, and rollback implemented)*
+- Runtime skill capability resolution. *(configured tools and extensions are
+  reconciled into ready/degraded/unavailable states; unavailable workflows are
+  blocked and degraded workflows receive only real tools with missing-action
+  disclosure)*
 - Signed skill catalog. *(expiring Ed25519 index, HTTPS-only package URLs,
   SHA-256 byte pinning, independent publisher trust, publisher/version
   revocation, duplicate rejection, and cached sequence rollback detection

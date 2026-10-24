@@ -6,6 +6,8 @@ export interface SkillDefinition {
   description: string;
   instructions: string;
   allowedTools: string[];
+  /** Runtime capabilities that must exist before this workflow may be selected. */
+  requiredCapabilities?: string[];
 }
 
 export type SkillMetadata = Omit<SkillDefinition, "instructions"> & { active: boolean };
@@ -23,7 +25,15 @@ export class SkillRegistry {
     }
     const versions = this.skills.get(skill.id) ?? new Map<string, SkillDefinition>();
     if (versions.has(skill.version)) throw new Error(`Skill ${skill.id}@${skill.version} is already registered`);
-    versions.set(skill.version, Object.freeze({ ...skill, allowedTools: [...skill.allowedTools] }));
+    const requiredCapabilities = [...new Set(skill.requiredCapabilities ?? [])].sort();
+    if (requiredCapabilities.some((capability) => !/^[a-z][a-z0-9._-]{2,127}$/u.test(capability))) {
+      throw new Error(`Invalid required capability for ${skill.id}`);
+    }
+    versions.set(skill.version, Object.freeze({
+      ...skill,
+      allowedTools: [...new Set(skill.allowedTools)],
+      ...(requiredCapabilities.length > 0 ? { requiredCapabilities } : {}),
+    }));
     this.skills.set(skill.id, versions);
     if (activate) this.activeVersions.set(skill.id, skill.version);
   }

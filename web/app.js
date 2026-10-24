@@ -193,10 +193,13 @@ async function loadVoiceAvailability() {
 async function loadSkillOptions() {
   const data = await api("/v1/skills");
   state.skills = data.skills;
-  const active = state.skills.filter((skill) => skill.active);
+  const active = state.skills.filter((skill) => skill.active && skill.usable !== false);
   $("#skill-select").replaceChildren(
     new Option("Без специального навыка", ""),
-    ...active.map((skill) => new Option(`${skill.id} · v${skill.version}`, `${skill.id}@${skill.version}`)),
+    ...active.map((skill) => new Option(
+      `${skill.id} · v${skill.version}${skill.readiness === "degraded" ? " · ограничен" : ""}`,
+      `${skill.id}@${skill.version}`,
+    )),
   );
 }
 
@@ -518,7 +521,12 @@ async function loadPanel(name) {
   if (name === "traces") renderList("#traces", (await api(`/v1/traces?userId=${encodeURIComponent(state.account.id)}`)).traces, (item) => card(item.operation, `${item.status} · ${new Date(item.createdAt).toLocaleString()}`, item.traceId));
   if (name === "skills") {
     await loadSkillOptions();
-    renderList("#skills", state.skills, (item) => card(item.id, `v${item.version} · ${item.active ? "active" : "candidate"} · ${item.allowedTools.join(", ")}`, item.description));
+    renderList("#skills", state.skills, (item) => {
+      const missing = [...(item.missingCapabilities || []), ...(item.missingTools || [])];
+      const status = item.readiness || (item.active ? "active" : "candidate");
+      const details = missing.length ? `${item.description}\nНе хватает: ${missing.join(", ")}` : item.description;
+      return card(item.id, `v${item.version} · ${item.active ? "active" : "candidate"} · ${status}`, details);
+    });
   }
   if (name === "organizations") await loadOrganizations();
   if (name === "connectors") await loadConnectors();

@@ -73,7 +73,7 @@ server-side; each plaintext token is shown only once.
 - `POST /nodes/heartbeat` — update node presence and advertised capabilities with the node token.
 - `GET /nodes/commands` — atomically claim a bounded batch of queued commands with the node token.
 - `POST /nodes/commands/:id/result` — acknowledge success or failure. The initial protocol only accepts `notify` commands.
-- `GET /v1/skills` — list installed skill IDs, versions, descriptions, activation state, and tool permissions.
+- `GET /v1/skills` — list installed skill IDs, versions, descriptions, activation state, tool permissions, runtime readiness (`ready`, `degraded`, or `unavailable`), available/missing tools, and missing hard capabilities.
 - `POST /v1/skills` — owner-only installation of an inactive candidate skill version; optional audited `agentskills.io` provenance records an exact SHA-256 without granting trust.
 - `POST /v1/skills/packages` — owner-only installation of an Ed25519-signed package after exact publisher-fingerprint confirmation; signature and trust binding are rechecked server-side and written to audit metadata.
 - `POST /v1/skills/:id/:version/evaluate` — run 1–5 bounded, tool-free acceptance cases.

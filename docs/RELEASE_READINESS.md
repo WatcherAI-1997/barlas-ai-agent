@@ -1,9 +1,9 @@
 # Release readiness
 
-## Verified on 2026-10-24
+## Verified on 2026-10-25
 
 - TypeScript typecheck and production build pass.
-- 234 automated tests across 64 files pass.
+- 241 automated tests across 65 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -68,6 +68,9 @@
   identities, signed publisher/version revocation, stale-sequence rollback
   detection, HTTPS-only package locations, bounded downloads, exact SHA-256
   byte pinning, independent publisher trust, and package identity binding.
+- Skill capability tests verify configured-extension discovery, complete,
+  degraded, and unavailable states, hard capability blocking, available-tool
+  narrowing, API disclosure, and explicit no-claim context for missing actions.
 - A repository-wide branding regression test keeps all tracked product files
   focused on the standalone Barlas identity.
 - An isolated live load smoke completed 1,000 `/health` and `/ready` requests at

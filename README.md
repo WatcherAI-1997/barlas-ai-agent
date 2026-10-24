@@ -242,7 +242,7 @@ also available as `install-node-windows.ps1` for a different Windows device.
 irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-node-windows.ps1 | iex
 ```
 
-The installation includes 63 active built-in skills: five Barlas-native
+The installation includes 63 built-in skill definitions: five Barlas-native
 workflows plus safe Barlas adaptations representing all 58 skills in the
 reviewed Nous Research catalog revision
 `5894e750c3dba980d43b25aa29e3958149ba2c61`.
@@ -261,6 +261,13 @@ image: the installer does not download or execute third-party scripts at
 runtime. Skills that need macOS or another optional connector do not bypass the
 platform boundary: they expose actions only when the owner configures a
 compatible approved connector.
+
+The API, CLI, and cabinet calculate each skill's runtime readiness from the
+tools and configured extensions actually present on the installation. Ready
+skills have their complete tool set, degraded skills run only with the
+available subset and are explicitly forbidden from claiming missing actions,
+and unavailable skills cannot be selected until their hard runner or platform
+capability is connected.
 
 Third-party skills use signed JSON packages instead of installer scripts. An
 owner first runs `barlas skills verify package.json`, compares the displayed

@@ -24,7 +24,12 @@ autonomy.
 - The file workspace is a dedicated Barlas AI Agent volume partitioned by a
   SHA-256 user key. It is not mounted from an existing agent installation.
 - Built-in skills have immutable IDs, semantic versions, explicit instructions,
-  and declared tool allowlists. Runtime listing omits the internal prompt.
+  declared tool allowlists, and optional hard capability requirements. Runtime
+  listing omits the internal prompt and derives `ready`, `degraded`, or
+  `unavailable` from the tools and configured extensions on this installation.
+  Unavailable workflows cannot be selected; degraded workflows receive only
+  the tools that actually exist plus an explicit no-claim instruction for the
+  missing optional actions.
 - Owner-installed versions are persisted as inactive candidates. A bounded,
   tool-free acceptance suite must pass before activation; autonomous runs can
   select only active versions, and the skill allowlist is enforced as a ceiling.
