@@ -23,7 +23,10 @@ The default web mode is adaptive: short factual turns stay on the fast route,
 while substantial, multi-step, project, or skill-backed work is promoted to the
 deep route. The bounded loop follows an observe/plan/act/verify protocol and
 emits content-safe cognitive phase events for the live Cortex view; private
-reasoning and prompts are never exposed by that telemetry.
+reasoning and prompts are never exposed by that telemetry. Deep-task completion
+receives a separate bounded audit pass that can correct omissions and unsupported
+claims before the final answer is returned; malformed or failed audits safely
+fall back to the original answer.
 
 ## Implemented capability boundaries
 

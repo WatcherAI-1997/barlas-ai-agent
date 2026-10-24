@@ -14,7 +14,7 @@ planned functionality as complete.
 | Extension discovery | Typed capability, risk and configuration catalog | Implemented |
 | Continuous terminal agent | Persistent conversations, sessions and slash commands | Implemented |
 | Autonomous tool loop | Durable bounded runs, recovery, cancellation and approval continuation | Implemented |
-| Adaptive cognition and live Cortex | Automatic fast/deep routing, evidence-first observe/plan/act/verify protocol, and animated content-safe run telemetry | Implemented |
+| Adaptive cognition and live Cortex | Automatic fast/deep routing, evidence-first observe/plan/act/verify protocol, independent deep-task completion audit, and animated content-safe run telemetry | Implemented |
 | Skills | 63 built-in workflows with runtime `ready`/`degraded`/`unavailable` assessment, hard capability gates, missing-tool disclosure, versioned custom skills, and bounded Codex/Claude Code runners | Implemented; OpenCode and platform-specific adapters remain gated |
 | Third-party skill safety | Ed25519 packages, explicit publisher trust, evaluation gate and rollback | Implemented |
 | skills.sh / Agent Skills compatibility | Reviewed `SKILL.md` or directory import with deterministic package digest, bounded text references, explicit executable/asset exclusions, zero tools by default and inactive-candidate gate | Implemented |

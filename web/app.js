@@ -571,6 +571,7 @@ function cognitivePhase(eventType = "") {
   if (eventType === "model.tool_calls") return ["reason", "Выбираю следующий шаг"];
   if (eventType === "cognition.act" || eventType.startsWith("tool.")) return ["action", "Использую инструмент"];
   if (eventType === "cognition.verify") return ["context", "Проверяю результат"];
+  if (eventType === "cognition.review" || eventType === "cognition.reviewed") return ["reason", "Провожу самопроверку"];
   if (eventType === "approval.pending" || eventType === "cognition.blocked") return ["action", "Жду подтверждения"];
   if (eventType === "model.completed" || eventType === "cognition.complete") return ["output", "Результат готов"];
   return ["idle", "Ожидание задачи"];

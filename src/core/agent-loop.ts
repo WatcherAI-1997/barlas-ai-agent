@@ -9,6 +9,7 @@ import type { ModelToolDefinition } from "../tools/registry.js";
 
 const MAX_OUTPUT_CHARS = 40_000;
 const MAX_CALLS_PER_STEP = 1;
+const MAX_REVIEW_OBJECTIVE_CHARS = 12_000;
 
 const COGNITION_PROTOCOL = [
   "Operate with disciplined autonomy: understand the objective and constraints before acting.",
@@ -133,8 +134,31 @@ export class AgentLoop {
         return this.finish("cancelled", "Автономный запуск отменён.", step, toolExecutions, approvalIds, last, aggregateUsage);
       }
       if (response.toolCalls.length === 0) {
+        let finalText = response.text || "Задача завершена.";
+        if (input.taskClass === "deep" && aggregateUsage.totalTokens < tokenBudget) {
+          await input.onStep?.({ step, type: "cognition.review", details: { mode: "independent_completion_check" } });
+          try {
+            const review = await this.reviewAnswer(input, finalText, toolExecutions);
+            if (review.usage) {
+              aggregateUsage.inputTokens += review.usage.inputTokens;
+              aggregateUsage.outputTokens += review.usage.outputTokens;
+              aggregateUsage.totalTokens += review.usage.totalTokens;
+              aggregateUsage.costUsd += review.usage.costUsd ?? 0;
+            }
+            const reviewed = parseReview(review.text);
+            if (reviewed?.final) finalText = reviewed.final;
+            await input.onStep?.({
+              step,
+              type: "cognition.reviewed",
+              details: { verdict: reviewed?.verdict ?? "unstructured", issueCount: reviewed?.issues.length ?? 0 },
+            });
+          } catch {
+            await input.onStep?.({ step, type: "cognition.reviewed", details: { verdict: "fallback", issueCount: 0 } });
+          }
+        }
+        last = { ...last, text: finalText };
         await input.onStep?.({ step, type: "cognition.complete", details: { verified: toolExecutions > 0 } });
-        return this.finish("completed", response.text || "Задача завершена.", step, toolExecutions, approvalIds, last, aggregateUsage);
+        return this.finish("completed", finalText, step, toolExecutions, approvalIds, last, aggregateUsage);
       }
       if (aggregateUsage.totalTokens >= tokenBudget) {
         return this.finish(
@@ -224,6 +248,34 @@ export class AgentLoop {
     );
   }
 
+  private reviewAnswer(
+    input: { userId: string; conversationId: string; messages: AgentMessage[] },
+    draft: string,
+    toolExecutions: number,
+  ): Promise<GenerateResult> {
+    const objective = input.messages
+      .filter((message) => message.role === "user")
+      .map((message) => message.content)
+      .join("\n")
+      .slice(-MAX_REVIEW_OBJECTIVE_CHARS);
+    return this.model.generate({
+      userId: input.userId,
+      conversationId: input.conversationId,
+      taskClass: "deep",
+      maxOutputTokens: 2_048,
+      messages: [
+        {
+          role: "system",
+          content: "You are the independent completion auditor for Barlas AI Agent. Check the draft against the objective for omissions, unsupported claims, contradictions, and incomplete execution. Do not invent facts or actions. Return strict JSON only: {\"verdict\":\"pass\"|\"revise\",\"final\":\"best corrected user-facing answer\",\"issues\":[\"short issue\"]}. Keep final concise and preserve the user's language.",
+        },
+        {
+          role: "user",
+          content: JSON.stringify({ objective, draft: draft.slice(0, MAX_OUTPUT_CHARS), toolExecutions }),
+        },
+      ],
+    });
+  }
+
   private finish(
     status: AgentLoopResult["status"],
     text: string,
@@ -247,5 +299,22 @@ export class AgentLoop {
         usage,
       },
     };
+  }
+}
+
+function parseReview(value: string): { verdict: "pass" | "revise"; final: string; issues: string[] } | null {
+  try {
+    const parsed = JSON.parse(value.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "")) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const candidate = parsed as { verdict?: unknown; final?: unknown; issues?: unknown };
+    if (!(["pass", "revise"] as unknown[]).includes(candidate.verdict) || typeof candidate.final !== "string") return null;
+    if (!Array.isArray(candidate.issues) || candidate.issues.some((issue) => typeof issue !== "string")) return null;
+    return {
+      verdict: candidate.verdict as "pass" | "revise",
+      final: candidate.final.slice(0, MAX_OUTPUT_CHARS),
+      issues: candidate.issues.slice(0, 20) as string[],
+    };
+  } catch {
+    return null;
   }
 }

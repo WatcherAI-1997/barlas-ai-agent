@@ -89,6 +89,26 @@ describe("Barlas AI Agent autonomous loop", () => {
     expect(JSON.stringify(onStep.mock.calls)).not.toContain("What time is it?");
   });
 
+  it("independently reviews deep-task completion and uses the corrected answer", async () => {
+    const model = provider([{ text: "I think it worked." }]);
+    vi.mocked(model.generate).mockResolvedValueOnce({
+      text: JSON.stringify({ verdict: "revise", final: "Implemented and verified with tests.", issues: ["Missing evidence"] }),
+      provider: "test",
+      model: "test-model",
+      usage: { inputTokens: 20, outputTokens: 10, totalTokens: 30, costUsd: 0.02 },
+    });
+    const onStep = vi.fn(async (_event: { step: number; type: string; details?: unknown }) => undefined);
+
+    const result = await new AgentLoop(model, tools(vi.fn())).run({ ...request, taskClass: "deep", onStep });
+
+    expect(result.text).toBe("Implemented and verified with tests.");
+    expect(result.result.usage?.totalTokens).toBe(45);
+    expect(model.generate).toHaveBeenCalledWith(expect.objectContaining({ taskClass: "deep", maxOutputTokens: 2_048 }));
+    expect(onStep.mock.calls.map(([event]) => event.type)).toEqual(expect.arrayContaining([
+      "cognition.review", "cognition.reviewed", "cognition.complete",
+    ]));
+  });
+
   it("completes a long sequential tool plan within the bounded loop", async () => {
     const model = provider([
       ...Array.from({ length: 6 }, (_value, index) => ({
