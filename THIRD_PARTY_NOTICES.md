@@ -2,8 +2,10 @@
 
 ## Nous Research licensed workflow references
 
-The built-in Barlas core skill pack contains independently adapted workflow
-ideas from selected MIT-licensed skill documents published by Nous Research:
+The built-in Barlas skill pack contains independently adapted workflow ideas
+representing all 58 MIT-licensed skill documents published in the Nous
+Research agent skill catalog at reviewed revision
+`5894e750c3dba980d43b25aa29e3958149ba2c61`:
 
 - grounded citations and blocked-page recovery;
 - arXiv and competitor research;
@@ -18,10 +20,16 @@ ideas from selected MIT-licensed skill documents published by Nous Research:
   design, songwriting, GIF research, knowledge maps, maps, connected team
   databases/files/pages, meeting pipelines, language-specific debugging,
   declarative skill authoring, and product dogfooding.
+- Apple Notes, Reminders, Find My and iMessage bridge workflows; bounded Claude
+  Code, Codex and OpenCode delegation; local agent-runtime support; ASCII and
+  Manim video; design-language and design-spec workflows; terminal email,
+  audio visualization, X research/actions, and desktop DOM inspection.
 
 The adaptations use Barlas' own isolated tool names, approval model, and
-runtime. Upstream scripts, package hooks, credentials, and platform-specific
-commands are not bundled.
+runtime. Where several upstream documents cover the same capability, Barlas
+uses one consolidated workflow; the remaining distinct capabilities have
+their own skill ID. Upstream scripts, package hooks, credentials, templates,
+binary assets, and platform-specific commands are not bundled or executed.
 
 Upstream license:
 

@@ -1,4 +1,4 @@
-import { bundledCoreSkills, bundledExtendedSkills } from "./bundled.js";
+import { bundledCompatibilitySkills, bundledCoreSkills, bundledExtendedSkills } from "./bundled.js";
 
 export interface SkillDefinition {
   id: string;
@@ -101,5 +101,6 @@ export function createBuiltinSkillRegistry(): SkillRegistry {
   });
   for (const skill of bundledCoreSkills) registry.register(skill);
   for (const skill of bundledExtendedSkills) registry.register(skill);
+  for (const skill of bundledCompatibilitySkills) registry.register(skill);
   return registry;
 }

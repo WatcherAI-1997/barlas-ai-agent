@@ -21,8 +21,16 @@ describe("versioned skill registry", () => {
     const registry = createBuiltinSkillRegistry();
     const expected = [
       "delivery.sdlc-review",
+      "creative.ascii-video",
+      "creative.design-language",
+      "creative.design-spec",
+      "creative.manim-video",
+      "development.claude-code",
       "development.code-review",
       "development.codebase-inspection",
+      "development.codex",
+      "development.desktop-dom",
+      "development.opencode",
       "development.simplify",
       "development.spike",
       "development.systematic-debugging",
@@ -30,18 +38,26 @@ describe("versioned skill registry", () => {
       "documents.docx",
       "documents.pdf",
       "email.inbox-triage",
+      "email.terminal-client",
       "creative.architecture-diagram",
       "development.github",
       "media.youtube-content",
+      "media.audio-visualization",
+      "messaging.imessage",
       "notes.obsidian",
       "productivity.document-actions",
       "productivity.google-workspace",
       "productivity.meeting-actions",
       "productivity.price-monitor",
       "productivity.weekly-review",
+      "platform.apple-notes",
+      "platform.apple-reminders",
+      "platform.find-my",
       "research.arxiv",
       "research.competitor-monitor",
       "research.grounded-citations",
+      "social.x-client",
+      "support.agent-runtime",
       "web.blocked-page-recovery",
       "web.computer-use",
       "writing.humanizer",
@@ -51,7 +67,7 @@ describe("versioned skill registry", () => {
     expect(bundled.map((skill) => skill.id).sort()).toEqual([...expected].sort());
     expect(bundled.every((skill) => skill.active)).toBe(true);
     expect(bundled.every((skill) => skill.allowedTools.length > 0)).toBe(true);
-    expect(registry.list()).toHaveLength(47);
+    expect(registry.list()).toHaveLength(63);
   });
 });
 

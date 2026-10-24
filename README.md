@@ -242,17 +242,25 @@ also available as `install-node-windows.ps1` for a different Windows device.
 irm https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-node-windows.ps1 | iex
 ```
 
-The installation includes 47 active built-in skills. The core pack covers
+The installation includes 63 active built-in skills: five Barlas-native
+workflows plus safe Barlas adaptations representing all 58 skills in the
+reviewed Nous Research catalog revision
+`5894e750c3dba980d43b25aa29e3958149ba2c61`.
+The core pack covers
 grounded and academic research, code inspection and delivery, debugging, TDD,
 GitHub, browser operation, architecture diagrams, DOCX/PDF, Markdown notes,
 video transcripts, Google Workspace, meeting and document actions, weekly
 planning, inbox triage, price and competitor monitoring, spreadsheet and
 presentation extraction, infographics, web/generative design, songwriting,
 knowledge maps, connected team systems, language-specific debugging,
-natural-language editing, and blocked-page recovery. The skills are compiled into the Barlas
+natural-language editing, Apple-bridge workflows, bounded coding-agent
+delegation, terminal mail and social connectors, audio/animation workflows,
+design specifications, local runtime support, and blocked-page recovery. The
+skills are compiled into the Barlas
 image: the installer does not download or execute third-party scripts at
-runtime. Skills that need an optional connector simply expose those actions
-when the connector is configured.
+runtime. Skills that need macOS or another optional connector do not bypass the
+platform boundary: they expose actions only when the owner configures a
+compatible approved connector.
 
 Third-party skills use signed JSON packages instead of installer scripts. An
 owner first runs `barlas skills verify package.json`, compares the displayed
