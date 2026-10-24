@@ -44,6 +44,22 @@ export class FileWorkspace {
     return { userRoot, absolutePath: target, relativePath: relative(userRoot, target) };
   }
 
+  async directoryForRun(userId: string, path = "."): Promise<{
+    userRoot: string;
+    absolutePath: string;
+    relativePath: string;
+  }> {
+    const userRoot = await this.ensureUserRoot(userId);
+    const requested = this.resolveRelative(userRoot, path);
+    const requestedInfo = await lstat(requested);
+    if (!requestedInfo.isDirectory() || requestedInfo.isSymbolicLink()) {
+      throw new Error("Runner path must be a real workspace directory");
+    }
+    const target = await realpath(requested);
+    this.assertInside(userRoot, target);
+    return { userRoot, absolutePath: target, relativePath: relative(userRoot, target) || "." };
+  }
+
   async readBuffer(userId: string, path: string, maxBytes = MAX_DOCUMENT_BYTES): Promise<{
     path: string;
     content: Buffer;

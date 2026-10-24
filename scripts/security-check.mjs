@@ -77,6 +77,7 @@ for (const required of [
   "assets/brand/barlas-ai-agent-installer.png",
   "assets/brand/barlas-ai-agent-github-hero.png",
   "src/skills/manager.ts",
+  "src/tools/codex-runner.ts",
   "tests/skill-manager.test.ts",
 ]) {
   if (!files.includes(required)) throw new Error(`Skill lifecycle component is missing: ${required}`);
@@ -152,6 +153,22 @@ for (const required of [
   if (!accountModelBridge.includes(required)) throw new Error(`OpenAI account bridge boundary is missing: ${required}`);
 }
 if (accountModelBridge.includes("dangerously-bypass")) throw new Error("OpenAI account bridge must never bypass its sandbox");
+const codexRunner = await readFile("src/tools/codex-runner.ts", "utf8");
+for (const required of [
+  '"--sandbox", "read-only"',
+  '"--disable", "shell_tool"',
+  "MAX_CONTEXT_BYTES = 500_000",
+  "MAX_WRITES = 20",
+  "validateWrites",
+  "sensitiveName",
+  "credentialPatterns",
+  'Pick<FileWorkspace, "directoryForRun" | "write">',
+]) {
+  if (!codexRunner.includes(required)) throw new Error(`Codex runner boundary is missing: ${required}`);
+}
+for (const forbidden of ["dangerously-bypass", '"workspace-write"']) {
+  if (codexRunner.includes(forbidden)) throw new Error(`Codex runner contains prohibited mode: ${forbidden}`);
+}
 const projects = await readFile("src/projects/service.ts", "utf8");
 const projectMigration = await readFile("migrations/018_projects.sql", "utf8");
 const database = await readFile("src/storage/database.ts", "utf8");

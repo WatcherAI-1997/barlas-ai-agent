@@ -10,6 +10,7 @@ import type { ManagedBrowser } from "./managed-browser.js";
 import type { SubagentCoordinator } from "../core/subagents.js";
 import { councilRoleIds, type CouncilRoleId } from "../agents/command.js";
 import type { CodeSandboxClient } from "./code-sandbox.js";
+import type { CodexWorkspaceRunner } from "./codex-runner.js";
 import type { GitHubConnector } from "../connectors/github.js";
 import type { GoogleConnector } from "../connectors/google.js";
 import type { McpConnector } from "../connectors/mcp.js";
@@ -28,6 +29,7 @@ export function createBuiltinToolRegistry(options: {
   managedBrowser?: Pick<ManagedBrowser, "run">;
   subagentCoordinator?: Pick<SubagentCoordinator, "delegate">;
   codeSandbox?: Pick<CodeSandboxClient, "run">;
+  codexRunner?: Pick<CodexWorkspaceRunner, "run">;
   mediaService?: Pick<MediaService, "analyzeImage" | "analyzePdf" | "transcribeAudio" | "createSpeech">;
   projectService?: Pick<ProjectService, "detail" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "snapshot" | "restore">;
   deviceNodes?: Pick<DeviceNodeService, "notify">;
@@ -352,6 +354,24 @@ export function createBuiltinToolRegistry(options: {
           cwd: string;
           timeoutSeconds: number;
         }),
+      }),
+    });
+  }
+
+  if (options.codexRunner) {
+    registry.register({
+      name: "runner.codex.execute",
+      description: "Run one bounded Codex coding edit in the current user's isolated workspace. Only a size-limited, secret-filtered text snapshot is sent to the configured account-backed model. Codex receives no shell or filesystem tools; Barlas validates structured write paths and content before applying them. Inspect the edits before accepting them.",
+      risk: "external",
+      inputSchema: z.object({
+        objective: z.string().trim().min(1).max(20_000),
+        path: z.string().min(1).max(1_000).default("."),
+        timeoutSeconds: z.number().int().min(30).max(900).default(300),
+      }).strict(),
+      execute: async (input, context) => options.codexRunner!.run(context.userId, input as {
+        objective: string;
+        path: string;
+        timeoutSeconds: number;
       }),
     });
   }

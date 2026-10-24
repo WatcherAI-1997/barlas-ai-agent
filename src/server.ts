@@ -31,6 +31,7 @@ import { createBuiltinToolRegistry } from "./tools/builtins.js";
 import { ToolExecutor } from "./tools/executor.js";
 import { ManagedBrowser } from "./tools/managed-browser.js";
 import { CodeSandboxClient } from "./tools/code-sandbox.js";
+import { CodexWorkspaceRunner } from "./tools/codex-runner.js";
 import { FileWorkspace } from "./tools/file-workspace.js";
 import { ProjectService } from "./projects/service.js";
 import { MediaService, OpenAIMediaModel } from "./tools/media.js";
@@ -126,6 +127,7 @@ const extensionCatalog = createBuiltinExtensionCatalog({
   google: Boolean(googleConnector),
   mcp: Boolean(mcpConnector),
   sandbox: Boolean(codeSandbox),
+  codexRunner: config.MODEL_PROVIDER === "codex_cli",
   telegram: Boolean(config.TELEGRAM_BOT_TOKEN),
   discord: Boolean(config.DISCORD_BOT_TOKEN && config.DISCORD_GATEWAY_ENABLED),
   slack: Boolean(config.SLACK_BOT_TOKEN && config.SLACK_APP_TOKEN && config.SLACK_SOCKET_MODE_ENABLED),
@@ -135,6 +137,9 @@ const extensionCatalog = createBuiltinExtensionCatalog({
   modelProvider: config.MODEL_PROVIDER,
 });
 const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
+const codexRunner = config.MODEL_PROVIDER === "codex_cli"
+  ? new CodexWorkspaceRunner(workspace, { model: config.MODEL_NAME })
+  : undefined;
 const projects = new ProjectService(database, workspace);
 const continuity = new ContinuityService(database);
 const outcomes = new OutcomeService(database);
@@ -159,6 +164,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   ...(config.BROWSER_WS_ENDPOINT ? { managedBrowser: new ManagedBrowser(config.BROWSER_WS_ENDPOINT) } : {}),
   subagentCoordinator,
   ...(codeSandbox ? { codeSandbox } : {}),
+  ...(codexRunner ? { codexRunner } : {}),
   ...(githubConnector ? { githubConnector } : {}),
   ...(googleConnector ? { googleConnector } : {}),
   ...(mcpConnector ? { mcpConnector } : {}),

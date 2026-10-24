@@ -97,6 +97,13 @@ autonomy.
   invocation receives a fresh high-numbered Linux UID; the runner restores the
   workspace to the API UID afterward, so code cannot read another user's
   directory or the root-owned runner token.
+- With the account-backed model provider, `runner.codex.execute` is registered
+  as an external-risk tool. It does not mount the workspace into the model CLI
+  and disables shell, network, apps, plugins, memories, user configuration, and
+  project instructions. Barlas selects at most 80 non-secret UTF-8 files/500 KB,
+  requires schema-constrained output, and validates at most 20 writes/1 MB for
+  relative, unique, non-credential text paths before using the tenant-bound
+  workspace writer. The runner cannot delete files or push/publish changes.
 - Per-user UTC-day counters and execution traces live in the isolated PostgreSQL
   database. Quota consumption is atomic under concurrent requests.
 - Human authentication follows the Barlas gateway-token model: a separately

@@ -81,6 +81,14 @@ describe("subagent tool registration", () => {
   });
 });
 
+describe("coding runner skill capability", () => {
+  it("makes the Codex workflow selectable only when its real runner tool exists", () => {
+    const skill = createBuiltinSkillRegistry().get("development.codex");
+    expect(skill.requiredCapabilities).toEqual(["runner.codex.execute"]);
+    expect(skill.allowedTools).toContain("runner.codex.execute");
+  });
+});
+
 describe("built-in public web tools", () => {
   it("always exposes safe search and page reading without separate infrastructure", () => {
     const tools = createBuiltinToolRegistry().list();

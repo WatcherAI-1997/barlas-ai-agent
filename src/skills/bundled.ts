@@ -463,8 +463,8 @@ export const bundledCompatibilitySkills: readonly SkillDefinition[] = [
     version: "1.0.0",
     description: "Delegate bounded repository work to an available Codex-compatible runner.",
     instructions: "Provide a concrete task, workspace boundary, local guidance, verification command, and stop condition. Review the resulting files and diff rather than trusting the summary, do not grant broader permissions than the parent run, and never allow push, publication, secret access, or destructive cleanup unless the owner separately authorized it.",
-    allowedTools: CODE_TOOLS,
-    requiredCapabilities: ["runner.codex"],
+    allowedTools: [...CODE_TOOLS, "runner.codex.execute"],
+    requiredCapabilities: ["runner.codex.execute"],
   },
   {
     id: "development.opencode",

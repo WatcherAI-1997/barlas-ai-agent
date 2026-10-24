@@ -3,7 +3,7 @@
 ## Verified on 2026-10-25
 
 - TypeScript typecheck and production build pass.
-- 241 automated tests across 65 files pass.
+- 246 automated tests across 66 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -71,6 +71,9 @@
 - Skill capability tests verify configured-extension discovery, complete,
   degraded, and unavailable states, hard capability blocking, available-tool
   narrowing, API disclosure, and explicit no-claim context for missing actions.
+- Codex runner tests verify tenant-root path enforcement, external-risk-only
+  registration, secret-file omission, schema-bounded edits, safe file writes,
+  and rejection of escaping output without invoking an unrestricted shell.
 - A repository-wide branding regression test keeps all tracked product files
   focused on the standalone Barlas identity.
 - An isolated live load smoke completed 1,000 `/health` and `/ready` requests at

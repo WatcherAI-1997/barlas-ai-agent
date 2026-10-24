@@ -430,6 +430,16 @@ per output stream, two concurrent processes, and the container CPU/RAM/PID
 limits. The production sandbox is enabled only when both
 `SANDBOX_SOCKET_PATH` and `SANDBOX_SHARED_TOKEN` are configured.
 
+When `MODEL_PROVIDER=codex_cli`, the optional `runner.codex.execute` tool makes
+the `development.codex` skill operational. The tool accepts a bounded objective,
+relative workspace directory, and 30–900 second timeout. It is classified as
+`external`, so execution pauses for explicit approval before any repository
+content is sent. Barlas sends at most 80 secret-filtered UTF-8 files/500 KB to a
+shell-less, read-only, ephemeral CLI turn, requires a JSON response, then
+validates at most 20 relative text-file writes/1 MB before applying them inside
+the authenticated user's workspace. The result contains only summary,
+verification statement, changed paths, model, and duration—not file bodies.
+
 Queued runs are leased with PostgreSQL `FOR UPDATE SKIP LOCKED`. A worker crash
 leaves a recoverable lease; after its timeout another worker may claim the run.
 Retries are bounded and use exponential delay. The original visible messages

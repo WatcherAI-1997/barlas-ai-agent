@@ -18,7 +18,7 @@ planned functionality as complete.
 | Third-party skill safety | Ed25519 packages, explicit publisher trust, evaluation gate and rollback | Implemented |
 | skills.sh / Agent Skills compatibility | Reviewed `SKILL.md` or directory import with deterministic package digest, bounded text references, explicit executable/asset exclusions, zero tools by default and inactive-candidate gate | Implemented |
 | Local models | Ollama chat and tool calls without an API key | Implemented |
-| Research and coding | Search with citations, browser, GitHub, debugging, TDD, review and isolated execution | Implemented |
+| Research and coding | Search with citations, browser, GitHub, debugging, TDD, review, isolated execution, and an approval-gated shell-less Codex workspace editor for the account-backed provider | Implemented |
 | Memory and planning | Semantic/lexical memory, evidence-backed commitments, leased Telegram reminders, projects, goals, ordered plans and artifact versions | Implemented |
 | Setup localization | Versioned, complete and review-attributed login/setup packs for English, Russian and Uzbek; explicit English fallback metadata for 35 more languages | Implemented foundation; remaining native reviews pending |
 | Outcome verification | Durable success criteria, typed evidence and automatic result verification independent of run completion | Implemented foundation |

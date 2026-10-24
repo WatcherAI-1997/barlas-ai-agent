@@ -144,10 +144,19 @@ plugins, memories, subagents, skills, and web search; only Barlas tools remain
 available through the normal approval and audit boundaries. An optional
 separate API key is still required for media or semantic embeddings.
 
+Selecting the account-backed provider also enables the `development.codex`
+workspace editor. Every invocation is an external-risk action and waits for
+owner approval. The editor is not given a shell or direct workspace mount:
+Barlas sends a bounded, secret-filtered text snapshot, validates a structured
+write set, and applies only safe relative UTF-8 paths inside the requesting
+user's workspace. It cannot delete, push, publish, install packages, or access
+files omitted from the snapshot.
+
 An existing `deploy\native.env` is reused and never silently overwritten.
-Windows installation is local-only. Native mode does not expose the
-container-isolated code sandbox; public HTTPS and hardened sandbox deployment
-remain the Linux server path.
+Windows installation is local-only. Native mode does not expose the general
+container-isolated `code.run` tool; its optional account-backed editor uses the
+shell-less snapshot/write boundary above. Public HTTPS and the hardened general
+code sandbox remain the Linux server path.
 
 ## Linux quick install
 

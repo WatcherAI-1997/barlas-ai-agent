@@ -315,6 +315,14 @@ provider cost. OpenAI-only media and embeddings remain optional through a
 separate `MEDIA_API_KEY`, so credentials are never silently reused across
 providers.
 
+When `MODEL_PROVIDER=codex_cli`, the `development.codex` skill also gains an
+approval-gated workspace editor. Barlas selects at most 80 non-secret text
+files within a 500 KB context budget; the runner receives that snapshot but no
+shell, network, plugins, memories, or direct filesystem access. Its structured
+response is limited to 20 UTF-8 file writes and 1 MB total, and Barlas rejects
+absolute, escaping, duplicate, credential-like, or non-text paths before
+applying anything to the owning user's workspace.
+
 Device nodes use a separate one-time pairing code and receive an independently
 revocable bearer token. The initial protocol supports heartbeat, capability
 advertising, command acknowledgement, and approval-gated notifications only;
@@ -358,8 +366,9 @@ Barlas AI Agent is free and open source under the [MIT License](LICENSE).
   their validated arguments and stop until the same user decides.
 - **Container boundaries:** production API, PostgreSQL, browser, sandbox,
   backups, networks, and volumes are dedicated to Barlas.
-- **No host shell:** code runs in an offline, constrained container without the
-  Docker socket, host filesystem, public ports, or internal network.
+- **No unrestricted host shell:** deterministic code runs in an offline,
+  constrained container; the optional account-backed coding editor receives
+  only a filtered text snapshot and has no shell or direct filesystem tools.
 - **Encrypted connections:** connector secrets use AES-256-GCM with a dedicated
   operator-controlled vault key.
 - **Auditable behavior:** quotas, traces, approval decisions, tool execution,
