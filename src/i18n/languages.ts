@@ -45,6 +45,10 @@ export const verifiedSetupLanguages = ["en", "ru", "uz"] as const satisfies read
 export type VerifiedSetupLanguageCode = (typeof verifiedSetupLanguages)[number];
 
 export type SetupPhrasePack = {
+  loginTitle: string;
+  loginDescription: string;
+  gatewayTokenLabel: string;
+  connectLabel: string;
   title: string;
   description: string;
   languageLabel: string;
@@ -52,29 +56,68 @@ export type SetupPhrasePack = {
   fallbackNotice: string;
 };
 
+export type SetupPhrasePackDescriptor = {
+  schemaVersion: 1;
+  revision: string;
+  language: VerifiedSetupLanguageCode;
+  author: string;
+  reviewer: string;
+  reviewedAt: string;
+  phrases: SetupPhrasePack;
+};
+
+export const setupPhraseKeys = [
+  "loginTitle", "loginDescription", "gatewayTokenLabel", "connectLabel",
+  "title", "description", "languageLabel", "continueLabel", "fallbackNotice",
+] as const satisfies readonly (keyof SetupPhrasePack)[];
+
 export const setupPhrasePacks = {
   en: {
-    title: "Choose your language",
-    description: "Barlas AI Agent will answer in this language. You can change it later in Settings.",
-    languageLabel: "Language",
-    continueLabel: "Continue",
-    fallbackNotice: "Setup text for this language is awaiting community review, so setup continues in English. Barlas will still answer in the language you selected.",
+    schemaVersion: 1, revision: "2026.10.1", language: "en",
+    author: "Barlas maintainers", reviewer: "Barlas language review", reviewedAt: "2026-10-24",
+    phrases: {
+      loginTitle: "Sign in to Barlas AI Agent",
+      loginDescription: "Use the protected Barlas gateway token created by the installer. No username or password is required.",
+      gatewayTokenLabel: "Gateway token",
+      connectLabel: "Connect",
+      title: "Choose your language",
+      description: "Barlas AI Agent will answer in this language. You can change it later in Settings.",
+      languageLabel: "Language",
+      continueLabel: "Continue",
+      fallbackNotice: "Setup text for this language is awaiting community review, so setup continues in English. Barlas will still answer in the language you selected.",
+    },
   },
   ru: {
-    title: "Выберите язык",
-    description: "Barlas AI Agent будет отвечать на этом языке. Выбор можно изменить позже в настройках.",
-    languageLabel: "Язык",
-    continueLabel: "Продолжить",
-    fallbackNotice: "Текст установки на этом языке ожидает проверки сообществом, поэтому установка продолжится на английском. Barlas всё равно будет отвечать на выбранном языке.",
+    schemaVersion: 1, revision: "2026.10.1", language: "ru",
+    author: "Barlas maintainers", reviewer: "Barlas language review", reviewedAt: "2026-10-24",
+    phrases: {
+      loginTitle: "Вход в Barlas AI Agent",
+      loginDescription: "Используйте защищённый gateway‑токен Barlas, созданный установщиком. Логин и пароль не нужны.",
+      gatewayTokenLabel: "Gateway token",
+      connectLabel: "Подключиться",
+      title: "Выберите язык",
+      description: "Barlas AI Agent будет отвечать на этом языке. Выбор можно изменить позже в настройках.",
+      languageLabel: "Язык",
+      continueLabel: "Продолжить",
+      fallbackNotice: "Текст установки на этом языке ожидает проверки сообществом, поэтому установка продолжится на английском. Barlas всё равно будет отвечать на выбранном языке.",
+    },
   },
   uz: {
-    title: "Tilni tanlang",
-    description: "Barlas AI Agent shu tilda javob beradi. Tilni keyinroq sozlamalarda o‘zgartirish mumkin.",
-    languageLabel: "Til",
-    continueLabel: "Davom etish",
-    fallbackNotice: "Bu til uchun o‘rnatish matni hamjamiyat tekshiruvini kutmoqda, shuning uchun o‘rnatish ingliz tilida davom etadi. Barlas baribir siz tanlagan tilda javob beradi.",
+    schemaVersion: 1, revision: "2026.10.1", language: "uz",
+    author: "Barlas maintainers", reviewer: "Barlas language review", reviewedAt: "2026-10-24",
+    phrases: {
+      loginTitle: "Barlas AI Agent tizimiga kirish",
+      loginDescription: "O‘rnatuvchi yaratgan himoyalangan Barlas gateway tokenidan foydalaning. Login va parol kerak emas.",
+      gatewayTokenLabel: "Gateway tokeni",
+      connectLabel: "Ulanish",
+      title: "Tilni tanlang",
+      description: "Barlas AI Agent shu tilda javob beradi. Tilni keyinroq sozlamalarda o‘zgartirish mumkin.",
+      languageLabel: "Til",
+      continueLabel: "Davom etish",
+      fallbackNotice: "Bu til uchun o‘rnatish matni hamjamiyat tekshiruvini kutmoqda, shuning uchun o‘rnatish ingliz tilida davom etadi. Barlas baribir siz tanlagan tilda javob beradi.",
+    },
   },
-} as const satisfies Record<VerifiedSetupLanguageCode, SetupPhrasePack>;
+} as const satisfies Record<VerifiedSetupLanguageCode, SetupPhrasePackDescriptor>;
 
 const verifiedSetupLanguageSet = new Set<SupportedLanguageCode>(verifiedSetupLanguages);
 
@@ -101,7 +144,18 @@ export function getSetupLanguage(code: string | null | undefined): VerifiedSetup
 }
 
 export function getSetupPhrasePack(code: string | null | undefined): SetupPhrasePack {
+  return setupPhrasePacks[getSetupLanguage(code)].phrases;
+}
+
+export function getSetupPhrasePackDescriptor(code: string | null | undefined): SetupPhrasePackDescriptor {
   return setupPhrasePacks[getSetupLanguage(code)];
+}
+
+export function setupPhrasePackCompleteness(code: string | null | undefined): number {
+  if (!isVerifiedSetupLanguage(code)) return 0;
+  const phrases = getSetupPhrasePack(code);
+  const complete = setupPhraseKeys.filter((key) => phrases[key].trim().length > 0).length;
+  return complete / setupPhraseKeys.length;
 }
 
 export function setupTranslationStatus(code: string | null | undefined): "verified" | "fallback" | "unsupported" {

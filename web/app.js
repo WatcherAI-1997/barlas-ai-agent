@@ -117,6 +117,10 @@ function applySetupLanguage(code) {
   if (!language) return;
   const phrases = language.setupPhrases;
   const fallback = language.setupTranslationStatus !== "verified";
+  $("#login-title").textContent = phrases.loginTitle;
+  $("#login-description").textContent = phrases.loginDescription;
+  $("#login-token-label").textContent = phrases.gatewayTokenLabel;
+  $("#login-submit").textContent = phrases.connectLabel;
   $("#language-setup-title").textContent = phrases.title;
   $("#language-setup-description").textContent = phrases.description;
   $("#language-setup-label").textContent = phrases.languageLabel;
@@ -142,7 +146,7 @@ async function showApp(account) {
   if (!account.languageConfigured) {
     $("#app-view").classList.add("hidden");
     $("#language-view").classList.remove("hidden");
-    const storedLanguage = localStorage.getItem("barlasLanguage") || "en";
+    const storedLanguage = localStorage.getItem("barlasLanguage") || initialPublicLanguage();
     fillLanguageSelect("#language-setup-select", storedLanguage);
     applySetupLanguage($("#language-setup-select").value);
     return;
@@ -166,6 +170,13 @@ async function showApp(account) {
     $("#voice-diagnostic").focus();
     $("#voice-diagnostic").scrollIntoView({ behavior: "smooth", block: "center" });
   }).catch((error) => notify(error.message, "error"));
+}
+
+function initialPublicLanguage() {
+  const stored = localStorage.getItem("barlasLanguage");
+  if (state.languages.some((language) => language.code === stored)) return stored;
+  const browser = navigator.language?.toLowerCase().split("-")[0];
+  return state.languages.some((language) => language.code === browser) ? browser : "en";
 }
 
 async function loadVoiceAvailability() {
@@ -1020,4 +1031,7 @@ $("#user-form").addEventListener("submit", async (event) => {
   } catch (error) { $("#user-error").textContent = error.message; }
 });
 
-loadLanguages().then(() => restore()).catch((error) => { $("#login-error").textContent = error.message; });
+loadLanguages().then(async () => {
+  applySetupLanguage(initialPublicLanguage());
+  await restore();
+}).catch((error) => { $("#login-error").textContent = error.message; });

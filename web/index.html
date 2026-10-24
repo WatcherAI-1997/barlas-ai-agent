@@ -12,11 +12,11 @@
     <main class="shell">
       <section id="login-view" class="auth-card">
         <img class="logo brand-hero" src="/ui/brand/barlas-ai-agent-github-hero.png" alt="Barlas AI Agent — Think ahead. Act beyond.">
-        <h1>Вход в Barlas AI Agent</h1>
-        <p class="meta">Используйте защищённый gateway‑токен Barlas, созданный установщиком. Логин и пароль не нужны.</p>
+        <h1 id="login-title">Вход в Barlas AI Agent</h1>
+        <p id="login-description" class="meta">Используйте защищённый gateway‑токен Barlas, созданный установщиком. Логин и пароль не нужны.</p>
         <form id="login-form">
-          <label>Gateway token<input id="gateway-token" type="password" autocomplete="off" minlength="32" required></label>
-          <button type="submit">Подключиться</button>
+          <label><span id="login-token-label">Gateway token</span><input id="gateway-token" type="password" autocomplete="off" minlength="32" required></label>
+          <button id="login-submit" type="submit">Подключиться</button>
           <p id="login-error" class="error" role="alert"></p>
         </form>
       </section>

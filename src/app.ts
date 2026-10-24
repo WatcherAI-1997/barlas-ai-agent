@@ -29,8 +29,10 @@ import { connectorProviders, type ConnectorService } from "./connectors/vault.js
 import type { SemanticMemory } from "./memory/semantic.js";
 import {
   getSetupPhrasePack,
+  getSetupPhrasePackDescriptor,
   isSupportedLanguage,
   languageInstruction,
+  setupPhrasePackCompleteness,
   setupTranslationStatus,
   supportedLanguages,
   type SupportedLanguageCode,
@@ -618,6 +620,20 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       ...language,
       setupTranslationStatus: setupTranslationStatus(language.code),
       setupPhrases: getSetupPhrasePack(language.code),
+      setupTranslation: (() => {
+        const pack = getSetupPhrasePackDescriptor(language.code);
+        return {
+          schemaVersion: pack.schemaVersion,
+          revision: pack.revision,
+          requestedLanguage: language.code,
+          effectiveLanguage: pack.language,
+          status: setupTranslationStatus(language.code),
+          author: pack.author,
+          reviewer: pack.reviewer,
+          reviewedAt: pack.reviewedAt,
+          completeness: setupPhrasePackCompleteness(language.code),
+        };
+      })(),
     })),
   }));
 

@@ -4,11 +4,14 @@ import { readFileSync } from "node:fs";
 import {
   getLanguage,
   getSetupPhrasePack,
+  getSetupPhrasePackDescriptor,
   getSetupLanguage,
   isSupportedLanguage,
   isVerifiedSetupLanguage,
   languageInstruction,
   setupTranslationStatus,
+  setupPhraseKeys,
+  setupPhrasePackCompleteness,
   setupLanguageInstruction,
   supportedLanguages,
   verifiedSetupLanguages,
@@ -44,10 +47,20 @@ describe("Barlas AI Agent languages", () => {
     expect(getSetupLanguage("uz")).toBe("uz");
     expect(getSetupLanguage("kk")).toBe("en");
     expect(getSetupPhrasePack("uz").title).toBe("Tilni tanlang");
+    expect(getSetupPhrasePack("uz").loginTitle).toBe("Barlas AI Agent tizimiga kirish");
     expect(getSetupPhrasePack("kk").title).toBe("Choose your language");
     expect(setupTranslationStatus("en")).toBe("verified");
     expect(setupTranslationStatus("tr")).toBe("fallback");
     expect(setupTranslationStatus("de")).toBe("unsupported");
+    expect(setupPhrasePackCompleteness("en")).toBe(1);
+    expect(setupPhrasePackCompleteness("ru")).toBe(1);
+    expect(setupPhrasePackCompleteness("uz")).toBe(1);
+    expect(setupPhrasePackCompleteness("kk")).toBe(0);
+    expect(getSetupPhrasePackDescriptor("uz")).toMatchObject({
+      schemaVersion: 1, revision: "2026.10.1", language: "uz", reviewedAt: "2026-10-24",
+    });
+    expect(Object.keys(getSetupPhrasePack("ru")).sort()).toEqual([...setupPhraseKeys].sort());
+    expect(getSetupPhrasePackDescriptor("kk").language).toBe("en");
   });
 
   it("publishes a GitHub product description for every selectable language", () => {

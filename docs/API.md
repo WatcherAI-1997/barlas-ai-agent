@@ -261,8 +261,13 @@ into a browser through a URL fragment that is stripped immediately.
 session. It includes the broad modern Turkic language family, Mongolian, plus
 Russian and English fallbacks, along with native names and writing direction.
 Each entry also reports `setupTranslationStatus` (`verified` or `fallback`) and
-the exact `setupPhrases` shown by the first-login language screen. A fallback is
-always labelled in the UI and never presented as a verified translation.
+the exact `setupPhrases` shown by the login and first-login language screens.
+`setupTranslation` identifies the schema version, phrase-pack revision, author,
+reviewer, review date, requested and effective languages, and completeness.
+A fallback is always labelled in the UI and never presented as a verified
+translation. Phrase packs for English, Russian, and Uzbek have identical,
+complete key sets; all other languages resolve explicitly to the versioned
+English pack until their own review is recorded.
 
 Authenticated users set or change their preference with
 `PATCH /v1/me/preferences` and `{ "languageCode": "uz" }`. The preference is

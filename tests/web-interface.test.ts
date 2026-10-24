@@ -27,6 +27,8 @@ describe("Barlas web interface", () => {
       'aria-pressed="false"',
       "barlas-ai-agent-github-hero.png",
       'id="council"',
+      'id="login-title"',
+      'id="login-token-label"',
     ]) expect(html).toContain(marker);
     expect(html).not.toMatch(/<script[^>]*>[^<]+<\/script>/u);
 
@@ -54,6 +56,8 @@ describe("Barlas web interface", () => {
       '"ArrowUp", "ArrowDown", "Home", "End"',
       "async function syncConversations()",
       'api("/v1/agents/council")',
+      "function initialPublicLanguage()",
+      '$("#login-submit").textContent = phrases.connectLabel',
       "setInterval(() => { void syncConversations(); }, 1_500)",
     ]) expect(script).toContain(marker);
     expect(script).not.toContain("alert(");

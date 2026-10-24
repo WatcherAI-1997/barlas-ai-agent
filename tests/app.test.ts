@@ -225,11 +225,16 @@ describe("Barlas AI Agent API", () => {
     expect(catalogue.json().languages.length).toBeGreaterThanOrEqual(35);
     expect(catalogue.json().languages.find((language: { code: string }) => language.code === "uz")).toMatchObject({
       setupTranslationStatus: "verified",
-      setupPhrases: { title: "Tilni tanlang" },
+      setupPhrases: { title: "Tilni tanlang", connectLabel: "Ulanish" },
+      setupTranslation: {
+        schemaVersion: 1, revision: "2026.10.1", requestedLanguage: "uz", effectiveLanguage: "uz",
+        status: "verified", completeness: 1,
+      },
     });
     expect(catalogue.json().languages.find((language: { code: string }) => language.code === "kk")).toMatchObject({
       setupTranslationStatus: "fallback",
       setupPhrases: { title: "Choose your language" },
+      setupTranslation: { requestedLanguage: "kk", effectiveLanguage: "en", status: "fallback", completeness: 0 },
     });
 
     const response = await app.inject({
