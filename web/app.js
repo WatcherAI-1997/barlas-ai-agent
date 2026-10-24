@@ -645,7 +645,7 @@ async function loadAgents() {
   renderList("#crisis-regent", [crisis], (item) => card(
     `${regent.name} · ${item.mode}`,
     item.expiresAt ? `Полномочия до ${new Date(item.expiresAt).toLocaleString()}` : "Временная кризисная роль",
-    [item.reason || regent.mandate, item.scope?.length ? `Область: ${item.scope.join(", ")}` : "", `Границы: ${regent.boundaries}`].filter(Boolean).join("\n"),
+    [item.commandMode ? `Командование: ${item.commandMode}` : "", item.reason || regent.mandate, item.scope?.length ? `Область: ${item.scope.join(", ")}` : "", `Границы: ${regent.boundaries}`].filter(Boolean).join("\n"),
   ));
   renderList("#council", [council.chief, ...council.members], (member, index) => index === 0
     ? card(member.name, "Глава · единая ответственность", member.mandate)
@@ -685,12 +685,12 @@ async function loadAgents() {
 $("#crisis-form").addEventListener("submit", async (event) => {
   event.preventDefault(); $("#crisis-status").textContent = "Активация…";
   try {
-    await api("/v1/system/crisis/activate", { method: "POST", body: JSON.stringify({
+    await api("/v1/system/crisis/takeover", { method: "POST", body: JSON.stringify({
       reason: $("#crisis-reason").value.trim(),
       scope: $("#crisis-scope").value.split(",").map((item) => item.trim()).filter(Boolean),
       ttlMinutes: Number($("#crisis-ttl").value),
     }) });
-    $("#crisis-status").textContent = "TEMIR принял временное кризисное командование."; await loadAgents();
+    $("#crisis-status").textContent = "TEMIR временно перехватил командование всей системой Barlas."; await loadAgents();
   } catch (error) { $("#crisis-status").textContent = `Ошибка: ${error.message}`; }
 });
 

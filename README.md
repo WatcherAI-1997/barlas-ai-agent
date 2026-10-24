@@ -174,13 +174,14 @@ increments its identity version and preserves a reviewable snapshot; custom
 instructions cannot override owner authority, approvals, privacy, budgets,
 accuracy, or the prohibition on invented actions and memories.
 
-For a confirmed critical incident, the owner can temporarily activate TEMIR,
-an original cold and decisive Crisis Regent. Its posture is bounded by scope
-and time, cannot bypass approvals or the emergency pause, enters recovery on
-expiry, and hands control back automatically:
+For a confirmed critical incident, the owner can let TEMIR temporarily take
+system-wide crisis command over every Barlas agent, autonomous run, and channel
+response. Its posture is bounded by scope and time, cannot bypass approvals or
+the emergency pause, enters recovery on expiry, and hands control back
+automatically:
 
 ```bash
-barlas crisis activate "Database integrity failure" --ttl 30 --scope "database,backups,service"
+barlas crisis takeover "Database integrity failure" --ttl 30 --scope "database,backups,service"
 barlas crisis status
 barlas crisis release "Restore verified"
 ```

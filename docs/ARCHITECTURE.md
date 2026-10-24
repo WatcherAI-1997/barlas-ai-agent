@@ -45,7 +45,9 @@ autonomy.
   reason. Runtime instructions append non-overridable owner, permission,
   privacy, accuracy, and non-fabrication principles after custom instructions.
 - TEMIR is a separate, persistent Crisis Regent posture, not a general-purpose
-  superuser. Manual owner activation lasts 5–60 minutes. Trusted-monitor
+  host superuser. Its `system-takeover` posture gives it exclusive incident
+  command across Council personalities, chats, autonomous runs, and channel
+  responses. Manual owner activation lasts 5–60 minutes. Trusted-monitor
   activation requires critical severity, confidence of at least 0.90, and two
   distinct signals. Active posture is injected into interactive, autonomous,
   and Telegram runs, then expires into a ten-minute recovery phase and finally

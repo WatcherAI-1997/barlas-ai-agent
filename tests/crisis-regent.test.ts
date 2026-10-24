@@ -30,7 +30,7 @@ describe("Crisis Regent TEMIR", () => {
     await expect(regent.assess({ severity: "critical", confidence: 0.99, summary: "single", signals: ["a", "a"] }))
       .resolves.toMatchObject({ activated: false });
     await expect(regent.assess({ severity: "critical", confidence: 0.99, summary: "confirmed outage", signals: ["health", "database"] }))
-      .resolves.toMatchObject({ activated: true, state: { mode: "active", source: "trusted-monitor" } });
+      .resolves.toMatchObject({ activated: true, state: { mode: "active", source: "trusted-monitor", commandMode: "system-takeover" } });
     await expect(regent.assess({ severity: "critical", confidence: 1, summary: "repeat", signals: ["health", "database"] }))
       .resolves.toMatchObject({ activated: false, reason: "Crisis Regent is already in active" });
   });
@@ -53,5 +53,16 @@ describe("Crisis Regent TEMIR", () => {
     expect(context).toMatch(/owner remains the highest authority/iu);
     expect(context).toMatch(/Never bypass permissions, approval gates/iu);
     expect(context).toMatch(/hand control back/iu);
+  });
+
+  it("can take exclusive command of Barlas without claiming host or safety controls", async () => {
+    const { regent } = await fixture();
+    await regent.activate({ reason: "coordinated outage", commandMode: "system-takeover", scope: ["service recovery"] });
+    const state = await regent.state();
+    const context = await regent.context();
+    expect(state).toMatchObject({ mode: "active", commandMode: "system-takeover" });
+    expect(context).toMatch(/exclusive incident commander across Barlas/iu);
+    expect(context).toMatch(/Do not claim control of the host operating system/iu);
+    expect(context).toMatch(/owner remains the highest authority/iu);
   });
 });

@@ -504,7 +504,7 @@ async function crisisControl(ctx: CliContext, args: string[]): Promise<void> {
   const path = actionName === "status" ? "/v1/system/crisis" : `/v1/system/crisis/${actionName}`;
   const request = actionName === "status" ? {} : {
     method: "POST",
-    body: JSON.stringify(actionName === "activate"
+    body: JSON.stringify(["activate", "takeover"].includes(actionName)
       ? {
           reason: reasonParts.join(" ").trim() || "Critical situation declared by owner",
           ttlMinutes: Number(option(args, "--ttl") ?? 30),
@@ -512,11 +512,11 @@ async function crisisControl(ctx: CliContext, args: string[]): Promise<void> {
         }
       : actionName === "release" ? { reason: reasonParts.join(" ").trim() || "Released by owner" } : {}),
   };
-  if (!["status", "activate", "release", "reset"].includes(actionName)) {
-    throw new Error("Использование: crisis status|activate|release|reset");
+  if (!["status", "activate", "takeover", "release", "reset"].includes(actionName)) {
+    throw new Error("Использование: crisis status|activate|takeover|release|reset");
   }
   const state = await ctx.api.request<JsonObject>(path, request);
-  output.write(`TEMIR: ${value(state.mode)}${state.reason ? `\nИнцидент: ${value(state.reason)}` : ""}${state.expiresAt ? `\nДо: ${value(state.expiresAt)}` : ""}${state.incidentId ? `\nID: ${value(state.incidentId)}` : ""}\n`);
+  output.write(`TEMIR: ${value(state.mode)}${state.commandMode ? `\nКомандование: ${value(state.commandMode)}` : ""}${state.reason ? `\nИнцидент: ${value(state.reason)}` : ""}${state.expiresAt ? `\nДо: ${value(state.expiresAt)}` : ""}${state.incidentId ? `\nID: ${value(state.incidentId)}` : ""}\n`);
 }
 
 const completionCommands = [
@@ -787,7 +787,9 @@ function help(): void {
   system status                     показать состояние общей паузы
   crisis status                     состояние кризисного регента TEMIR
   crisis activate ПРИЧИНА [--ttl 30] [--scope a,b]
-                                    временно включить кризисное командование
+                                   временно включить кризисное командование
+  crisis takeover ПРИЧИНА [--ttl 30] [--scope a,b]
+                                   TEMIR перехватывает кризисное командование Barlas
   crisis release [ПРИЧИНА]         перейти к контролируемому восстановлению
   crisis reset                      немедленно вернуть обычный режим
   runs                              последние запуски

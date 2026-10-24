@@ -30,10 +30,12 @@ grants, inspect approval and audit records, restore only from verified backups,
 notify affected users and authorities when required, and publish a blameless
 post-incident review.
 
-TEMIR Crisis Regent is an incident-response posture, not a privilege bypass.
-It cannot override the owner, runtime pause, consent, tool allowlists, approval
-gates, budgets, tenant boundaries, or privacy rules. Owner activation expires
-after at most 60 minutes. Trusted-monitor activation additionally requires
+TEMIR Crisis Regent can enter `system-takeover`, where it is the exclusive
+incident commander for Barlas agents, autonomous runs, and channel responses.
+This is an orchestration lease, not a host privilege bypass. It cannot override
+the owner, runtime pause, consent, tool allowlists, approval gates, budgets,
+tenant boundaries, or privacy rules. Owner activation expires after at most 60
+minutes. Trusted-monitor activation additionally requires
 critical severity, at least 0.90 confidence, and two distinct signals. Expiry
 enters bounded recovery before returning to standby. State is persisted with
 restrictive file permissions; API control requests and monitor assessments are

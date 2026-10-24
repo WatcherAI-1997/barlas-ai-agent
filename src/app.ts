@@ -829,6 +829,25 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     return state;
   });
 
+  app.post("/v1/system/crisis/takeover", async (request, reply) => {
+    const principal = requireOwner(request);
+    if (!dependencies.crisisRegent) return reply.notFound();
+    const parsed = crisisActivateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid crisis takeover request");
+    const state = await dependencies.crisisRegent.activate({
+      reason: parsed.data.reason,
+      ttlMinutes: parsed.data.ttlMinutes,
+      source: "owner",
+      commandMode: "system-takeover",
+      ...(parsed.data.scope ? { scope: parsed.data.scope } : {}),
+    });
+    await dependencies.database.appendAudit({
+      userId: principal.userId, eventType: "crisis_regent.takeover_activated", resourceType: "incident",
+      resourceId: state.incidentId ?? "crisis-regent", details: { reason: state.reason, scope: state.scope, expiresAt: state.expiresAt, commandMode: state.commandMode },
+    });
+    return state;
+  });
+
   app.post("/v1/system/crisis/assess", async (request, reply) => {
     const principal = requireOwner(request);
     if (!dependencies.crisisRegent) return reply.notFound();
@@ -1025,7 +1044,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       id: "temir",
       name: "TEMIR",
       status: "standby",
-      mandate: "Temporary crisis command for containment, verified recovery, and an explicit handback to the owner.",
+      mandate: "Temporary system-wide crisis command over all Barlas agents and runs, followed by verified recovery and an explicit handback to the owner.",
       boundaries: "Cannot bypass owner authority, permissions, approval gates, budgets, privacy, policy, or emergency pause; every activation expires.",
     },
     members: barlasCouncil,

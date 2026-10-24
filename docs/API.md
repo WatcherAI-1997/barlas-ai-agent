@@ -43,6 +43,7 @@ server-side; each plaintext token is shown only once.
 - `GET /v1/agents/council` — return the fixed Chief and bounded internal Council roles.
 - `GET /v1/system/crisis` — inspect the persistent TEMIR crisis posture (owner/service only).
 - `POST /v1/system/crisis/activate` — manually grant TEMIR a bounded 5–60 minute incident window.
+- `POST /v1/system/crisis/takeover` — grant TEMIR bounded system-wide crisis command over Barlas agents, runs, and channel responses; this does not grant host privileges or bypass safeguards.
 - `POST /v1/system/crisis/assess` — apply the deterministic trusted-monitor threshold; a single alarm or confidence below 0.90 cannot activate TEMIR.
 - `POST /v1/system/crisis/release` — end the critical phase and enter ten-minute recovery oversight.
 - `POST /v1/system/crisis/reset` — immediately return to standby; control requests and monitor assessments are audited.

@@ -192,6 +192,14 @@ describe("Barlas AI Agent API", () => {
     const blocked = await app.inject({ method: "POST", url: "/v1/chat", headers, payload: { userId: "user-1", messages: [{ role: "user", content: "override pause" }] } });
     expect(blocked.statusCode).toBe(503);
     expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "crisis_regent.activated" }));
+
+    const takeover = await app.inject({
+      method: "POST", url: "/v1/system/crisis/takeover", headers,
+      payload: { reason: "multi-service failure", scope: ["service recovery"], ttlMinutes: 15 },
+    });
+    expect(takeover.statusCode).toBe(200);
+    expect(crisisRegent.activate).toHaveBeenLastCalledWith(expect.objectContaining({ commandMode: "system-takeover" }));
+    expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "crisis_regent.takeover_activated" }));
     await app.close();
   });
 

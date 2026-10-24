@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 
 export type CrisisMode = "standby" | "active" | "recovery";
 export type CrisisActivationSource = "owner" | "trusted-monitor";
+export type CrisisCommandMode = "crisis-command" | "system-takeover";
 
 export interface CrisisRegentState {
   mode: CrisisMode;
@@ -11,6 +12,7 @@ export interface CrisisRegentState {
   reason?: string;
   scope?: string[];
   source?: CrisisActivationSource;
+  commandMode?: CrisisCommandMode;
   evidence?: string[];
   activatedAt?: string;
   expiresAt?: string;
@@ -58,7 +60,7 @@ export class CrisisRegent {
     return current;
   }
 
-  async activate(input: { reason: string; scope?: string[]; ttlMinutes?: number; source?: CrisisActivationSource; evidence?: string[] }): Promise<CrisisRegentState> {
+  async activate(input: { reason: string; scope?: string[]; ttlMinutes?: number; source?: CrisisActivationSource; commandMode?: CrisisCommandMode; evidence?: string[] }): Promise<CrisisRegentState> {
     const now = this.now();
     const ttlMinutes = Math.max(5, Math.min(input.ttlMinutes ?? 30, 60));
     const state: CrisisRegentState = {
@@ -67,6 +69,7 @@ export class CrisisRegent {
       reason: input.reason.trim().slice(0, 500),
       scope: cleanList(input.scope ?? ["system stability", "data protection", "service continuity"]),
       source: input.source ?? "owner",
+      commandMode: input.commandMode ?? "crisis-command",
       evidence: cleanList(input.evidence ?? []),
       activatedAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + ttlMinutes * 60_000).toISOString(),
@@ -94,6 +97,7 @@ export class CrisisRegent {
     const state = await this.activate({
       reason: input.summary,
       source: "trusted-monitor",
+      commandMode: "system-takeover",
       evidence: signals,
       ttlMinutes: 15,
     });
@@ -114,12 +118,17 @@ export class CrisisRegent {
   async context(): Promise<string | null> {
     const state = await this.state();
     if (state.mode === "standby") return null;
-    const phase = state.mode === "active" ? "ACTIVE CRISIS COMMAND" : "RECOVERY OVERSIGHT";
+    const takeover = state.mode === "active" && state.commandMode === "system-takeover";
+    const phase = state.mode === "active"
+      ? takeover ? "SYSTEM-WIDE CRISIS TAKEOVER" : "ACTIVE CRISIS COMMAND"
+      : "RECOVERY OVERSIGHT";
     return [
       `Crisis Regent TEMIR — ${phase}. This is a temporary operating posture, not a transfer of ownership.`,
       state.reason ? `Incident: ${state.reason}` : undefined,
       state.scope?.length ? `Authorized scope: ${state.scope.join(", ")}.` : undefined,
       state.expiresAt ? `Authority window ends at ${state.expiresAt}; do not extend it yourself.` : undefined,
+      takeover ? "TEMIR is the exclusive incident commander across Barlas. All Council personalities, chats, autonomous runs, and channel responses operate as its subordinate incident units; ordinary priorities are suspended when they conflict with containment and recovery." : undefined,
+      takeover ? "Centralize the plan, assign bounded tasks, reject conflicting agent initiatives, and require evidence before declaring an action complete. Do not claim control of the host operating system or of any capability that was not actually granted." : undefined,
       "Act calm, exact, and decisive. First preserve people, secrets, data integrity, and service recoverability; then contain impact, establish verified facts, and propose the smallest reversible next action.",
       "The owner remains the highest authority. Never bypass permissions, approval gates, budgets, privacy, policy, tool restrictions, or the emergency pause. Never self-grant tools, widen scope, retaliate, conceal uncertainty, or impersonate a fictional character.",
       "Keep an incident ledger in each response: confirmed facts, actions actually completed, evidence, blockers, residual risk, and the next review point. In recovery, verify stability and hand control back instead of seeking permanent authority.",
