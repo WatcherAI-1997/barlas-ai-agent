@@ -4,10 +4,10 @@ if (fragmentToken) {
   sessionStorage.setItem("barlasToken", fragmentToken);
   history.replaceState(null, "", `${location.pathname}${location.search}`);
 }
-const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, conversationUpdatedAt: null, manualNewConversation: false, projectId: null, languages: [], skills: [], projects: [], agents: [], voiceRecorder: null, voiceStream: null, voiceChunks: [], voiceTimer: null, microphoneRecorder: null, microphoneStream: null, microphoneChunks: [], microphoneTimer: null, microphoneUrl: null };
+const state = { token: fragmentToken || sessionStorage.getItem("barlasToken"), account: null, conversationId: null, conversationUpdatedAt: null, manualNewConversation: false, projectId: null, languages: [], skills: [], projects: [], agents: [], cortexTimer: null, cortexRunId: null, voiceRecorder: null, voiceStream: null, voiceChunks: [], voiceTimer: null, microphoneRecorder: null, microphoneStream: null, microphoneChunks: [], microphoneTimer: null, microphoneUrl: null };
 const $ = (selector) => document.querySelector(selector);
 const panelTitles = {
-  overview: "Обзор", chat: "Чат", approvals: "Подтверждения", runs: "Запуски",
+  overview: "Обзор", cortex: "Живой интеллект", chat: "Чат", approvals: "Подтверждения", runs: "Запуски",
   jobs: "Задачи", schedules: "Расписания", files: "Файлы", projects: "Проекты", agents: "Агенты",
   traces: "Трассировка", skills: "Навыки", organizations: "Организации",
   connectors: "Подключения", settings: "Настройки", users: "Пользователи",
@@ -260,7 +260,8 @@ $("#chat-form").addEventListener("submit", async (event) => {
     const split = selectedSkill.lastIndexOf("@");
     const skill = split > 0 ? { skillId: selectedSkill.slice(0, split), skillVersion: selectedSkill.slice(split + 1) } : {};
     const agentId = $("#chat-agent").value || undefined;
-    const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, agentId, ...(!agentId ? { projectId: $("#chat-project").value || undefined, taskClass: $("#task-class").value } : {}), messages: [{ role: "user", content: text }], ...skill }) });
+    const taskClass = $("#task-class").value;
+    const data = await api("/v1/agent/run", { method: "POST", body: JSON.stringify({ userId: state.account.id, conversationId: state.conversationId || undefined, agentId, ...(!agentId ? { projectId: $("#chat-project").value || undefined, ...(taskClass !== "auto" ? { taskClass } : {}) } : {}), messages: [{ role: "user", content: text }], ...skill }) });
     state.conversationId = data.conversationId;
     state.manualNewConversation = false;
     const statusNode = addMessage("agent", data.message.content);
@@ -301,10 +302,11 @@ async function submitVoiceTurn(blob, extension) {
   try {
     const formData = new FormData();
     formData.append("file", blob, `voice.${extension}`);
+    const selectedTaskClass = $("#task-class").value;
     const query = new URLSearchParams({
       userId: state.account.id,
       consent: "true",
-      ...($("#chat-agent").value ? { agentId: $("#chat-agent").value } : { taskClass: $("#task-class").value }),
+      ...($("#chat-agent").value ? { agentId: $("#chat-agent").value } : selectedTaskClass !== "auto" ? { taskClass: selectedTaskClass } : {}),
       ...(state.conversationId ? { conversationId: state.conversationId } : {}),
     });
     const data = await upload(`/v1/voice/turn?${query}`, formData);
@@ -474,12 +476,14 @@ $("#media-upload-form").addEventListener("submit", async (event) => {
 });
 
 async function watchAgentRun(runId, statusNode) {
+  state.cortexRunId = runId;
   const terminal = new Set(["completed", "step_limit", "budget_limit", "cancelled", "failed", "waiting_approval"]);
   while (true) {
     try {
       const data = await api(`/v1/agent-runs/${runId}?userId=${encodeURIComponent(state.account.id)}`);
       const events = await api(`/v1/agent-runs/${runId}/events?userId=${encodeURIComponent(state.account.id)}`);
       const latest = events.events.at(-1);
+      renderCortex(data.run, events.events);
       statusNode.textContent = latest
         ? `Выполняется: шаг ${latest.step}, ${latest.eventType}`
         : `Состояние: ${data.run.status}`;
@@ -510,6 +514,7 @@ async function loadPanel(name) {
   document.title = `${panelTitles[name] || name} · Barlas AI Agent`;
   closeNavigation();
   if (name === "overview") await loadOverview();
+  if (name === "cortex") await loadCortex();
   if (name === "chat") await loadConversations();
   if (name === "approvals") await loadApprovals();
   if (name === "runs") await loadRuns();
@@ -533,6 +538,78 @@ async function loadPanel(name) {
   if (name === "settings") fillLanguageSelect("#language-settings-select", state.account.languageCode);
   if (name === "users") await loadUsers();
 }
+
+const cortexColumns = [
+  { key: "input", x: 100, title: "Сигнал", nodes: 4 },
+  { key: "context", x: 330, title: "Контекст", nodes: 6 },
+  { key: "reason", x: 600, title: "Анализ", nodes: 7 },
+  { key: "action", x: 860, title: "Действие", nodes: 5 },
+  { key: "output", x: 1100, title: "Результат", nodes: 4 },
+];
+
+function buildCortexMap(activeKey = "idle") {
+  const svg = $("#cortex-map");
+  if (!svg) return;
+  const points = cortexColumns.map((column) => Array.from({ length: column.nodes }, (_, index) => ({
+    x: column.x,
+    y: 92 + index * (376 / Math.max(1, column.nodes - 1)),
+    key: column.key,
+  })));
+  const lines = [];
+  for (let column = 0; column < points.length - 1; column += 1) {
+    for (const from of points[column]) for (const to of points[column + 1]) {
+      lines.push(`<line class="cortex-link ${from.key === activeKey || to.key === activeKey ? "active" : ""}" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`);
+    }
+  }
+  const labels = cortexColumns.map((column) => `<text class="cortex-label" x="${column.x}" y="35" text-anchor="middle">${column.title}</text>`);
+  const nodes = points.flat().map((point, index) => `<g class="cortex-node ${point.key === activeKey ? "active" : ""}" style="--delay:${index * 34}ms"><circle cx="${point.x}" cy="${point.y}" r="10"/><circle class="halo" cx="${point.x}" cy="${point.y}" r="22"/></g>`);
+  svg.innerHTML = `${lines.join("")}${labels.join("")}${nodes.join("")}`;
+}
+
+function cognitivePhase(eventType = "") {
+  if (eventType === "run.queued" || eventType === "run.started" || eventType === "cognition.observe") return ["input", "Собираю контекст"];
+  if (eventType === "model.tool_calls") return ["reason", "Выбираю следующий шаг"];
+  if (eventType === "cognition.act" || eventType.startsWith("tool.")) return ["action", "Использую инструмент"];
+  if (eventType === "cognition.verify") return ["context", "Проверяю результат"];
+  if (eventType === "approval.pending" || eventType === "cognition.blocked") return ["action", "Жду подтверждения"];
+  if (eventType === "model.completed" || eventType === "cognition.complete") return ["output", "Результат готов"];
+  return ["idle", "Ожидание задачи"];
+}
+
+function renderCortex(run, events = []) {
+  if (!$("#cortex-map")) return;
+  const latest = events.at(-1);
+  const [phase, label] = cognitivePhase(latest?.eventType);
+  buildCortexMap(phase);
+  $("#cortex-status").textContent = label;
+  $("#cortex-run").textContent = run ? `Запуск ${run.id.slice(0, 8)} · ${run.status}` : "Нет активного запуска";
+  $("#cortex-pulse").classList.toggle("active", Boolean(run && ["queued", "running"].includes(run.status)));
+  const visible = events.filter((event) => event.eventType.startsWith("cognition.") || event.eventType.startsWith("tool.") || event.eventType.startsWith("approval.")).slice(-8);
+  $("#cortex-phases").replaceChildren(...visible.map((event) => {
+    const item = document.createElement("div");
+    item.className = "cortex-phase";
+    const [, phaseLabel] = cognitivePhase(event.eventType);
+    item.innerHTML = `<span>${event.step}</span><strong></strong><small></small>`;
+    item.querySelector("strong").textContent = phaseLabel;
+    item.querySelector("small").textContent = event.eventType;
+    return item;
+  }));
+}
+
+async function loadCortex() {
+  const runs = (await api(`/v1/agent-runs?userId=${encodeURIComponent(state.account.id)}`)).runs;
+  const run = runs.find((item) => ["queued", "running", "waiting_approval"].includes(item.status)) || runs[0];
+  if (!run) { renderCortex(null, []); return; }
+  state.cortexRunId = run.id;
+  const events = (await api(`/v1/agent-runs/${run.id}/events?userId=${encodeURIComponent(state.account.id)}`)).events;
+  renderCortex(run, events);
+  clearTimeout(state.cortexTimer);
+  if (["queued", "running"].includes(run.status) && !$("#panel-cortex").classList.contains("hidden")) {
+    state.cortexTimer = setTimeout(() => loadCortex().catch((error) => notify(error.message, "error")), 1200);
+  }
+}
+
+buildCortexMap();
 
 function renderList(selector, items, renderer) {
   const root = $(selector);

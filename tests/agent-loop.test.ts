@@ -67,6 +67,28 @@ describe("Barlas AI Agent autonomous loop", () => {
     }));
   });
 
+  it("applies the cognition protocol and emits content-safe cognitive phases", async () => {
+    const model = provider([
+      { calls: [{ callId: "call-1", name: "system_time", arguments: {} }] },
+      { text: "Verified." },
+    ]);
+    const execute = vi.fn(async () => ({ status: "completed" as const, output: { ok: true } }));
+    const observed: string[] = [];
+    const onStep = vi.fn(async (event: { step: number; type: string; details?: unknown }) => {
+      observed.push(event.type);
+    });
+
+    await new AgentLoop(model, tools(execute)).run({ ...request, onStep });
+
+    const firstRequest = vi.mocked(model.generateWithTools).mock.calls[0]![0];
+    expect(firstRequest.messages[0]?.content).toContain("disciplined autonomy");
+    expect(firstRequest.messages[0]?.content).toContain("do not guess facts that can be checked");
+    expect(observed).toEqual(expect.arrayContaining([
+      "cognition.observe", "cognition.act", "cognition.verify", "cognition.complete",
+    ]));
+    expect(JSON.stringify(onStep.mock.calls)).not.toContain("What time is it?");
+  });
+
   it("completes a long sequential tool plan within the bounded loop", async () => {
     const model = provider([
       ...Array.from({ length: 6 }, (_value, index) => ({

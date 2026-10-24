@@ -21,12 +21,13 @@
   automatic verification, and a strict distinction between a finished run and
   an achieved result. *(implemented foundation)*
 - Web research, files, documents, terminal tools, and task execution. *(SearXNG search, SSRF-protected page reader, isolated Playwright interaction, Markdown/TXT/CSV/DOCX creation, PDF/DOCX extraction, isolated files, restricted inspection, and approval-gated offline Python/Node/Git/npm sandbox implemented)*
-- Model switching and routing. *(fast/deep/private foundation implemented)*
+- Model switching and routing. *(fast/deep/private routes plus automatic promotion of substantial, multi-step, project, and skill-backed work implemented)*
 - Approval gates, audit trail, and usage limits. *(implemented foundation)*
 
 ## Phase 2 — Agent capabilities
 
 - Native autonomous tool loop with bounded steps and approval pauses. *(implemented)*
+- Evidence-first cognition protocol and live Cortex visualization. *(observe/plan/act/verify behavior and content-safe phase telemetry implemented; private reasoning is never exposed)*
 - Durable run checkpoints, approval continuation, recovery, cancellation, and step journal. *(implemented)*
 - Asynchronous leased agent-run queue, live progress polling, and Telegram result delivery. *(implemented)*
 - Durable long-running job storage and schedules. *(job worker, leases, retries,

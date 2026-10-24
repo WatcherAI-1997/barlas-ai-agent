@@ -10,6 +10,15 @@ import type { ModelToolDefinition } from "../tools/registry.js";
 const MAX_OUTPUT_CHARS = 40_000;
 const MAX_CALLS_PER_STEP = 1;
 
+const COGNITION_PROTOCOL = [
+  "Operate with disciplined autonomy: understand the objective and constraints before acting.",
+  "For non-trivial work, silently form a short plan, choose the smallest useful next action, and revise the plan when evidence changes.",
+  "Use memory, project context, and tools as evidence; do not guess facts that can be checked.",
+  "After every tool result, verify what actually changed and whether the objective is satisfied before continuing.",
+  "Do not expose private chain-of-thought. Give the user concise conclusions, evidence, decisions, and any remaining uncertainty.",
+  "If blocked, explain the exact blocker and the smallest decision or permission needed. Never bypass approvals or safety boundaries.",
+].join(" ");
+
 export interface AgentLoopResult {
   status: "completed" | "waiting_approval" | "step_limit" | "budget_limit" | "cancelled";
   text: string;
@@ -78,6 +87,7 @@ export class AgentLoop {
         "You are Barlas AI Agent operating in a bounded autonomous loop.",
         "Use only the provided tools. Never claim a tool succeeded before receiving its output.",
         "Risky tools pause for explicit user approval. If a tool is unnecessary, answer directly.",
+        COGNITION_PROTOCOL,
       ].join(" "),
     }, ...input.messages];
     let previousResponseId = input.continuation?.previousResponseId;
@@ -86,6 +96,12 @@ export class AgentLoop {
     const approvalIds = [...(input.continuation?.approvalIds ?? [])];
     let aggregateUsage = input.continuation?.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 };
     let last: GenerateResult = input.continuation?.last ?? { text: "", provider: this.model.name, model: "unknown" };
+
+    await input.onStep?.({
+      step: input.continuation?.steps ?? 0,
+      type: "cognition.observe",
+      details: { availableTools: definitions.length, resumed: Boolean(input.continuation) },
+    });
 
     for (let step = (input.continuation?.steps ?? 0) + 1; step <= maxSteps; step += 1) {
       if (await input.shouldCancel?.()) {
@@ -117,6 +133,7 @@ export class AgentLoop {
         return this.finish("cancelled", "Автономный запуск отменён.", step, toolExecutions, approvalIds, last, aggregateUsage);
       }
       if (response.toolCalls.length === 0) {
+        await input.onStep?.({ step, type: "cognition.complete", details: { verified: toolExecutions > 0 } });
         return this.finish("completed", response.text || "Задача завершена.", step, toolExecutions, approvalIds, last, aggregateUsage);
       }
       if (aggregateUsage.totalTokens >= tokenBudget) {
@@ -138,6 +155,11 @@ export class AgentLoop {
       for (const call of response.toolCalls) {
         const definition = byModelName.get(call.name);
         if (!definition) throw new Error(`Model requested an unavailable tool: ${call.name}`);
+        await input.onStep?.({
+          step,
+          type: "cognition.act",
+          details: { toolName: definition.toolName },
+        });
         const execution = await this.tools.execute({
           userId: input.userId,
           toolName: definition.toolName,
@@ -172,6 +194,11 @@ export class AgentLoop {
             type: "approval.pending",
             details: { approvalId: execution.approvalId, toolName: definition.toolName },
           });
+          await input.onStep?.({
+            step,
+            type: "cognition.blocked",
+            details: { reason: "approval_required", toolName: definition.toolName },
+          });
           return result;
         }
         const output = execution.status === "completed"
@@ -179,6 +206,11 @@ export class AgentLoop {
           : JSON.stringify({ rejected: true });
         toolOutputs.push({ callId: call.callId, output: (output ?? "null").slice(0, MAX_OUTPUT_CHARS) });
         await input.onStep?.({ step, type: "tool.completed", details: { toolName: definition.toolName } });
+        await input.onStep?.({
+          step,
+          type: "cognition.verify",
+          details: { toolName: definition.toolName, outcome: execution.status },
+        });
       }
     }
     return this.finish(

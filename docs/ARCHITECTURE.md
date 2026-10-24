@@ -19,6 +19,12 @@ autonomy.
 8. **Policy engine** — approvals, allowlists, quotas, tenancy, and audit logs.
 9. **Control panel** — users, models, costs, tools, traces, and administration.
 
+The default web mode is adaptive: short factual turns stay on the fast route,
+while substantial, multi-step, project, or skill-backed work is promoted to the
+deep route. The bounded loop follows an observe/plan/act/verify protocol and
+emits content-safe cognitive phase events for the live Cortex view; private
+reasoning and prompts are never exposed by that telemetry.
+
 ## Implemented capability boundaries
 
 - The file workspace is a dedicated Barlas AI Agent volume partitioned by a

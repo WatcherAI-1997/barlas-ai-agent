@@ -45,6 +45,7 @@
         <nav id="primary-nav" aria-label="Основная навигация">
           <p class="nav-label">Рабочее пространство</p>
           <button data-panel="overview" data-icon="⌂" class="active" aria-current="page">Обзор</button>
+          <button data-panel="cortex" data-icon="⌬">Живой интеллект</button>
           <button data-panel="chat" data-icon="✦">Чат</button>
           <button data-panel="agents" data-icon="◉">Агенты</button>
           <button data-panel="projects" data-icon="◫">Проекты</button>
@@ -80,7 +81,7 @@
               <form id="chat-form" class="composer">
                 <textarea id="chat-input" maxlength="20000" placeholder="Поставьте задачу Barlas AI Agent…" required></textarea>
                 <select id="task-class" aria-label="Режим модели">
-                  <option value="fast">Fast</option><option value="deep">Deep</option><option value="private">Private</option>
+                  <option value="auto" selected>Adaptive</option><option value="fast">Fast</option><option value="deep">Deep</option><option value="private">Private</option>
                 </select>
                 <select id="skill-select" aria-label="Навык">
                   <option value="">Без специального навыка</option>
@@ -99,6 +100,20 @@
               <p id="media-upload-status" class="meta" role="status"></p>
             </div>
           </div>
+        </section>
+
+        <section id="panel-cortex" class="panel hidden">
+          <div class="cortex-heading">
+            <div><span class="eyebrow">BARLAS COGNITIVE ENGINE</span><h2>Живой интеллект</h2><p class="meta">Это реальная телеметрия работы агента без показа его скрытых рассуждений. Узлы оживают по журналу текущего запуска.</p></div>
+            <div class="cortex-state"><span id="cortex-pulse" aria-hidden="true"></span><strong id="cortex-status">Ожидание задачи</strong><small id="cortex-run">Нет активного запуска</small></div>
+          </div>
+          <div class="cortex-stage" role="img" aria-label="Карта этапов работы Barlas AI Agent">
+            <svg id="cortex-map" viewBox="0 0 1200 560" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+            <div class="cortex-legend">
+              <span><i class="legend-input"></i>Контекст</span><span><i class="legend-reason"></i>Анализ</span><span><i class="legend-action"></i>Действие</span><span><i class="legend-output"></i>Результат</span>
+            </div>
+          </div>
+          <div id="cortex-phases" class="cortex-phases" aria-live="polite"></div>
         </section>
 
         <section id="panel-approvals" class="panel hidden"><h2>Очередь подтверждений</h2><div id="approvals" class="grid"></div></section>

@@ -129,6 +129,8 @@ describe("Barlas AI Agent API", () => {
     const brand = await app.inject({ method: "GET", url: "/ui/brand/barlas-ai-agent-github-hero.png" });
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain("barlas-ai-agent-github-hero.png");
+    expect(page.body).toContain("BARLAS COGNITIVE ENGINE");
+    expect(page.body).toContain('<option value="auto" selected>Adaptive</option>');
     expect(brand.statusCode).toBe(200);
     expect(brand.headers["content-type"]).toContain("image/png");
     expect(brand.rawPayload.byteLength).toBeGreaterThan(10_000);

@@ -69,6 +69,7 @@ import {
 } from "./agents/profiles.js";
 import type { RuntimeControl, RuntimeControlState } from "./system/runtime-control.js";
 import type { CrisisAssessment, CrisisRegent } from "./agents/crisis-regent.js";
+import { inferTaskClass } from "./core/task-classifier.js";
 
 class RuntimePausedError extends Error {}
 
@@ -1700,7 +1701,11 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const selectedProfile = dependencies.agentProfiles
       ? await dependencies.agentProfiles.resolve(userId, conversationId, parsed.data.agentId)
       : null;
-    const effectiveTaskClass = parsed.data.taskClass ?? selectedProfile?.defaultTaskClass ?? "fast";
+    const effectiveTaskClass = parsed.data.taskClass ?? selectedProfile?.defaultTaskClass ?? inferTaskClass({
+      messages: parsed.data.messages,
+      hasProject: Boolean(parsed.data.projectId),
+      hasSkill: Boolean(parsed.data.skillId),
+    });
     const existingConversation = parsed.data.conversationId
       ? await dependencies.database.getConversation(userId, parsed.data.conversationId)
       : null;
