@@ -147,6 +147,13 @@
             <select id="agent-style"><option value="balanced">Сбалансированный</option><option value="concise">Краткий</option><option value="warm">Тёплый</option><option value="analytical">Аналитический</option><option value="creative">Творческий</option></select>
             <select id="agent-task-class"><option value="fast">Fast</option><option value="deep">Deep</option><option value="private">Private</option></select>
             <select id="agent-project"><option value="">Без проекта</option></select>
+            <input id="agent-values" maxlength="400" placeholder="Ценности через запятую" value="полезность, честность, уважение" required>
+            <input id="agent-strengths" maxlength="400" placeholder="Сильные стороны через запятую">
+            <input id="agent-voice" maxlength="500" placeholder="Узнаваемый голос и манера речи">
+            <select id="agent-initiative"><option value="directed">По поручению</option><option value="balanced" selected>Сбалансированно</option><option value="proactive">Проактивно</option></select>
+            <select id="agent-risk"><option value="cautious">Осторожный</option><option value="balanced" selected>Сбалансированный риск</option><option value="bold">Смелый</option></select>
+            <select id="agent-critique"><option value="gentle">Мягкая критика</option><option value="direct" selected>Прямая критика</option><option value="challenging">Требовательная критика</option></select>
+            <input id="agent-color" type="color" value="#c62828" aria-label="Цвет личности">
             <input id="agent-instructions" maxlength="4000" placeholder="Личные инструкции">
             <button type="submit">Создать агента</button>
           </form>

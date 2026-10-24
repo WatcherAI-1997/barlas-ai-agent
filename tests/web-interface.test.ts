@@ -27,6 +27,10 @@ describe("Barlas web interface", () => {
       'aria-pressed="false"',
       "barlas-ai-agent-github-hero.png",
       'id="council"',
+      'id="agent-values"',
+      'id="agent-initiative"',
+      'id="agent-risk"',
+      'id="agent-critique"',
       'id="login-title"',
       'id="login-token-label"',
     ]) expect(html).toContain(marker);

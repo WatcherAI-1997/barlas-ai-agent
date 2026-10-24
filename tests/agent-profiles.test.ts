@@ -13,14 +13,35 @@ import {
 class MemoryProfileStore implements AgentProfileStore {
   profiles: AgentProfile[] = [];
   bindings = new Map<string, string>();
+  revisions = new Map<string, Array<{ version: number; snapshot: Omit<AgentProfile, "createdAt" | "updatedAt">; reason: string; createdAt: string }>>();
 
-  async createAgentProfile(input: Omit<AgentProfile, "id" | "createdAt" | "updatedAt">) {
-    const profile = { ...input, id: randomUUID(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  async createAgentProfile(input: Omit<AgentProfile, "id" | "createdAt" | "updatedAt" | "identityVersion">) {
+    const profile = { ...input, id: randomUUID(), identityVersion: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     this.profiles.push(profile);
     return profile;
   }
   async listAgentProfiles(userId: string) { return this.profiles.filter((profile) => profile.userId === userId); }
   async getAgentProfile(userId: string, id: string) { return this.profiles.find((profile) => profile.userId === userId && profile.id === id) ?? null; }
+  async updateAgentProfile(input: { userId: string; id: string; patch: import("../src/agents/profiles.js").AgentProfilePatch; reason: string }) {
+    const index = this.profiles.findIndex((profile) => profile.userId === input.userId && profile.id === input.id);
+    if (index < 0) return null;
+    const current = this.profiles[index]!;
+    const { projectId: _currentProjectId, ...currentWithoutProject } = current;
+    const { projectId, ...fields } = input.patch;
+    const effectiveProjectId = projectId === undefined ? current.projectId : projectId ?? undefined;
+    const updated: AgentProfile = {
+      ...currentWithoutProject, ...fields,
+      ...(effectiveProjectId ? { projectId: effectiveProjectId } : {}),
+      identityVersion: current.identityVersion + 1, updatedAt: new Date().toISOString(),
+    };
+    this.profiles[index] = updated;
+    const { createdAt: _createdAt, updatedAt: _updatedAt, ...snapshot } = updated;
+    this.revisions.set(updated.id, [...(this.revisions.get(updated.id) ?? []), { version: updated.identityVersion, snapshot, reason: input.reason, createdAt: updated.updatedAt }]);
+    return updated;
+  }
+  async listAgentProfileRevisions(userId: string, id: string) {
+    return (await this.getAgentProfile(userId, id)) ? (this.revisions.get(id) ?? []) : [];
+  }
   async deleteAgentProfile(userId: string, id: string) {
     const before = this.profiles.length;
     this.profiles = this.profiles.filter((profile) => profile.userId !== userId || profile.id !== id);
@@ -41,24 +62,29 @@ class MemoryProfileStore implements AgentProfileStore {
 }
 
 describe("agent profiles", () => {
+  const character = { values: ["truth"], strengths: ["research"], voice: "Calm and precise.", initiativeLevel: "balanced" as const, riskPosture: "cautious" as const, critiqueStyle: "direct" as const, color: "#C62828" };
   it("binds a conversation to one owned profile and restores it", async () => {
     const store = new MemoryProfileStore();
     const service = new AgentProfileService(store);
     const profile = await service.create({
       userId: "owner", slug: "research", name: "Researcher", style: "analytical",
-      instructions: "Cite evidence.", defaultTaskClass: "deep", projectId: randomUUID(),
+      instructions: "Cite evidence.", defaultTaskClass: "deep", projectId: randomUUID(), character,
     });
     const conversationId = randomUUID();
     expect(await service.resolve("owner", conversationId, profile.id)).toEqual(profile);
     expect(await service.resolve("owner", conversationId)).toEqual(profile);
     expect(agentProfileInstruction(profile)).toContain("Cite evidence.");
+    expect(agentProfileInstruction(profile)).toContain("Protected Barlas principles");
+    const evolved = await service.update("owner", profile.id, { character: { ...character, voice: "More candid." } }, "Owner preference");
+    expect(evolved?.identityVersion).toBe(2);
+    expect(await service.revisions("owner", profile.id)).toEqual([expect.objectContaining({ version: 2, reason: "Owner preference" })]);
   });
 
   it("rejects cross-profile and cross-user conversation reuse", async () => {
     const store = new MemoryProfileStore();
     const service = new AgentProfileService(store);
-    const first = await service.create({ userId: "owner", slug: "one", name: "One", style: "balanced", instructions: "", defaultTaskClass: "fast" });
-    const second = await service.create({ userId: "owner", slug: "two", name: "Two", style: "warm", instructions: "", defaultTaskClass: "fast" });
+    const first = await service.create({ userId: "owner", slug: "one", name: "One", style: "balanced", instructions: "", defaultTaskClass: "fast", character });
+    const second = await service.create({ userId: "owner", slug: "two", name: "Two", style: "warm", instructions: "", defaultTaskClass: "fast", character });
     const conversationId = randomUUID();
     await service.resolve("owner", conversationId, first.id);
     await expect(service.resolve("owner", conversationId, second.id)).rejects.toBeInstanceOf(AgentProfileConflictError);

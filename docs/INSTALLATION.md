@@ -408,6 +408,21 @@ downloaded package bytes, rechecks its publisher signature, blocks signed
 revocations and stale catalog sequences, evaluates the candidate without tools,
 and activates it only after all acceptance cases pass.
 
+### Personalities for additional agents
+
+An additional agent is more than a display name. Its durable identity card can
+record values, strengths, a recognizable voice, initiative level, risk posture,
+critique style, color, model class, and a dedicated project workspace:
+
+```powershell
+barlas agents create strategist "Strategist" --style analytical --task deep --values "foresight,honesty" --strengths "planning,tradeoffs" --voice "Calm and long-range" --initiative proactive --risk cautious --critique direct --color "#C62828"
+barlas agents history AGENT_ID
+```
+
+The cabinet supports owner-led evolution of a personality. A reason is required,
+the identity version increases, and earlier snapshots remain reviewable.
+Protected Barlas principles always remain in force regardless of custom text.
+
 ## Discord without a domain
 
 Create a dedicated Discord application and bot, enable the Message Content

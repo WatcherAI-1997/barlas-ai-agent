@@ -196,6 +196,16 @@ const fileQuerySchema = z.object({
 }).strict();
 const fileUploadQuerySchema = fileQuerySchema.extend({ overwrite: z.enum(["true", "false"]).default("false") });
 const projectBodySchema = z.object({ userId: z.string().min(1).max(128), name: z.string().min(1).max(120), description: z.string().max(4_000).default("") }).strict();
+const agentCharacterSchema = z.object({
+  values: z.array(z.string().trim().min(1).max(80)).min(1).max(8).default(["helpfulness", "honesty", "respect"]),
+  strengths: z.array(z.string().trim().min(1).max(80)).max(8).default([]),
+  voice: z.string().trim().max(500).default(""),
+  initiativeLevel: z.enum(["directed", "balanced", "proactive"]).default("balanced"),
+  riskPosture: z.enum(["cautious", "balanced", "bold"]).default("balanced"),
+  critiqueStyle: z.enum(["gentle", "direct", "challenging"]).default("direct"),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/u).default("#C62828"),
+  avatar: z.string().trim().max(1_000).optional(),
+}).strict();
 const agentProfileBodySchema = z.object({
   userId: z.string().min(1).max(128),
   slug: z.string().regex(/^[a-z][a-z0-9-]{1,31}$/u),
@@ -204,6 +214,20 @@ const agentProfileBodySchema = z.object({
   instructions: z.string().max(4_000).default(""),
   defaultTaskClass: z.enum(["fast", "deep", "private"]).default("fast"),
   projectId: z.string().uuid().optional(),
+  character: agentCharacterSchema.default({
+    values: ["helpfulness", "honesty", "respect"], strengths: [], voice: "",
+    initiativeLevel: "balanced", riskPosture: "balanced", critiqueStyle: "direct", color: "#C62828",
+  }),
+}).strict();
+const agentProfileUpdateSchema = z.object({
+  userId: z.string().min(1).max(128),
+  reason: z.string().trim().min(1).max(500),
+  name: z.string().min(1).max(80).optional(),
+  style: z.enum(["balanced", "concise", "warm", "analytical", "creative"]).optional(),
+  instructions: z.string().max(4_000).optional(),
+  defaultTaskClass: z.enum(["fast", "deep", "private"]).optional(),
+  projectId: z.string().uuid().nullable().optional(),
+  character: agentCharacterSchema.optional(),
 }).strict();
 const projectQuerySchema = z.object({ userId: z.string().min(1).max(128) }).strict();
 const projectParamsSchema = z.object({ id: z.string().uuid() });
@@ -415,7 +439,7 @@ export interface AppDependencies {
   projects?: Pick<ProjectService, "create" | "list" | "detail" | "context" | "attach" | "snapshot" | "restore" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "recordRunResult">;
   continuity?: Pick<ContinuityService, "context">;
   outcomes?: Pick<OutcomeService, "context">;
-  agentProfiles?: Pick<AgentProfileService, "create" | "list" | "get" | "delete" | "resolve">;
+  agentProfiles?: Pick<AgentProfileService, "create" | "list" | "get" | "update" | "revisions" | "delete" | "resolve">;
   schedules?: Pick<ScheduleService, "create" | "list" | "pause" | "resume" | "disable">;
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
@@ -930,6 +954,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         style: parsed.data.style,
         instructions: parsed.data.instructions,
         defaultTaskClass: parsed.data.defaultTaskClass,
+        character: parsed.data.character,
         ...(parsed.data.projectId ? { projectId: parsed.data.projectId } : {}),
       });
       await dependencies.database.appendAudit({
@@ -951,6 +976,44 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const parsed = projectQuerySchema.safeParse(request.query);
     if (!parsed.success) return reply.badRequest("Invalid agent profiles query");
     return { profiles: await dependencies.agentProfiles.list(authorizeUser(request, parsed.data.userId)) };
+  });
+
+  app.patch("/v1/agents/:id", async (request, reply) => {
+    if (!dependencies.agentProfiles) return reply.notFound();
+    const params = agentProfileParamsSchema.safeParse(request.params);
+    const parsed = agentProfileUpdateSchema.safeParse(request.body);
+    if (!params.success || !parsed.success) return reply.badRequest("Invalid agent profile update");
+    const userId = authorizeUser(request, parsed.data.userId);
+    const { reason } = parsed.data;
+    const patch: Parameters<AgentProfileService["update"]>[2] = {};
+    if (parsed.data.name !== undefined) patch.name = parsed.data.name;
+    if (parsed.data.style !== undefined) patch.style = parsed.data.style;
+    if (parsed.data.instructions !== undefined) patch.instructions = parsed.data.instructions;
+    if (parsed.data.defaultTaskClass !== undefined) patch.defaultTaskClass = parsed.data.defaultTaskClass;
+    if (parsed.data.character !== undefined) patch.character = parsed.data.character;
+    if (parsed.data.projectId !== undefined) patch.projectId = parsed.data.projectId;
+    try {
+      const profile = await dependencies.agentProfiles.update(userId, params.data.id, patch, reason);
+      if (!profile) return reply.notFound("Agent profile not found");
+      await dependencies.database.appendAudit({
+        userId, eventType: "agent_profile.identity_updated", resourceType: "agent_profile", resourceId: profile.id,
+        details: { identityVersion: profile.identityVersion, reason },
+      });
+      return { profile };
+    } catch (error) {
+      if (error instanceof Error && error.message === "Agent workspace project not found") return reply.notFound(error.message);
+      throw error;
+    }
+  });
+
+  app.get("/v1/agents/:id/revisions", async (request, reply) => {
+    if (!dependencies.agentProfiles) return reply.notFound();
+    const params = agentProfileParamsSchema.safeParse(request.params);
+    const query = projectQuerySchema.safeParse(request.query);
+    if (!params.success || !query.success) return reply.badRequest("Invalid agent profile request");
+    const userId = authorizeUser(request, query.data.userId);
+    if (!(await dependencies.agentProfiles.get(userId, params.data.id))) return reply.notFound("Agent profile not found");
+    return { revisions: await dependencies.agentProfiles.revisions(userId, params.data.id) };
   });
 
   app.delete("/v1/agents/:id", async (request, reply) => {

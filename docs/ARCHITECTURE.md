@@ -38,6 +38,12 @@ autonomy.
   classes. Delegates receive only supplied context, have no tools or recursive
   delegation, use bounded output, and return usage totals. The Chief reconciles
   dissent and remains accountable for every user-visible conclusion and action.
+- Owner-created agents have durable, structured identity cards rather than a
+  prompt-only persona: stable values, strengths, communication voice,
+  initiative, risk posture, critique style, and visual cues. Each owner-led
+  change increments an identity version and saves an immutable snapshot with a
+  reason. Runtime instructions append non-overridable owner, permission,
+  privacy, accuracy, and non-fabrication principles after custom instructions.
 - Web search uses a separately configured open-source SearXNG endpoint. It is
   disabled by default and remains subject to the external-action approval gate.
 - Interactive JavaScript browsing runs in a separate Playwright container with

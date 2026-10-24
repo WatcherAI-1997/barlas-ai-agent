@@ -276,6 +276,11 @@ function option(args: string[], name: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined;
 }
 
+function commaList(value: string | undefined, fallback: string[] = []): string[] {
+  if (!value) return fallback;
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
 async function readAgentSkill(path: string) {
   if (!path) throw new Error("Укажите путь к SKILL.md или каталогу навыка");
   const source = resolve(path);
@@ -589,7 +594,7 @@ async function ask(ctx: CliContext, prompt: string, conversationId?: string, age
 
 async function agents(ctx: CliContext): Promise<void> {
   const result = await ctx.api.request<{ profiles: JsonObject[] }>(`/v1/agents?userId=${encodeURIComponent(ctx.userId)}`);
-  output.write(`${renderRows(result.profiles, ["id", "slug", "name", "style", "defaultTaskClass", "projectId"])}\n`);
+  output.write(`${renderRows(result.profiles, ["id", "slug", "name", "style", "identityVersion", "defaultTaskClass", "projectId"])}\n`);
 }
 
 async function council(ctx: CliContext): Promise<void> {
@@ -604,7 +609,7 @@ async function council(ctx: CliContext): Promise<void> {
 async function createAgentProfile(ctx: CliContext, args: string[]): Promise<void> {
   const slug = args[2] ?? "";
   const name = args[3] ?? "";
-  if (!slug || !name) throw new Error("Использование: agents create SLUG NAME [--style STYLE] [--task CLASS] [--project ID] [--instructions TEXT]");
+  if (!slug || !name) throw new Error("Использование: agents create SLUG NAME [--values A,B] [--strengths A,B] [--voice TEXT] [--initiative LEVEL] [--risk LEVEL] [--critique STYLE]");
   const result = await ctx.api.request<{ profile: JsonObject }>("/v1/agents", {
     method: "POST",
     body: JSON.stringify({
@@ -615,9 +620,25 @@ async function createAgentProfile(ctx: CliContext, args: string[]): Promise<void
       defaultTaskClass: option(args, "--task") ?? "fast",
       ...(option(args, "--project") ? { projectId: option(args, "--project") } : {}),
       instructions: option(args, "--instructions") ?? "",
+      character: {
+        values: commaList(option(args, "--values"), ["helpfulness", "honesty", "respect"]),
+        strengths: commaList(option(args, "--strengths")),
+        voice: option(args, "--voice") ?? "",
+        initiativeLevel: option(args, "--initiative") ?? "balanced",
+        riskPosture: option(args, "--risk") ?? "balanced",
+        critiqueStyle: option(args, "--critique") ?? "direct",
+        color: option(args, "--color") ?? "#C62828",
+        ...(option(args, "--avatar") ? { avatar: option(args, "--avatar") } : {}),
+      },
     }),
   });
   output.write(`Агент создан: ${value(result.profile.name)} (${value(result.profile.id)})\n`);
+}
+
+async function agentProfileHistory(ctx: CliContext, id: string): Promise<void> {
+  if (!id) throw new Error("Укажите ID агента");
+  const result = await ctx.api.request<{ revisions: JsonObject[] }>(`/v1/agents/${encodeURIComponent(id)}/revisions?userId=${encodeURIComponent(ctx.userId)}`);
+  output.write(`${renderRows(result.revisions, ["version", "reason", "createdAt"])}\n`);
 }
 
 async function deleteAgentProfile(ctx: CliContext, id: string): Promise<void> {
@@ -726,6 +747,7 @@ function help(): void {
   agents                            список отдельных агентов
   council                           Глава Barlas и внутренний Совет
   agents create SLUG NAME [...]     создать агента и привязать workspace
+  agents history <id>               история развития личности
   agents delete <id>                удалить агента
   integrations                      подключения без раскрытия секретов
   integrations add PROVIDER LABEL   безопасно запросить и зашифровать токен
@@ -923,6 +945,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     return;
   }
   if (command === "agents" && args[1] === "create") return createAgentProfile(ctx, args);
+  if (command === "agents" && args[1] === "history") return agentProfileHistory(ctx, args[2] ?? "");
   if (command === "agents" && args[1] === "delete") return deleteAgentProfile(ctx, args[2] ?? "");
   if (command === "agents") return agents(ctx);
   if (command === "council") return council(ctx);

@@ -38,7 +38,7 @@ import type {
 import type { AgentSchedule } from "../schedules/types.js";
 import type { ArtifactVersion, GoalStatus, PlanStepStatus, Project, ProjectCheckpoint, ProjectGoal, ProjectPlanStep, ProjectResource, ProjectResourceType, ProjectStore } from "../projects/service.js";
 import type { DeviceCommand, DeviceNode, DeviceNodeStore, NodePlatform } from "../nodes/service.js";
-import type { AgentProfile, AgentProfileStore } from "../agents/profiles.js";
+import type { AgentProfile, AgentProfilePatch, AgentProfileRevision, AgentProfileStore } from "../agents/profiles.js";
 import type { Commitment, CommitmentReminderStore, CommitmentStatus, CommitmentStore } from "../continuity/service.js";
 import type { EvidenceKind, Outcome, OutcomeCriterion, OutcomeDetail, OutcomeEvidence, OutcomeStatus, OutcomeStore } from "../outcomes/service.js";
 
@@ -237,21 +237,37 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     return result.rows[0] ? mapOutcome(result.rows[0]) : null;
   }
 
-  async createAgentProfile(input: Omit<AgentProfile, "id" | "createdAt" | "updatedAt">): Promise<AgentProfile> {
-    const result = await this.pool.query<AgentProfileRow>(
-      `insert into agent_profiles (user_id, slug, name, style, instructions, default_task_class, project_id)
-       select $1, $2, $3, $4, $5, $6, $7
+  async createAgentProfile(input: Omit<AgentProfile, "id" | "createdAt" | "updatedAt" | "identityVersion">): Promise<AgentProfile> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const result = await client.query<AgentProfileRow>(
+      `insert into agent_profiles (user_id, slug, name, style, instructions, default_task_class, project_id,
+         character_values, strengths, communication_voice, initiative_level, risk_posture, critique_style, color, avatar)
+       select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
        where $7::uuid is null or exists (select 1 from projects where id = $7 and user_id = $1)
-       returning id, user_id, slug, name, style, instructions, default_task_class, project_id, created_at, updated_at`,
-      [input.userId, input.slug, input.name, input.style, input.instructions, input.defaultTaskClass, input.projectId ?? null],
-    );
-    if (!result.rows[0]) throw new Error("Agent workspace project not found");
-    return mapAgentProfile(result.rows[0]);
+       returning ${agentProfileColumns}`,
+      [input.userId, input.slug, input.name, input.style, input.instructions, input.defaultTaskClass, input.projectId ?? null,
+        input.character.values, input.character.strengths, input.character.voice, input.character.initiativeLevel,
+        input.character.riskPosture, input.character.critiqueStyle, input.character.color, input.character.avatar ?? null],
+      );
+      if (!result.rows[0]) throw new Error("Agent workspace project not found");
+      const profile = mapAgentProfile(result.rows[0]);
+      await client.query(
+        `insert into agent_profile_revisions (agent_profile_id, user_id, version, snapshot, reason) values ($1, $2, 1, $3, $4)`,
+        [profile.id, profile.userId, profileSnapshot(profile), "Initial identity card"],
+      );
+      await client.query("commit");
+      return profile;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally { client.release(); }
   }
 
   async listAgentProfiles(userId: string): Promise<AgentProfile[]> {
     const result = await this.pool.query<AgentProfileRow>(
-      `select id, user_id, slug, name, style, instructions, default_task_class, project_id, created_at, updated_at
+      `select ${agentProfileColumns}
        from agent_profiles where user_id = $1 order by created_at, id`, [userId],
     );
     return result.rows.map(mapAgentProfile);
@@ -259,10 +275,60 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async getAgentProfile(userId: string, id: string): Promise<AgentProfile | null> {
     const result = await this.pool.query<AgentProfileRow>(
-      `select id, user_id, slug, name, style, instructions, default_task_class, project_id, created_at, updated_at
+      `select ${agentProfileColumns}
        from agent_profiles where user_id = $1 and id = $2`, [userId, id],
     );
     return result.rows[0] ? mapAgentProfile(result.rows[0]) : null;
+  }
+
+  async updateAgentProfile(input: { userId: string; id: string; patch: AgentProfilePatch; reason: string }): Promise<AgentProfile | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("begin");
+      const currentResult = await client.query<AgentProfileRow>(
+        `select ${agentProfileColumns} from agent_profiles where user_id = $1 and id = $2 for update`,
+        [input.userId, input.id],
+      );
+      if (!currentResult.rows[0]) {
+        await client.query("rollback");
+        return null;
+      }
+      const current = mapAgentProfile(currentResult.rows[0]);
+      const nextCharacter = input.patch.character ?? current.character;
+      const nextProjectId = input.patch.projectId === undefined ? current.projectId : input.patch.projectId ?? undefined;
+      const result = await client.query<AgentProfileRow>(
+        `update agent_profiles set name = $3, style = $4, instructions = $5, default_task_class = $6,
+           project_id = $7, character_values = $8, strengths = $9, communication_voice = $10,
+           initiative_level = $11, risk_posture = $12, critique_style = $13, color = $14, avatar = $15,
+           identity_version = identity_version + 1, updated_at = now()
+         where user_id = $1 and id = $2
+           and ($7::uuid is null or exists (select 1 from projects where id = $7 and user_id = $1))
+         returning ${agentProfileColumns}`,
+        [input.userId, input.id, input.patch.name ?? current.name, input.patch.style ?? current.style,
+          input.patch.instructions ?? current.instructions, input.patch.defaultTaskClass ?? current.defaultTaskClass, nextProjectId ?? null,
+          nextCharacter.values, nextCharacter.strengths, nextCharacter.voice, nextCharacter.initiativeLevel,
+          nextCharacter.riskPosture, nextCharacter.critiqueStyle, nextCharacter.color, nextCharacter.avatar ?? null],
+      );
+      if (!result.rows[0]) throw new Error("Agent workspace project not found");
+      const profile = mapAgentProfile(result.rows[0]);
+      await client.query(
+        `insert into agent_profile_revisions (agent_profile_id, user_id, version, snapshot, reason) values ($1, $2, $3, $4, $5)`,
+        [profile.id, profile.userId, profile.identityVersion, profileSnapshot(profile), input.reason],
+      );
+      await client.query("commit");
+      return profile;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async listAgentProfileRevisions(userId: string, id: string): Promise<AgentProfileRevision[]> {
+    const result = await this.pool.query<AgentProfileRevisionRow>(
+      `select version, snapshot, reason, created_at from agent_profile_revisions
+       where user_id = $1 and agent_profile_id = $2 order by version desc`, [userId, id],
+    );
+    return result.rows.map((row) => ({ version: row.version, snapshot: row.snapshot, reason: row.reason, createdAt: row.created_at.toISOString() }));
   }
 
   async deleteAgentProfile(userId: string, id: string): Promise<boolean> {
@@ -286,8 +352,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
 
   async getConversationAgentProfile(userId: string, conversationId: string): Promise<AgentProfile | null> {
     const result = await this.pool.query<AgentProfileRow>(
-      `select profile.id, profile.user_id, profile.slug, profile.name, profile.style, profile.instructions,
-              profile.default_task_class, profile.project_id, profile.created_at, profile.updated_at
+      `select ${agentProfileColumns.replaceAll(/\b(id|user_id|slug|name|style|instructions|default_task_class|project_id|character_values|strengths|communication_voice|initiative_level|risk_posture|critique_style|color|avatar|identity_version|created_at|updated_at)\b/gu, "profile.$1")}
        from conversation_agent_profiles binding
        join agent_profiles profile on profile.id = binding.agent_profile_id and profile.user_id = binding.user_id
        where binding.user_id = $1 and binding.conversation_id = $2`, [userId, conversationId],
@@ -2263,7 +2328,9 @@ interface CommitmentRow { id: string; user_id: string; title: string; details: s
 interface OutcomeRow { id: string; user_id: string; title: string; objective: string; status: OutcomeStatus; source_conversation_id: string | null; created_at: Date; updated_at: Date; verified_at: Date | null }
 interface OutcomeCriterionRow { id: string; outcome_id: string; description: string; required: boolean; created_at: Date }
 interface OutcomeEvidenceRow { id: string; outcome_id: string; criterion_id: string; kind: EvidenceKind; passed: boolean; summary: string; locator: string | null; observed_at: Date; created_at: Date }
-interface AgentProfileRow { id: string; user_id: string; slug: string; name: string; style: AgentProfile["style"]; instructions: string; default_task_class: AgentProfile["defaultTaskClass"]; project_id: string | null; created_at: Date; updated_at: Date }
+const agentProfileColumns = "id, user_id, slug, name, style, instructions, default_task_class, project_id, character_values, strengths, communication_voice, initiative_level, risk_posture, critique_style, color, avatar, identity_version, created_at, updated_at";
+interface AgentProfileRow { id: string; user_id: string; slug: string; name: string; style: AgentProfile["style"]; instructions: string; default_task_class: AgentProfile["defaultTaskClass"]; project_id: string | null; character_values: string[]; strengths: string[]; communication_voice: string; initiative_level: AgentProfile["character"]["initiativeLevel"]; risk_posture: AgentProfile["character"]["riskPosture"]; critique_style: AgentProfile["character"]["critiqueStyle"]; color: string; avatar: string | null; identity_version: number; created_at: Date; updated_at: Date }
+interface AgentProfileRevisionRow { version: number; snapshot: AgentProfileRevision["snapshot"]; reason: string; created_at: Date }
 interface ProjectResourceRow { project_id: string; resource_type: ProjectResourceType; resource_id: string; label: string; created_at: Date }
 interface ArtifactRow { id: string; project_id: string; path: string; version: number; sha256: string; size_bytes: number; created_at: Date }
 interface ProjectGoalRow { id: string; project_id: string; title: string; description: string; status: GoalStatus; priority: number; created_at: Date; updated_at: Date }
@@ -2315,9 +2382,20 @@ function mapAgentProfile(row: AgentProfileRow): AgentProfile {
   return {
     id: row.id, userId: row.user_id, slug: row.slug, name: row.name, style: row.style,
     instructions: row.instructions, defaultTaskClass: row.default_task_class,
+    character: {
+      values: row.character_values, strengths: row.strengths, voice: row.communication_voice,
+      initiativeLevel: row.initiative_level, riskPosture: row.risk_posture, critiqueStyle: row.critique_style,
+      color: row.color, ...(row.avatar ? { avatar: row.avatar } : {}),
+    },
+    identityVersion: row.identity_version,
     ...(row.project_id ? { projectId: row.project_id } : {}),
     createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
   };
+}
+
+function profileSnapshot(profile: AgentProfile): AgentProfileRevision["snapshot"] {
+  const { createdAt: _createdAt, updatedAt: _updatedAt, ...snapshot } = profile;
+  return snapshot;
 }
 
 function mapProjectResource(row: ProjectResourceRow): ProjectResource {

@@ -23,7 +23,17 @@ describe("native embedded database", () => {
       const result = await database.query<{ count: string }>("select count(*)::text as count from information_schema.tables where table_schema = 'public'");
       expect(Number(result.rows[0]?.count)).toBeGreaterThan(20);
       const migrations = await database.query<{ count: string }>("select count(*)::text as count from _barlas_native_migrations");
-      expect(Number(migrations.rows[0]?.count)).toBe(25);
+      expect(Number(migrations.rows[0]?.count)).toBe(26);
+      const personality = await database.query<{ identity_version: number }>(
+        `insert into agent_profiles (user_id, slug, name, character_values, initiative_level, risk_posture, critique_style, color)
+         values ($1, $2, $3, $4, $5, $6, $7, $8) returning identity_version`,
+        ["owner", "strategist", "Strategist", ["foresight"], "proactive", "cautious", "challenging", "#C62828"],
+      );
+      expect(personality.rows[0]?.identity_version).toBe(1);
+      await expect(database.query(
+        `insert into agent_profiles (user_id, slug, name, character_values, color) values ($1, $2, $3, $4, $5)`,
+        ["owner", "unsafe", "Unsafe", [], "red"],
+      )).rejects.toThrow();
       const reminder = await database.query<{ reminder_count: number }>(
         "insert into commitments (user_id, title, next_reminder_at, reminder_interval_hours) values ($1, $2, now(), 24) returning reminder_count",
         ["owner", "Verify reminders"],

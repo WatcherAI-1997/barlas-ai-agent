@@ -273,6 +273,42 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("creates and evolves versioned agent identity cards", async () => {
+    const deps = dependencies();
+    const profileId = "00000000-0000-4000-8000-000000000081";
+    const base = {
+      id: profileId, userId: "user-1", slug: "critic", name: "Critic", style: "analytical" as const,
+      instructions: "Find weak assumptions.", defaultTaskClass: "deep" as const,
+      character: { values: ["truth"], strengths: ["stress testing"], voice: "Candid.", initiativeLevel: "proactive" as const, riskPosture: "cautious" as const, critiqueStyle: "challenging" as const, color: "#C62828" },
+      identityVersion: 1, createdAt: "2026-10-24T00:00:00.000Z", updatedAt: "2026-10-24T00:00:00.000Z",
+    };
+    const agentProfiles = {
+      create: vi.fn(async () => base), list: vi.fn(async () => [base]), get: vi.fn(async () => base), delete: vi.fn(), resolve: vi.fn(),
+      update: vi.fn(async (_userId: string, _id: string, patch: Record<string, unknown>) => ({ ...base, ...patch, identityVersion: 2 })),
+      revisions: vi.fn(async () => [{ version: 2, snapshot: { ...base, identityVersion: 2 }, reason: "Owner preference", createdAt: base.updatedAt }]),
+    };
+    const app = await buildApp({ apiToken, ...deps, agentProfiles });
+    const created = await app.inject({
+      method: "POST", url: "/v1/agents", headers: { authorization: `Bearer ${apiToken}` },
+      payload: { userId: "user-1", slug: "critic", name: "Critic", style: "analytical", instructions: "Find weak assumptions.", defaultTaskClass: "deep", character: base.character },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(agentProfiles.create).toHaveBeenCalledWith(expect.objectContaining({ character: base.character }));
+    const updated = await app.inject({
+      method: "PATCH", url: `/v1/agents/${profileId}`, headers: { authorization: `Bearer ${apiToken}` },
+      payload: { userId: "user-1", reason: "Owner preference", character: { ...base.character, voice: "Candid but calm." } },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().profile.identityVersion).toBe(2);
+    const history = await app.inject({
+      method: "GET", url: `/v1/agents/${profileId}/revisions?userId=user-1`, headers: { authorization: `Bearer ${apiToken}` },
+    });
+    expect(history.statusCode).toBe(200);
+    expect(history.json().revisions[0]).toMatchObject({ version: 2, reason: "Owner preference" });
+    expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "agent_profile.identity_updated" }));
+    await app.close();
+  });
+
   it("serves the branded web cabinet with strict browser security headers", async () => {
     const deps = dependencies();
     const app = await buildApp({ apiToken, ...deps, webRoot: resolve("web") });
@@ -342,10 +378,12 @@ describe("Barlas AI Agent API", () => {
     const profile = {
       id: profileId, userId: "user-1", slug: "research", name: "Researcher", style: "analytical" as const,
       instructions: "Use primary evidence.", defaultTaskClass: "deep" as const, projectId,
+      character: { values: ["truth"], strengths: ["research"], voice: "Calm.", initiativeLevel: "proactive" as const, riskPosture: "cautious" as const, critiqueStyle: "direct" as const, color: "#C62828" },
+      identityVersion: 1,
       createdAt: "2026-10-17T00:00:00.000Z", updatedAt: "2026-10-17T00:00:00.000Z",
     };
     const agentProfiles = {
-      create: vi.fn(), list: vi.fn(), get: vi.fn(), delete: vi.fn(), resolve: vi.fn(async () => profile),
+      create: vi.fn(), list: vi.fn(), get: vi.fn(), update: vi.fn(), revisions: vi.fn(), delete: vi.fn(), resolve: vi.fn(async () => profile),
     };
     const projects = {
       create: vi.fn(), list: vi.fn(), detail: vi.fn(), context: vi.fn(async () => "Workspace: research-only"),

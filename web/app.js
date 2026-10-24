@@ -644,14 +644,33 @@ async function loadAgents() {
     : card(member.name, `${member.id} · ${member.taskClass}`, `${member.character}\n${member.mandate}\nГраница: ${member.boundaries}`));
   renderList("#agents", state.agents, (agent) => {
     const project = state.projects.find((item) => item.id === agent.projectId);
-    const node = card(agent.name, `${agent.slug} · ${agent.style} · ${agent.defaultTaskClass}`, project ? `Workspace: ${project.name}` : "Без отдельного workspace");
+    const character = agent.character || {};
+    const body = [
+      project ? `Workspace: ${project.name}` : "Без отдельного workspace",
+      `Ценности: ${(character.values || []).join(", ") || "—"}`,
+      `Сильные стороны: ${(character.strengths || []).join(", ") || "—"}`,
+      character.voice ? `Голос: ${character.voice}` : "",
+      `Инициатива: ${character.initiativeLevel || "balanced"} · риск: ${character.riskPosture || "balanced"} · критика: ${character.critiqueStyle || "direct"}`,
+    ].filter(Boolean).join("\n");
+    const node = card(agent.name, `${agent.slug} · ${agent.style} · v${agent.identityVersion || 1}`, body);
+    node.style.borderTopColor = character.color || "#C62828";
     const use = document.createElement("button"); use.textContent = "Открыть чат"; use.addEventListener("click", () => {
       $("#chat-agent").value = agent.id; state.conversationId = null; loadPanel("chat").catch((error) => notify(error.message, "error"));
     });
     const remove = document.createElement("button"); remove.textContent = "Удалить"; remove.className = "reject"; remove.addEventListener("click", async () => {
       await api(`/v1/agents/${agent.id}?userId=${encodeURIComponent(state.account.id)}`, { method: "DELETE" }); await loadAgents();
     });
-    node.append(use, remove); return node;
+    const evolve = document.createElement("button"); evolve.textContent = "Развить личность"; evolve.className = "secondary"; evolve.addEventListener("click", async () => {
+      const reason = window.prompt("Почему меняется личность?", "Уточнение владельца"); if (!reason) return;
+      const voice = window.prompt("Голос и манера речи", character.voice || ""); if (voice === null) return;
+      const values = window.prompt("Ценности через запятую", (character.values || []).join(", ")); if (values === null) return;
+      await api(`/v1/agents/${agent.id}`, { method: "PATCH", body: JSON.stringify({
+        userId: state.account.id, reason,
+        character: { ...character, voice, values: values.split(",").map((item) => item.trim()).filter(Boolean) },
+      }) });
+      await loadAgents();
+    });
+    node.append(use, evolve, remove); return node;
   });
 }
 
@@ -662,6 +681,13 @@ $("#agent-form").addEventListener("submit", async (event) => {
       userId: state.account.id, slug: $("#agent-slug").value.trim(), name: $("#agent-name").value.trim(),
       style: $("#agent-style").value, defaultTaskClass: $("#agent-task-class").value,
       projectId: $("#agent-project").value || undefined, instructions: $("#agent-instructions").value.trim(),
+      character: {
+        values: $("#agent-values").value.split(",").map((item) => item.trim()).filter(Boolean),
+        strengths: $("#agent-strengths").value.split(",").map((item) => item.trim()).filter(Boolean),
+        voice: $("#agent-voice").value.trim(), initiativeLevel: $("#agent-initiative").value,
+        riskPosture: $("#agent-risk").value, critiqueStyle: $("#agent-critique").value,
+        color: $("#agent-color").value,
+      },
     }) });
     event.target.reset(); $("#agent-status").textContent = `Создан агент: ${data.profile.name}`; await loadAgents();
   } catch (error) { $("#agent-status").textContent = `Ошибка: ${error.message}`; }

@@ -7,7 +7,7 @@ planned functionality as complete.
 | Product capability | Barlas implementation | State |
 | --- | --- | --- |
 | Gateway lifecycle and nested CLI | `barlas gateway`, onboard/configure, health, logs, update and rollback | Implemented |
-| Multiple agents | Owned profiles with independent identity, model-routing class, project workspace, conversation binding and CLI selection | Implemented |
+| Multiple agents | Owned profiles with versioned character cards (values, strengths, voice, initiative, risk, critique, visual cues), protected principles, revision history, independent model-routing class, project workspace, conversation binding and CLI selection | Implemented |
 | Domain-free local channels | Telegram long polling, Discord Gateway, and Slack Socket Mode | Implemented |
 | Channel safety | Dedicated tokens, mention-gated group chat, approvals and bounded delivery | Implemented foundation |
 | Device nodes | One-time pairing, revocable node tokens, heartbeat and approval-gated notifications | Implemented foundation |

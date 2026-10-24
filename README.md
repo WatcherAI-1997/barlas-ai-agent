@@ -155,19 +155,24 @@ gateway around the filesystem operation so the embedded database is captured
 consistently. Shell completion is available through
 `barlas completion powershell|bash|zsh|fish`.
 
-Create independent agent profiles with their own identity, model-routing class,
-and optional project workspace:
+Create independent agent profiles with durable personality cards, protected
+Barlas principles, model-routing class, and an optional project workspace:
 
 ```powershell
 barlas projects
-barlas agents create research "Researcher" --style analytical --task deep --project PROJECT_ID --instructions "Use primary evidence"
+barlas agents create research "Researcher" --style analytical --task deep --project PROJECT_ID --instructions "Use primary evidence" --values "truth,curiosity" --strengths "source analysis,synthesis" --voice "Calm, precise, evidence-led" --initiative proactive --risk cautious --critique direct
 barlas agents
+barlas agents history AGENT_ID
 barlas agent "Investigate this topic" --profile AGENT_ID
 ```
 
 Inside interactive chat, `/agents` lists profiles and `/agent ID` starts a new
 conversation with one. Each conversation is permanently bound to its selected
 profile; attempts to reuse it with a different or foreign profile are rejected.
+The web cabinet can evolve a profile with an explicit reason. Every change
+increments its identity version and preserves a reviewable snapshot; custom
+instructions cannot override owner authority, approvals, privacy, budgets,
+accuracy, or the prohibition on invented actions and memories.
 
 ### Linux
 

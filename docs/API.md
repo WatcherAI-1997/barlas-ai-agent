@@ -40,6 +40,12 @@ server-side; each plaintext token is shown only once.
 - `POST /v1/agent-runs/:id/resume` — recover a waiting run after its approval was decided.
 - `GET /v1/conversations` — list a user's stored conversations.
 - `GET /v1/conversations/:id` — load ordered messages from one conversation.
+- `GET /v1/agents/council` — return the fixed Chief and bounded internal Council roles.
+- `POST /v1/agents` — create an owned agent with a structured identity card: values, strengths, voice, initiative, risk posture, critique style, color, optional avatar, model class, and workspace.
+- `GET /v1/agents` — list the current user's agents and identity versions.
+- `PATCH /v1/agents/:id` — evolve an owned identity card with a required reason; protected Barlas authority and safety principles cannot be replaced.
+- `GET /v1/agents/:id/revisions` — inspect the immutable identity revision history.
+- `DELETE /v1/agents/:id` — delete an unused profile; conversation-bound profiles are retained.
 - `POST /v1/memory` — save an explicit long-term memory.
 - `GET /v1/memory/search` — retrieve relevant memories for one user.
 - `GET /v1/tools` — list registered tools and their risk levels.
