@@ -380,7 +380,10 @@ installer, scripts, hooks, or bundled executables. Inspect the exact file:
 barlas skills inspect-agent path\to\skill
 ```
 
-After reading `SKILL.md`, pin the digest printed by that command and import it:
+When a directory is inspected, Barlas lists every portable reference and every
+excluded file, then prints both the `SKILL.md` digest and a deterministic digest
+of the complete package bytes. After reading the package, pin the **package**
+digest printed by that command and import it:
 
 ```powershell
 barlas skills import-agent path\to\skill --trust-sha256 sha256:REVIEWED_DIGEST
@@ -388,11 +391,13 @@ barlas skills import-agent path\to\skill --trust-sha256 sha256:REVIEWED_DIGEST
 
 The default imported ID is `community.<name>`, the version is `1.0.0`, and no
 tools are granted. Optional flags are `--id`, `--version`, and a comma-separated
-`--allow-tools`. The result is always an inactive candidate. It still needs
-explicit acceptance cases through `skills evaluate` before Barlas permits
-activation. Referenced files, scripts, MCP servers, and installation hooks are
-not imported or executed; package those capabilities separately through the
-signed Barlas lifecycle if they are genuinely required.
+`--allow-tools`. The result is always an inactive candidate. Bounded UTF-8
+`.md`, `.txt`, `.csv`, `.json`, `.yaml`, and `.yml` files under `references/`
+are appended to the imported instructions with their relative paths. Scripts,
+hooks, symlinks, executable extensions, assets, and MCP runtimes are listed but
+never imported or executed. The exact package digest changes if any inventoried
+package file changes after review. The candidate still needs explicit acceptance
+cases through `skills evaluate` before Barlas permits activation.
 
 For a signed catalog, first verify the catalog key through an independent
 maintainer channel, then inspect or install only non-revoked entries:

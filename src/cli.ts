@@ -34,8 +34,8 @@ import {
 } from "./skills/catalog.js";
 import {
   defaultAgentSkillId,
-  parseAgentSkill,
-  verifyAgentSkillDigest,
+  inspectAgentSkillPackage,
+  verifyAgentSkillPackageDigest,
 } from "./skills/agent-skill.js";
 
 type JsonObject = Record<string, unknown>;
@@ -283,26 +283,31 @@ function commaList(value: string | undefined, fallback: string[] = []): string[]
 
 async function readAgentSkill(path: string) {
   if (!path) throw new Error("Укажите путь к SKILL.md или каталогу навыка");
-  const source = resolve(path);
-  const file = (await stat(source)).isDirectory() ? join(source, "SKILL.md") : source;
-  return { file, skill: parseAgentSkill(await readFile(file, "utf8")) };
+  return inspectAgentSkillPackage(resolve(path));
 }
 
 async function inspectAgentSkill(path: string): Promise<void> {
-  const { file, skill } = await readAgentSkill(path);
+  const inspected = await readAgentSkill(path);
+  const references = inspected.files.filter((file) => file.category === "reference");
+  const excluded = inspected.files.filter((file) => file.category === "blocked" || file.category === "ignored");
   output.write([
-    `Agent Skill: ${skill.name}`,
-    `Описание: ${skill.description}`,
-    `Файл: ${file}`,
-    `SHA-256: ${skill.sha256}`,
-    "Импорт ничего не исполняет. Изучите SKILL.md, затем повторите digest через skills import-agent --trust-sha256.",
+    `Agent Skill: ${inspected.skill.name}`,
+    `Описание: ${inspected.skill.description}`,
+    `Файл: ${inspected.skillFile}`,
+    `SHA-256 SKILL.md: ${inspected.skill.sha256}`,
+    `SHA-256 пакета: ${inspected.packageSha256}`,
+    `Текстовые references: ${references.length ? references.map((file) => file.path).join(", ") : "нет"}`,
+    `Исключено: ${excluded.length ? excluded.map((file) => `${file.path} (${file.category})`).join(", ") : "нет"}`,
+    ...inspected.warnings.map((warning) => `Предупреждение: ${warning}`),
+    "Импорт ничего не исполняет. Изучите пакет, затем повторите digest пакета через skills import-agent --trust-sha256.",
   ].join("\n") + "\n");
 }
 
 async function importAgentSkill(ctx: CliContext, args: string[]): Promise<void> {
-  const { skill } = await readAgentSkill(args[2] ?? "");
+  const inspected = await readAgentSkill(args[2] ?? "");
+  const { skill } = inspected;
   const trustedDigest = option(args, "--trust-sha256") ?? "";
-  verifyAgentSkillDigest(skill, trustedDigest);
+  verifyAgentSkillPackageDigest(inspected, trustedDigest);
   const id = option(args, "--id") ?? defaultAgentSkillId(skill.name);
   const version = option(args, "--version") ?? "1.0.0";
   const allowedTools = (option(args, "--allow-tools") ?? "")
@@ -310,13 +315,15 @@ async function importAgentSkill(ctx: CliContext, args: string[]): Promise<void> 
   const { skill: installed } = await ctx.api.request<{ skill: JsonObject }>("/v1/skills", {
     method: "POST",
     body: JSON.stringify({
-      id, version, description: skill.description, instructions: skill.instructions, allowedTools,
-      provenance: { format: "agentskills.io", sha256: skill.sha256 },
+      id, version, description: skill.description, instructions: inspected.importedInstructions, allowedTools,
+      provenance: { format: "agentskills.io", sha256: inspected.packageSha256 },
     }),
   });
   output.write([
     `Импортирован неактивный кандидат ${value(installed.id)}@${value(installed.version)}.`,
-    `Источник agentskills.io/skills.sh: ${skill.sha256}.`,
+    `Источник agentskills.io/skills.sh: ${inspected.packageSha256}.`,
+    `Встроено текстовых references: ${inspected.files.filter((file) => file.category === "reference").length}.`,
+    ...inspected.warnings.map((warning) => `Не импортировано: ${warning}`),
     `Разрешённые инструменты: ${allowedTools.join(", ") || "нет"}.`,
     "Перед активацией создайте acceptance cases и выполните skills evaluate.",
   ].join("\n") + "\n");

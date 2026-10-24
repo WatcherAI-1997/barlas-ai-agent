@@ -272,6 +272,13 @@ by SHA-256, publisher signatures are checked independently, signed revocations
 are enforced, and cached sequence numbers detect catalog rollback. Catalog
 trust never silently becomes publisher trust.
 
+Open Agent Skills from skills.sh can be inspected as either one `SKILL.md` or a
+complete local skill directory. Directory inspection produces a deterministic
+digest over the package bytes, embeds bounded text files from `references/`,
+and inventories but never imports scripts, hooks, symlinks, executables, or
+other non-portable assets. Import still creates an inactive, zero-tool candidate
+unless the owner explicitly grants a reviewed tool allowlist.
+
 The extension catalog declares each built-in channel, connector, provider,
 runtime, skill source, and device bridge together with its capabilities, risk
 classes, and required setting names. It never returns secret values.
@@ -351,7 +358,7 @@ See the [security policy](docs/SECURITY.md),
 
 ## Current state
 
-**Private alpha · 224 automated tests · 25 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
+**Private alpha · 238 automated tests · 25 PostgreSQL migrations · npm audit: 0 known vulnerabilities**
 
 The functional agent core, web cabinet, Telegram channel, project system,
 recurring tasks, multimodal tools, sandbox, browser, MCP, encrypted connectors,

@@ -16,7 +16,7 @@ planned functionality as complete.
 | Autonomous tool loop | Durable bounded runs, recovery, cancellation and approval continuation | Implemented |
 | Skills | 47 built-in workflows plus versioned custom skills | Implemented |
 | Third-party skill safety | Ed25519 packages, explicit publisher trust, evaluation gate and rollback | Implemented |
-| skills.sh / Agent Skills compatibility | Reviewed single-file `SKILL.md` import with exact digest pinning, zero tools by default and inactive-candidate gate | Implemented |
+| skills.sh / Agent Skills compatibility | Reviewed `SKILL.md` or directory import with deterministic package digest, bounded text references, explicit executable/asset exclusions, zero tools by default and inactive-candidate gate | Implemented |
 | Local models | Ollama chat and tool calls without an API key | Implemented |
 | Research and coding | Search with citations, browser, GitHub, debugging, TDD, review and isolated execution | Implemented |
 | Memory and planning | Semantic/lexical memory, evidence-backed commitments, leased Telegram reminders, projects, goals, ordered plans and artifact versions | Implemented |

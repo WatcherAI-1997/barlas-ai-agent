@@ -56,6 +56,12 @@ log. Installation creates an inactive candidate; activation requires a passing
 bounded evaluation, and a skill cannot enlarge the runtime tool registry.
 Private publisher keys remain local and are created with mode `0600`.
 
+Open Agent Skills directory import hashes every inventoried package file before
+trust is accepted. Only bounded UTF-8 text under `references/` is embedded;
+scripts, hooks, executable extensions, symlinks, assets, and MCP runtimes are
+reported and excluded. The imported candidate receives no tools by default and
+cannot activate without acceptance evaluation.
+
 Catalogs are a separate trust layer, not a substitute for publisher trust. The
 CLI verifies an explicitly trusted Ed25519 catalog key, expiry, monotonic
 sequence number, duplicate identities, and signed publisher/version revocations.
