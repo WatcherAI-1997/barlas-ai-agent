@@ -440,6 +440,14 @@ validates at most 20 relative text-file writes/1 MB before applying them inside
 the authenticated user's workspace. The result contains only summary,
 verification statement, changed paths, model, and duration—not file bodies.
 
+When `CLAUDE_CODE_ENABLED=true`, `runner.claude-code.execute` applies the same
+snapshot, secret filtering, path validation, file-count, byte, timeout, tenant,
+and approval boundaries. The configured `CLAUDE_CODE_COMMAND` is started in an
+empty temporary directory with `--safe-mode`, no built-in tools, no MCP
+servers, no slash commands, and no session persistence. The CLI must already be
+installed and authenticated; Barlas does not install it or copy its account
+credentials. `CLAUDE_CODE_MODEL` defaults to `sonnet`.
+
 Queued runs are leased with PostgreSQL `FOR UPDATE SKIP LOCKED`. A worker crash
 leaves a recoverable lease; after its timeout another worker may claim the run.
 Retries are bounded and use exponential delay. The original visible messages

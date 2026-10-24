@@ -5,7 +5,7 @@ import { createBuiltinExtensionCatalog, ExtensionCatalog } from "../src/extensio
 describe("Barlas extension catalog", () => {
   it("reports built-in capability availability without exposing secrets", () => {
     const catalog = createBuiltinExtensionCatalog({
-      browser: true, github: false, google: false, mcp: true, sandbox: true, codexRunner: false,
+      browser: true, github: false, google: false, mcp: true, sandbox: true, codexRunner: false, claudeCodeRunner: true,
       telegram: true, discord: false, slack: false, whatsapp: false, privateModel: false, deviceNodes: true, modelProvider: "openai",
     });
     expect(catalog.get("channel.telegram")).toMatchObject({ configured: true, kind: "channel" });
@@ -16,6 +16,7 @@ describe("Barlas extension catalog", () => {
     expect(catalog.get("provider.anthropic")).toMatchObject({ configured: false });
     expect(catalog.get("provider.ollama")).toMatchObject({ configured: false, risks: ["none"] });
     expect(catalog.get("runtime.codex-runner")).toMatchObject({ configured: false, kind: "runtime" });
+    expect(catalog.get("runtime.claude-code-runner")).toMatchObject({ configured: true, kind: "runtime" });
     expect(catalog.get("skills.signed-catalog")).toMatchObject({ configured: true, kind: "skill-source" });
     expect(catalog.list().map((item) => item.id)).toEqual([...catalog.list().map((item) => item.id)].sort());
     expect(JSON.stringify(catalog.list())).not.toContain("token-value");

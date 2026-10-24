@@ -11,6 +11,7 @@ import type { SubagentCoordinator } from "../core/subagents.js";
 import { councilRoleIds, type CouncilRoleId } from "../agents/command.js";
 import type { CodeSandboxClient } from "./code-sandbox.js";
 import type { CodexWorkspaceRunner } from "./codex-runner.js";
+import type { ClaudeCodeWorkspaceRunner } from "./claude-code-runner.js";
 import type { GitHubConnector } from "../connectors/github.js";
 import type { GoogleConnector } from "../connectors/google.js";
 import type { McpConnector } from "../connectors/mcp.js";
@@ -30,6 +31,7 @@ export function createBuiltinToolRegistry(options: {
   subagentCoordinator?: Pick<SubagentCoordinator, "delegate">;
   codeSandbox?: Pick<CodeSandboxClient, "run">;
   codexRunner?: Pick<CodexWorkspaceRunner, "run">;
+  claudeCodeRunner?: Pick<ClaudeCodeWorkspaceRunner, "run">;
   mediaService?: Pick<MediaService, "analyzeImage" | "analyzePdf" | "transcribeAudio" | "createSpeech">;
   projectService?: Pick<ProjectService, "detail" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "snapshot" | "restore">;
   deviceNodes?: Pick<DeviceNodeService, "notify">;
@@ -369,6 +371,24 @@ export function createBuiltinToolRegistry(options: {
         timeoutSeconds: z.number().int().min(30).max(900).default(300),
       }).strict(),
       execute: async (input, context) => options.codexRunner!.run(context.userId, input as {
+        objective: string;
+        path: string;
+        timeoutSeconds: number;
+      }),
+    });
+  }
+
+  if (options.claudeCodeRunner) {
+    registry.register({
+      name: "runner.claude-code.execute",
+      description: "Run one bounded Claude Code edit in the current user's isolated workspace. Only a size-limited, secret-filtered text snapshot is sent to Claude; its tools, MCP, plugins, project instructions and session persistence are disabled. Barlas validates structured writes before applying them.",
+      risk: "external",
+      inputSchema: z.object({
+        objective: z.string().trim().min(1).max(20_000),
+        path: z.string().min(1).max(1_000).default("."),
+        timeoutSeconds: z.number().int().min(30).max(900).default(300),
+      }).strict(),
+      execute: async (input, context) => options.claudeCodeRunner!.run(context.userId, input as {
         objective: string;
         path: string;
         timeoutSeconds: number;

@@ -159,7 +159,7 @@ for (const required of [
   '"--disable", "shell_tool"',
   "MAX_CONTEXT_BYTES = 500_000",
   "MAX_WRITES = 20",
-  "validateWrites",
+  "validateRunnerWrites",
   "sensitiveName",
   "credentialPatterns",
   'Pick<FileWorkspace, "directoryForRun" | "write">',
@@ -168,6 +168,23 @@ for (const required of [
 }
 for (const forbidden of ["dangerously-bypass", '"workspace-write"']) {
   if (codexRunner.includes(forbidden)) throw new Error(`Codex runner contains prohibited mode: ${forbidden}`);
+}
+const claudeRunner = await readFile("src/tools/claude-code-runner.ts", "utf8");
+for (const required of [
+  '"--tools", ""',
+  '"--safe-mode"',
+  '"--disable-slash-commands"',
+  '"--strict-mcp-config"',
+  '"--no-session-persistence"',
+  "collectTextSnapshot",
+  "validateRunnerWrites",
+  'Pick<FileWorkspace, "directoryForRun" | "write">',
+  "delete environment.ANTHROPIC_API_KEY",
+]) {
+  if (!claudeRunner.includes(required)) throw new Error(`Claude Code runner boundary is missing: ${required}`);
+}
+for (const forbidden of ["dangerously-skip-permissions", '"Bash"', '"Edit"', '"Read"']) {
+  if (claudeRunner.includes(forbidden)) throw new Error(`Claude Code runner contains prohibited mode: ${forbidden}`);
 }
 const projects = await readFile("src/projects/service.ts", "utf8");
 const projectMigration = await readFile("migrations/018_projects.sql", "utf8");

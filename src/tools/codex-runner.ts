@@ -29,12 +29,12 @@ const credentialPatterns = [
 ];
 const sensitiveDirectories = new Set([".aws", ".azure", ".codex", ".gnupg", ".kube", ".ssh"]);
 
-interface ProposedEdit {
+export interface ProposedEdit {
   path: string;
   content: string;
 }
 
-interface RunnerResponse {
+export interface RunnerResponse {
   summary: string;
   writes: ProposedEdit[];
   verification: string;
@@ -92,7 +92,7 @@ export class CodexWorkspaceRunner {
     ].join("\n\n");
     const startedAt = Date.now();
     try {
-      await writeFile(schemaPath, JSON.stringify(responseSchema), { encoding: "utf8", mode: 0o600 });
+      await writeFile(schemaPath, JSON.stringify(runnerResponseSchema), { encoding: "utf8", mode: 0o600 });
       if (this.options.runCli) {
         await this.options.runCli({
           prompt,
@@ -105,8 +105,8 @@ export class CodexWorkspaceRunner {
       } else {
         await this.runCli(prompt, schemaPath, outputPath, directory, input.timeoutSeconds);
       }
-      const response = await readResponse(outputPath);
-      const writes = validateWrites(target.absolutePath, response.writes);
+      const response = await readRunnerResponse(outputPath, "Codex");
+      const writes = validateRunnerWrites(target.absolutePath, response.writes, "Codex");
       for (const write of writes) {
         const workspacePath = target.relativePath === "." ? write.path : join(target.relativePath, write.path);
         await this.workspace.write(userId, workspacePath, write.content);
@@ -132,7 +132,7 @@ export class CodexWorkspaceRunner {
     cwd: string,
     timeoutSeconds: number,
   ): Promise<void> {
-    const environment = sanitizedEnvironment();
+    const environment = sanitizedRunnerEnvironment();
     await new Promise<void>((resolvePromise, reject) => {
       const child = spawn(process.execPath, [
         this.codexScript, "exec", "-", "--model", this.options.model,
@@ -165,7 +165,7 @@ export class CodexWorkspaceRunner {
   }
 }
 
-async function collectTextSnapshot(root: string): Promise<{
+export async function collectTextSnapshot(root: string): Promise<{
   files: Array<{ path: string; content: string }>;
   bytes: number;
 }> {
@@ -200,35 +200,35 @@ async function collectTextSnapshot(root: string): Promise<{
   return { files, bytes };
 }
 
-async function readResponse(path: string): Promise<RunnerResponse> {
+export async function readRunnerResponse(path: string, runner: string): Promise<RunnerResponse> {
   const info = await stat(path);
-  if (!info.isFile() || info.size > MAX_RESULT_BYTES) throw new Error("Codex runner result is missing or oversized");
+  if (!info.isFile() || info.size > MAX_RESULT_BYTES) throw new Error(`${runner} runner result is missing or oversized`);
   const value = JSON.parse(await readFile(path, "utf8")) as Partial<RunnerResponse>;
   if (typeof value.summary !== "string" || !value.summary.trim() ||
       typeof value.verification !== "string" || !Array.isArray(value.writes)) {
-    throw new Error("Codex runner returned an invalid structured result");
+    throw new Error(`${runner} runner returned an invalid structured result`);
   }
   return value as RunnerResponse;
 }
 
-function validateWrites(root: string, writes: ProposedEdit[]): ProposedEdit[] {
-  if (writes.length > MAX_WRITES) throw new Error(`Codex runner proposed more than ${MAX_WRITES} files`);
+export function validateRunnerWrites(root: string, writes: ProposedEdit[], runner: string): ProposedEdit[] {
+  if (writes.length > MAX_WRITES) throw new Error(`${runner} runner proposed more than ${MAX_WRITES} files`);
   const seen = new Set<string>();
   let bytes = 0;
   return writes.map((write) => {
     if (!write || typeof write.path !== "string" || typeof write.content !== "string" ||
         !write.path || write.path.includes("\0") || write.path.includes("\\") || isAbsolute(write.path) ||
         sensitiveName(write.path) || !writableTextName(write.path)) {
-      throw new Error("Codex runner proposed an unsafe file write");
+      throw new Error(`${runner} runner proposed an unsafe file write`);
     }
     const absolutePath = resolve(root, write.path);
     const child = relative(root, absolutePath);
     if (child === ".." || child.startsWith(`..${sep}`) || isAbsolute(child) || seen.has(absolutePath)) {
-      throw new Error("Codex runner proposed an escaping or duplicate file write");
+      throw new Error(`${runner} runner proposed an escaping or duplicate file write`);
     }
     seen.add(absolutePath);
     bytes += Buffer.byteLength(write.content);
-    if (bytes > MAX_WRITE_BYTES) throw new Error("Codex runner proposed oversized writes");
+    if (bytes > MAX_WRITE_BYTES) throw new Error(`${runner} runner proposed oversized writes`);
     return { path: child.split(sep).join("/"), content: write.content };
   });
 }
@@ -256,7 +256,7 @@ function sensitiveName(name: string): boolean {
     basename.endsWith(".pfx");
 }
 
-function sanitizedEnvironment(): NodeJS.ProcessEnv {
+export function sanitizedRunnerEnvironment(): NodeJS.ProcessEnv {
   const safe = [
     "PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP",
     "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "CODEX_HOME", "LANG", "LC_ALL",
@@ -264,7 +264,7 @@ function sanitizedEnvironment(): NodeJS.ProcessEnv {
   return Object.fromEntries(safe.flatMap((name) => process.env[name] ? [[name, process.env[name]]] : []));
 }
 
-const responseSchema = {
+export const runnerResponseSchema = {
   type: "object",
   additionalProperties: false,
   properties: {

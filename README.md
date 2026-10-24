@@ -323,6 +323,13 @@ response is limited to 20 UTF-8 file writes and 1 MB total, and Barlas rejects
 absolute, escaping, duplicate, credential-like, or non-text paths before
 applying anything to the owning user's workspace.
 
+An independently installed Claude Code CLI can be enabled with
+`CLAUDE_CODE_ENABLED=true` (plus optional `CLAUDE_CODE_MODEL` and
+`CLAUDE_CODE_COMMAND`). Its `development.claude-code` workflow uses the same
+snapshot and write limits. Claude Code runs in a fresh temporary directory with
+all tools, project instructions, skills, plugins, MCP servers, hooks, and
+session persistence disabled; it never receives the real workspace path.
+
 Device nodes use a separate one-time pairing code and receive an independently
 revocable bearer token. The initial protocol supports heartbeat, capability
 advertising, command acknowledgement, and approval-gated notifications only;

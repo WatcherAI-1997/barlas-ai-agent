@@ -32,6 +32,7 @@ import { ToolExecutor } from "./tools/executor.js";
 import { ManagedBrowser } from "./tools/managed-browser.js";
 import { CodeSandboxClient } from "./tools/code-sandbox.js";
 import { CodexWorkspaceRunner } from "./tools/codex-runner.js";
+import { ClaudeCodeWorkspaceRunner } from "./tools/claude-code-runner.js";
 import { FileWorkspace } from "./tools/file-workspace.js";
 import { ProjectService } from "./projects/service.js";
 import { MediaService, OpenAIMediaModel } from "./tools/media.js";
@@ -128,6 +129,7 @@ const extensionCatalog = createBuiltinExtensionCatalog({
   mcp: Boolean(mcpConnector),
   sandbox: Boolean(codeSandbox),
   codexRunner: config.MODEL_PROVIDER === "codex_cli",
+  claudeCodeRunner: config.CLAUDE_CODE_ENABLED,
   telegram: Boolean(config.TELEGRAM_BOT_TOKEN),
   discord: Boolean(config.DISCORD_BOT_TOKEN && config.DISCORD_GATEWAY_ENABLED),
   slack: Boolean(config.SLACK_BOT_TOKEN && config.SLACK_APP_TOKEN && config.SLACK_SOCKET_MODE_ENABLED),
@@ -139,6 +141,12 @@ const extensionCatalog = createBuiltinExtensionCatalog({
 const workspace = new FileWorkspace(config.WORKSPACE_ROOT);
 const codexRunner = config.MODEL_PROVIDER === "codex_cli"
   ? new CodexWorkspaceRunner(workspace, { model: config.MODEL_NAME })
+  : undefined;
+const claudeCodeRunner = config.CLAUDE_CODE_ENABLED
+  ? new ClaudeCodeWorkspaceRunner(workspace, {
+      model: config.CLAUDE_CODE_MODEL,
+      command: config.CLAUDE_CODE_COMMAND,
+    })
   : undefined;
 const projects = new ProjectService(database, workspace);
 const continuity = new ContinuityService(database);
@@ -165,6 +173,7 @@ const toolExecutor = new ToolExecutor(createBuiltinToolRegistry({
   subagentCoordinator,
   ...(codeSandbox ? { codeSandbox } : {}),
   ...(codexRunner ? { codexRunner } : {}),
+  ...(claudeCodeRunner ? { claudeCodeRunner } : {}),
   ...(githubConnector ? { githubConnector } : {}),
   ...(googleConnector ? { googleConnector } : {}),
   ...(mcpConnector ? { mcpConnector } : {}),

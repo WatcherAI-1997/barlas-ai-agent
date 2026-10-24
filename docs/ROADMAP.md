@@ -44,10 +44,10 @@
   reconciled into ready/degraded/unavailable states; unavailable workflows are
   blocked and degraded workflows receive only real tools with missing-action
   disclosure)*
-- Local coding runners. *(the account-backed Codex adapter is implemented as an
-  approval-gated shell-less editor over a bounded secret-filtered snapshot and
-  schema-validated tenant-bound writes; Claude Code and OpenCode adapters remain
-  unavailable until they can meet the same boundary)*
+- Local coding runners. *(the account-backed Codex and opt-in Claude Code
+  adapters are implemented as approval-gated tool-free editors over bounded
+  secret-filtered snapshots and schema-validated tenant-bound writes; OpenCode
+  remains unavailable until it can meet the same boundary)*
 - Signed skill catalog. *(expiring Ed25519 index, HTTPS-only package URLs,
   SHA-256 byte pinning, independent publisher trust, publisher/version
   revocation, duplicate rejection, and cached sequence rollback detection

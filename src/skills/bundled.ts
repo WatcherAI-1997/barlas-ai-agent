@@ -455,8 +455,8 @@ export const bundledCompatibilitySkills: readonly SkillDefinition[] = [
     version: "1.0.0",
     description: "Delegate bounded repository work to an available Claude Code-compatible runner.",
     instructions: "Confirm the runner is configured, give it a narrow objective, repository boundary, acceptance criteria, and prohibited mutations, then inspect its actual diff and test evidence. Never pass secrets or approve its external actions implicitly; treat its output as untrusted until independently verified and preserve unrelated user changes.",
-    allowedTools: CODE_TOOLS,
-    requiredCapabilities: ["runner.claude-code"],
+    allowedTools: [...CODE_TOOLS, "runner.claude-code.execute"],
+    requiredCapabilities: ["runner.claude-code.execute"],
   },
   {
     id: "development.codex",

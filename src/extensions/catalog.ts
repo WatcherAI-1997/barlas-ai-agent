@@ -52,6 +52,7 @@ export interface BuiltinExtensionAvailability {
   mcp: boolean;
   sandbox: boolean;
   codexRunner: boolean;
+  claudeCodeRunner: boolean;
   telegram: boolean;
   discord: boolean;
   slack: boolean;
@@ -83,6 +84,7 @@ export function createBuiltinExtensionCatalog(availability: BuiltinExtensionAvai
   add({ id: "runtime.browser", name: "Managed browser", description: "Isolated Playwright browser navigation and extraction.", kind: "runtime", capabilities: ["browser.navigate", "browser.read"], risks: ["external", "read"], configuration: ["BROWSER_WS_ENDPOINT"] }, () => availability.browser);
   add({ id: "runtime.code-sandbox", name: "Code sandbox", description: "Isolated Python, Node.js, Git and npm execution.", kind: "runtime", capabilities: ["code.execute", "git", "npm", "python"], risks: ["write"], configuration: ["SANDBOX_SHARED_TOKEN", "SANDBOX_SOCKET_PATH"] }, () => availability.sandbox);
   add({ id: "runtime.codex-runner", name: "Codex workspace runner", description: "Approval-gated, ephemeral coding tasks inside the owning user's workspace through the bundled account-backed CLI.", kind: "runtime", capabilities: ["code.delegate", "workspace.write"], risks: ["external", "write"], configuration: ["MODEL_PROVIDER", "MODEL_NAME"] }, () => availability.codexRunner);
+  add({ id: "runtime.claude-code-runner", name: "Claude Code workspace runner", description: "Approval-gated, tool-free coding edits over a bounded secret-filtered workspace snapshot through a configured Claude Code account.", kind: "runtime", capabilities: ["code.delegate", "workspace.write"], risks: ["external", "write"], configuration: ["CLAUDE_CODE_ENABLED", "CLAUDE_CODE_MODEL"] }, () => availability.claudeCodeRunner);
   add({ id: "skills.builtin", name: "Versioned skills", description: "Versioned skill installation, evaluation, activation and rollback.", kind: "skill-source", capabilities: ["skills.activate", "skills.evaluate", "skills.install", "skills.rollback"], risks: ["write"], configuration: [] }, () => true);
   add({ id: "skills.signed-catalog", name: "Signed skill catalog", description: "Expiring Ed25519 catalog with HTTPS package pinning, revocation and rollback detection.", kind: "skill-source", capabilities: ["skills.catalog.search", "skills.catalog.verify", "skills.catalog.install", "skills.catalog.revoke"], risks: ["external", "write"], configuration: [] }, () => true);
   add({ id: "device.nodes", name: "Device nodes", description: "Token-paired desktop and mobile nodes with heartbeat, revocation and approval-gated notification delivery.", kind: "device", capabilities: ["nodes.notify", "nodes.pair", "nodes.revoke", "nodes.status"], risks: ["device", "external"], configuration: [] }, () => availability.deviceNodes);

@@ -15,6 +15,9 @@ const configSchema = z.object({
   MODEL_NAME: z.string().min(1),
   MODEL_API_KEY: z.string().default(""),
   MODEL_BASE_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+  CLAUDE_CODE_ENABLED: z.stringbool().default(false),
+  CLAUDE_CODE_MODEL: z.string().min(1).default("sonnet"),
+  CLAUDE_CODE_COMMAND: z.string().min(1).default("claude"),
   OLLAMA_BASE_URL: z.string().url().default("http://127.0.0.1:11434"),
   MEDIA_API_KEY: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   VISION_MODEL: z.preprocess(

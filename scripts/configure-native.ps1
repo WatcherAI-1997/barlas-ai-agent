@@ -16,6 +16,7 @@ $SupportedLanguageNames = @("Türkçe", "Azərbaycanca", "تۆرکجه", "Türkm
 $AllowedKeys = @(
     "PORT", "BARLAS_HTTP_PORT", "OWNER_EMAIL", "OWNER_DISPLAY_NAME", "OWNER_LANGUAGE",
     "MODEL_PROVIDER", "MODEL_NAME", "MODEL_API_KEY", "MODEL_BASE_URL", "OLLAMA_BASE_URL", "DEEP_MODEL_NAME", "MEDIA_API_KEY", "VISION_MODEL",
+    "CLAUDE_CODE_ENABLED", "CLAUDE_CODE_MODEL", "CLAUDE_CODE_COMMAND",
     "TRANSCRIPTION_MODEL", "SPEECH_MODEL", "DEFAULT_SPEECH_VOICE", "EMBEDDING_MODEL", "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET",
     "TELEGRAM_POLLING_ENABLED", "DISCORD_BOT_TOKEN", "DISCORD_GATEWAY_ENABLED", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_SOCKET_MODE_ENABLED",
     "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_GRAPH_API_BASE_URL",
@@ -379,6 +380,14 @@ function Configure-Tools {
     } elseif ($SearchMode -eq "disable") { $Settings.Remove("SEARXNG_BASE_URL") }
     Set-Value "LOG_LEVEL" (Read-MappedChoice "Diagnostic logging" @("warn", "info", "debug") @("Minimal", "Normal", "Detailed") (Current "LOG_LEVEL" "info"))
     Write-Host "Code execution stays isolated and approval-bound; native Windows never enables a hidden remote shell." -ForegroundColor DarkGray
+    $ClaudeMode = Read-MappedChoice "Claude Code runner" @("enabled", "disabled") @("Enabled - use an existing Claude Code login after approval", "Disabled") "$(if ((Current 'CLAUDE_CODE_ENABLED' 'false') -eq 'true') { 'enabled' } else { 'disabled' })"
+    if ($ClaudeMode -eq "enabled") {
+        Set-Value "CLAUDE_CODE_ENABLED" "true"
+        Set-Value "CLAUDE_CODE_MODEL" (Read-Plain "Claude Code model" (Current "CLAUDE_CODE_MODEL" "sonnet"))
+        Set-Value "CLAUDE_CODE_COMMAND" (Read-Plain "Claude Code executable" (Current "CLAUDE_CODE_COMMAND" "claude"))
+    } else {
+        Set-Value "CLAUDE_CODE_ENABLED" "false"
+    }
 }
 function Configure-Channels {
     Write-Step 6 10 "Channels"

@@ -87,6 +87,12 @@ describe("coding runner skill capability", () => {
     expect(skill.requiredCapabilities).toEqual(["runner.codex.execute"]);
     expect(skill.allowedTools).toContain("runner.codex.execute");
   });
+
+  it("makes the Claude Code workflow selectable only when its bounded runner exists", () => {
+    const skill = createBuiltinSkillRegistry().get("development.claude-code");
+    expect(skill.requiredCapabilities).toEqual(["runner.claude-code.execute"]);
+    expect(skill.allowedTools).toContain("runner.claude-code.execute");
+  });
 });
 
 describe("built-in public web tools", () => {
