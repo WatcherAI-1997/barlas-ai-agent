@@ -451,3 +451,10 @@ $StartupText = "@echo off`r`nstart `"`" /min `"%SystemRoot%\System32\WindowsPowe
 
 & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady
 Write-Host "[OK] Barlas will start automatically when you sign in to Windows" -ForegroundColor Green
+try {
+    & (Join-Path $RootDir "scripts\desktop-native.ps1") -Action install
+    Write-Host "[OK] Barlas Desktop shortcuts installed" -ForegroundColor Green
+} catch {
+    Write-Host "[WARN] Barlas core is ready, but desktop shortcuts were not installed: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "Run 'barlas desktop install' after Microsoft Edge is available." -ForegroundColor Yellow
+}

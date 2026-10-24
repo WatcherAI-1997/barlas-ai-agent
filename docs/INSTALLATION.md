@@ -21,16 +21,33 @@ launcher for the current user, and adds a current-user startup entry. The
 configuration is stored in `deploy\native.env`, restricted to the current
 Windows account and `SYSTEM`, and the cabinet is exposed only on loopback.
 
+The installer also creates **Barlas Desktop** shortcuts on the current user's
+Desktop and Start Menu. The shell opens the loopback cabinet in Microsoft Edge
+application mode with a dedicated Barlas profile, so it behaves as a separate
+window without browser tabs or address chrome. It does not bundle Electron,
+open another network listener, or create a second copy of the agent or its
+data. The tray node's **Open Barlas** action uses the same launcher.
+
 Useful commands after installation:
 
 ```powershell
 barlas
 barlas status
+barlas desktop
+barlas desktop install
+barlas desktop status
+barlas desktop uninstall
 & "$env:LOCALAPPDATA\Barlas\app\scripts\dashboard-url.ps1"
 & "$env:LOCALAPPDATA\Barlas\app\scripts\doctor-native.ps1"
 & "$env:LOCALAPPDATA\Barlas\app\scripts\stop-native.ps1"
 & "$env:LOCALAPPDATA\Barlas\app\scripts\start-native.ps1" -WaitReady
 ```
+
+`desktop install` repairs both current-user shortcuts. `desktop uninstall`
+removes those shortcuts and the isolated UI profile without touching the
+gateway or agent data. Full Barlas uninstall removes them automatically.
+Microsoft Edge/WebView must be available; failure to create this optional shell
+does not prevent the local gateway from installing.
 
 The complete Barlas setup and configuration surface is available after install:
 

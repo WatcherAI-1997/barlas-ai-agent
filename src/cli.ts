@@ -494,7 +494,7 @@ async function runtimeControl(ctx: CliContext, actionName: "status" | "pause" | 
 
 const completionCommands = [
   "agent", "agents", "approvals", "approve", "audit", "backup", "channels", "chat", "completion", "council",
-  "config", "configure", "cron", "daemon", "dashboard", "devices", "doctor", "extensions", "gateway",
+  "config", "configure", "cron", "daemon", "dashboard", "desktop", "devices", "doctor", "extensions", "gateway",
   "health", "integrations", "jobs", "logs", "memory", "models", "node", "nodes", "onboard", "pause",
   "plugins", "projects", "reject", "repair", "resume", "runs", "schedules", "security", "sessions",
   "skills", "status", "system", "tasks", "terminal", "tools", "transcripts", "tui", "uninstall", "update", "voice",
@@ -733,6 +733,8 @@ function help(): void {
   integrations delete <id>          удалить подключение
   status | health | doctor          состояние и диагностика
   dashboard                         открыть кабинет (Windows)
+  desktop [open|install|uninstall|status]
+                                    отдельное desktop-окно Barlas (Windows)
   voice test                        приватная проверка микрофона и голоса (Windows)
 
 Работа:

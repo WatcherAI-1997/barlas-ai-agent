@@ -23,6 +23,7 @@ describe("production installer", () => {
     const configure = await readFile(join(root, "scripts", "configure-native.ps1"), "utf8");
     const nativeUpdater = await readFile(join(root, "scripts", "update-native.ps1"), "utf8");
     const nativeUninstaller = await readFile(join(root, "scripts", "uninstall-native.ps1"), "utf8");
+    const nativeDesktop = await readFile(join(root, "scripts", "desktop-native.ps1"), "utf8");
     const modelAuth = await readFile(join(root, "scripts", "model-auth-native.ps1"), "utf8");
     const webDiagnostic = await readFile(join(root, "scripts", "web-diagnostic.mjs"), "utf8");
     const windowsNode = await readFile(join(root, "scripts", "windows-node.ps1"), "utf8");
@@ -92,6 +93,7 @@ describe("production installer", () => {
     expect(configure).toContain("barlas web test");
     expect(cli).toContain("doctor-native.ps1");
     expect(cli).toContain('if ($LocalCommand -eq "voice"');
+    expect(cli).toContain('if ($LocalCommand -eq "desktop"');
     expect(cli).toContain('"auth-status"');
     expect(cli).toContain("voice-test=1");
     expect(cli).toContain('$LocalCommand -eq "backup"');
@@ -114,6 +116,19 @@ describe("production installer", () => {
     expect(nativeUninstaller).toContain("uninstalled-native.env");
     expect(nativeUninstaller).toContain("Protect-File");
     expect(nativeUninstaller).toContain("icacls.exe");
+    expect(nativeUninstaller).toContain('desktop-native.ps1');
+    expect(installer).toContain('desktop-native.ps1');
+    for (const required of [
+      'ValidateSet("open", "install", "uninstall", "status")',
+      'Barlas AI Agent.lnk',
+      'WScript.Shell',
+      '--app=',
+      '--user-data-dir=',
+      'StartsWith("http://127.0.0.1:"',
+      'start-native.ps1',
+      'barlas-ai-agent-logo-original.png',
+    ]) expect(nativeDesktop).toContain(required);
+    expect(nativeDesktop).not.toContain("Electron");
     expect(modelAuth).toContain('[switch]$Quiet');
     expect(modelAuth).toContain('$ErrorActionPreference = "Continue"');
     expect(modelAuth).toContain('Write-Output "disconnected"');
@@ -181,6 +196,7 @@ describe("production installer", () => {
     expect(cli).toContain('System32\\WindowsPowerShell\\v1.0\\powershell.exe');
     expect(nativeUpdater).toContain('System32\\WindowsPowerShell\\v1.0\\powershell.exe');
     expect(windowsNode).toContain('System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+    expect(windowsNode).toContain('desktop-native.ps1');
   });
 
   it("prepares a protected config without printing supplied secrets", async () => {

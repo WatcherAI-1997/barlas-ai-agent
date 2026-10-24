@@ -62,6 +62,7 @@ for (const required of [
   "scripts/configure-native.ps1",
   "scripts/update-native.ps1",
   "scripts/uninstall-native.ps1",
+  "scripts/desktop-native.ps1",
   "scripts/start-native.ps1",
   "scripts/stop-native.ps1",
   "scripts/dashboard-url.sh",
@@ -79,6 +80,7 @@ for (const required of [
 const installer = await readFile("install.sh", "utf8");
 const windowsInstaller = await readFile("install.ps1", "utf8");
 const nativeWindowsInstaller = await readFile("install-native.ps1", "utf8");
+const nativeDesktop = await readFile("scripts/desktop-native.ps1", "utf8");
 const windowsBootstrap = await readFile("install-windows.ps1", "utf8");
 const doctor = await readFile("scripts/doctor.sh", "utf8");
 const updater = await readFile("scripts/update.sh", "utf8");
@@ -94,6 +96,20 @@ for (const required of ["Windows_NT", "Docker Desktop", "BARLAS_INSTALL_MODE = \
 }
 for (const required of ["BARLAS_INSTALL_MODE = \"native\"", "RandomNumberGenerator", "Protect-SecretFile", "BROWSER_WS_ENDPOINT = $BrowserEndpoint", "start-native.ps1", "Read-MenuChoice", "Read-ArrowMenu", "Read-ValidatedValue", "[int]::TryParse", "OpenAI account - browser sign-in, no API key", "Ollama - local and private"]) {
   if (!nativeWindowsInstaller.includes(required)) throw new Error(`Native Windows installer boundary is missing: ${required}`);
+}
+for (const required of [
+  'ValidateSet("open", "install", "uninstall", "status")',
+  'StartsWith("http://127.0.0.1:"',
+  '"--app=`"$DashboardUrl`""',
+  '"--user-data-dir=`"$ProfileDir`""',
+  "WScript.Shell",
+  "Barlas AI Agent.lnk",
+  "start-native.ps1",
+]) {
+  if (!nativeDesktop.includes(required)) throw new Error(`Native desktop boundary is missing: ${required}`);
+}
+for (const forbidden of ["Electron", "http://0.0.0.0", "--remote-debugging-port"]) {
+  if (nativeDesktop.includes(forbidden)) throw new Error(`Native desktop must not include ${forbidden}`);
 }
 for (const required of ["commits/main", "archive/$ReleaseSha.zip", ".barlas-version", "LOCALAPPDATA", "native.env", "barlas.cmd", "ExecutionPolicy Bypass", "nodejs.org", "node_modules\\playwright-core\\cli.js", "THINK AHEAD.", "ACT BEYOND."]) {
   if (!windowsBootstrap.includes(required)) throw new Error(`Windows bootstrap boundary is missing: ${required}`);

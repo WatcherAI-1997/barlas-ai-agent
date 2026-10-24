@@ -31,6 +31,10 @@ if (-not $Yes) {
 
 $StopScript = Join-Path $AppDir "scripts\stop-native.ps1"
 if (Test-Path -LiteralPath $StopScript -PathType Leaf) { & $StopScript }
+$DesktopScript = Join-Path $AppDir "scripts\desktop-native.ps1"
+if (Test-Path -LiteralPath $DesktopScript -PathType Leaf) {
+    try { & $DesktopScript -Action uninstall } catch { Write-Warning "Could not remove every Barlas Desktop artifact: $($_.Exception.Message)" }
+}
 if (-not $PurgeData) {
     New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
     $EnvironmentFile = Join-Path $AppDir "deploy\native.env"

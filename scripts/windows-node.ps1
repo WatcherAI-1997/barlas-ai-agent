@@ -15,6 +15,7 @@ $ConfigPath = Join-Path $NodeRoot "node.json"
 $RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $RunName = "Barlas Desktop Node"
 $WindowsPowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+$script:DesktopScript = Join-Path $AppRoot "scripts\desktop-native.ps1"
 
 function Protect-NodeFile([string]$Path) {
     $UserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -149,7 +150,14 @@ $Menu = New-Object Windows.Forms.ContextMenuStrip
 $Open = $Menu.Items.Add("Open Barlas")
 $Exit = $Menu.Items.Add("Exit")
 $script:Running = $true
-$Open.add_Click({ Start-Process $script:Config.baseUrl })
+$Open.add_Click({
+    if (Test-Path -LiteralPath $script:DesktopScript -PathType Leaf) {
+        Start-Process $WindowsPowerShellExe -ArgumentList @(
+            "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass",
+            "-File", "`"$script:DesktopScript`"", "-Action", "open"
+        ) | Out-Null
+    } else { Start-Process $script:Config.baseUrl }
+})
 $Exit.add_Click({ $script:Running = $false })
 $Tray.ContextMenuStrip = $Menu
 $Tray.BalloonTipTitle = "Barlas Desktop Node"

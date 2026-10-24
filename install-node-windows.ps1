@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-$ExpectedSha256 = "9ec84d1fb4b245a38dd95b0429a3961332fd74d01395e243172a302d0298c24b"
+$ExpectedSha256 = "6a4f2d241ef7e2585c5bf2f3f91245c3d2559e42ae8c9ab39a605c9e412c19ef"
 $ExpectedIconSha256 = "4ba86c089b1582361db3fc244d430641c6f66d4121663e0e22a3ef35b577848e"
 $Source = "https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/scripts/windows-node.ps1"
 $IconSource = "https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/assets/brand/barlas-ai-agent-logo-original.png"

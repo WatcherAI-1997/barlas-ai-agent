@@ -86,6 +86,10 @@ autonomy.
 - The branded web cabinet is served from immutable container assets with a
   restrictive Content Security Policy, no third-party browser scripts, and no
   access to the service automation token.
+- Native Windows exposes that same loopback-only cabinet through a dedicated
+  Edge application-mode profile and current-user shortcuts. The desktop shell
+  starts the existing gateway when needed, adds no listener or privileged
+  process, and is also the target of the tray node's Open Barlas action.
 - The cabinet uses a responsive sidebar/topbar shell, keyboard-visible focus,
   reduced-motion support, accessible live notifications, and native modal
   dialogs for copyable one-time credentials and run details.

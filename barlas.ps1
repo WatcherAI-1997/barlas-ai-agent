@@ -137,6 +137,14 @@ if (Test-Path -LiteralPath $NativeEnvFile -PathType Leaf) {
         if ($LocalCommand -in @("start", "restart")) { & (Join-Path $RootDir "scripts\start-native.ps1") -WaitReady }
         exit 0
     }
+    if ($LocalCommand -eq "desktop") {
+        $DesktopAction = if ($Arguments.Count -gt 1) { $Arguments[1] } else { "open" }
+        if ($DesktopAction -notin @("open", "install", "uninstall", "status")) {
+            throw "Unknown desktop command. Use: open, install, uninstall, status"
+        }
+        & (Join-Path $RootDir "scripts\desktop-native.ps1") -Action $DesktopAction
+        exit $LASTEXITCODE
+    }
     if ($LocalCommand -eq "dashboard") {
         $DashboardUrl = & (Join-Path $RootDir "scripts\dashboard-url.ps1")
         Start-Process ([string]$DashboardUrl).Trim()

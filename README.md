@@ -55,6 +55,7 @@ preserve project state.
 | 👁️ | **Multimodal understanding** | Images, scanned PDFs, audio transcription, speech generation, and Unicode document workflows. |
 | 🎙️ | **Telegram voice mode** | `/voice` and `/call` return an agent answer as a bounded Telegram voice message through the official Bot API. |
 | 🗣️ | **Private push-to-talk** | The web chat records only after an explicit click, discards microphone audio after transcription, keeps conversation context, and plays the spoken answer. |
+| 🪟 | **Windows desktop shell** | Current-user Desktop/Start Menu shortcuts open the local Barlas cabinet as a dedicated app window; the tray uses the same launcher. |
 | 📁 | **Project operating system** | Goals, ordered plans, checkpoints, linked runs, immutable artifact versions, and recoverable results. |
 | 🛡️ | **Human control** | External, write, and destructive operations stop before execution and require approval of the exact stored request. |
 
@@ -106,8 +107,8 @@ The bootstrap installs a private portable Node.js runtime, an embedded
 PostgreSQL-compatible PGlite database, and a private Chromium runtime under
 `%LOCALAPPDATA%\Barlas`. It creates a configuration protected by a Windows ACL,
 adds the `barlas` command to the user PATH, enables current-user autostart, and
-opens the cabinet. The service binds only to `http://127.0.0.1:17840`; Telegram
-uses long polling.
+installs Desktop/Start Menu shortcuts for a dedicated Barlas app window. The
+service binds only to `http://127.0.0.1:17840`; Telegram uses long polling.
 
 Native laptop mode intentionally does not provide the container-isolated code
 sandbox. Use the Linux/Docker server deployment when untrusted code execution
@@ -117,6 +118,7 @@ After installation, open a new PowerShell window:
 
 ```powershell
 barlas
+barlas desktop
 barlas ask "Проверь проект и составь план"
 ```
 
