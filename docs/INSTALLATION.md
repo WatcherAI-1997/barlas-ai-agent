@@ -6,6 +6,28 @@ stop, or reconfigure another agent.
 
 ## Windows laptop
 
+For the full desktop experience, build or download `Barlas-AI-Agent-Setup.exe`.
+It is a current-user graphical installer with a black/red Barlas design,
+English/Russian/Uzbek first-run language selection, live progress, an installation
+log, optional Desktop and Start Menu shortcuts, launch-after-install, and an
+Apps & Features uninstall entry. It does not request administrator access. Model
+account sign-in is deliberately deferred until Barlas opens, so credentials are
+never placed in installer arguments or logs.
+
+Maintainers build the deterministic NSIS package from a clean checkout on
+Windows with:
+
+```powershell
+.\scripts\build-windows-installer.ps1
+```
+
+The command creates `artifacts\Barlas-AI-Agent-Setup.exe` and a matching
+SHA-256 file. NSIS 3 and Git for Windows are build-time requirements only; end
+users do not need them. Release signing remains a separate release gate.
+
+The console bootstrap remains available for inspection and recovery. Open
+PowerShell and run:
+
 Open PowerShell and run:
 
 ```powershell
@@ -21,7 +43,7 @@ launcher for the current user, and adds a current-user startup entry. The
 configuration is stored in `deploy\native.env`, restricted to the current
 Windows account and `SYSTEM`, and the cabinet is exposed only on loopback.
 
-The installer also creates **Barlas Desktop** shortcuts on the current user's
+Both installation paths create **Barlas Desktop** shortcuts on the current user's
 Desktop and Start Menu. The shell opens the loopback cabinet in Microsoft Edge
 application mode with a dedicated Barlas profile, so it behaves as a separate
 window without browser tabs or address chrome. It does not bundle Electron,

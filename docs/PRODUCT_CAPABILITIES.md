@@ -25,7 +25,7 @@ planned functionality as complete.
 | Multi-agent execution | Bounded parallel workflows and non-recursive analytical subagents | Implemented |
 | Multimodal work | Images, PDF/DOCX/XLSX/PPTX, audio transcription and speech replies | Implemented; provider-dependent |
 | Wider channel ecosystem | Additional official adapters where safe local operation is possible | Planned |
-| Desktop/mobile control | Windows desktop app-mode shell and shortcuts plus tray node with DPAPI token, current-user autostart, notifications only, and no remote shell | Windows desktop implemented; Authenticode/mobile/camera/screen pending |
+| Desktop/mobile control | Branded current-user NSIS setup, Windows desktop app-mode shell and shortcuts plus tray node with DPAPI token, current-user autostart, notifications only, and no remote shell | Windows desktop and reproducible installer implemented; Authenticode/real-device E2E/mobile/camera/screen pending |
 | Voice conversation | Explicit-consent web push-to-talk with ephemeral recordings and spoken contextual replies | Implemented; full-duplex interruption planned |
 | Skill marketplace | Expiring Ed25519 catalog, HTTPS package hashes, exact publisher trust, revocation and sequence rollback detection | Implemented foundation; reputation UI pending |
 

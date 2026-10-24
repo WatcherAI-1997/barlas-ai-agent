@@ -34,6 +34,12 @@
 - Installer tests verify Bash syntax, discoverable help, non-interactive
   prepare-only operation, `0600` secret storage, placeholder removal, and that
   supplied secrets never appear in installer output.
+- The Windows desktop package is reproducibly defined as a current-user NSIS
+  installer with a branded welcome screen, no credential fields, loopback-only
+  messaging, a retained installation log, rollback through the hardened
+  bootstrap, and an Apps & Features uninstall entry. Its source compiles to a
+  PE installer in CI-compatible NSIS; real Windows 10/11 execution and
+  Authenticode signing remain release gates.
 - The public repository reports `private=false`; the one-command Windows
   bootstrap on `raw.githubusercontent.com/.../main/install-windows.ps1` returns
   HTTP 200 without GitHub authentication.

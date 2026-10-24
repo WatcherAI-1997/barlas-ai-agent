@@ -263,8 +263,11 @@ if (Test-Path -LiteralPath $EnvFile -PathType Leaf) {
     if ($ModelProvider -eq "codex_cli") {
         $AuthState = & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action status -Quiet
         if ($AuthState -ne "connected") {
-            if ($NonInteractive) { throw "MODEL_PROVIDER=codex_cli requires an existing OpenAI account sign-in." }
-            & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action login
+            if ($NonInteractive) {
+                Write-Host "[INFO] OpenAI account sign-in is deferred until Barlas first opens." -ForegroundColor Cyan
+            } else {
+                & (Join-Path $RootDir "scripts\model-auth-native.ps1") -Action login
+            }
         }
     }
     $DefaultModel = if ($ModelProvider -eq "ollama") { "qwen3:8b" } elseif ($ModelProvider -eq "anthropic") { "claude-sonnet-4-5" } elseif ($ModelProvider -eq "openai_compatible") { "model-name" } else { "gpt-6.1-sol" }

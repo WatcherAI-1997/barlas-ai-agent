@@ -88,6 +88,15 @@ recursive delegation. Real actions stay in the Chief's approval-gated loop.
 
 ### Windows 10/11
 
+The primary desktop distribution is `Barlas-AI-Agent-Setup.exe`: a branded,
+current-user graphical installer with language selection, progress and recovery
+logging, shortcut controls, launch-after-install, and Windows Apps uninstall.
+It does not require administrator access. Maintainers can reproduce it with
+`.\scripts\build-windows-installer.ps1`; the build emits a SHA-256 file beside
+the executable. Authenticode signing is still required before public release.
+
+The transparent PowerShell bootstrap remains the recovery/install alternative:
+
 Open PowerShell and run one command:
 
 ```powershell

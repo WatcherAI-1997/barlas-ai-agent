@@ -1,5 +1,9 @@
 [CmdletBinding()]
-param([string]$SourceArchive = "")
+param(
+    [string]$SourceArchive = "",
+    [switch]$NonInteractive,
+    [switch]$NoLaunch
+)
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -166,7 +170,9 @@ try {
         Write-Done "Browser ready"
 
         Write-Step 5 "Personal setup"
-        & $WindowsPowerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppDir "install-native.ps1")
+        $NativeArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $AppDir "install-native.ps1"))
+        if ($NonInteractive) { $NativeArguments += "-NonInteractive" }
+        & $WindowsPowerShellExe @NativeArguments
         if ($LASTEXITCODE -ne 0) { throw "Barlas setup exited with code $LASTEXITCODE" }
     } catch {
         if (Test-Path -LiteralPath $PreviousDir) {
@@ -208,7 +214,9 @@ try {
     [IO.File]::WriteAllText((Join-Path $AppDir ".barlas-version"), $ReleaseSha + "`r`n", [Text.Encoding]::ASCII)
 
     $DashboardUrl = & $WindowsPowerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppDir "scripts\dashboard-url.ps1")
-    if ($LASTEXITCODE -eq 0 -and $DashboardUrl) { Start-Process ([string]$DashboardUrl).Trim() }
+    if (-not $NoLaunch -and $LASTEXITCODE -eq 0 -and $DashboardUrl) {
+        & $WindowsPowerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppDir "scripts\desktop-native.ps1") -Action open
+    }
     Write-Host ""
     Write-Host "Barlas is ready - Docker is not used." -ForegroundColor Green
     Write-Host ""
@@ -253,6 +261,7 @@ try {
     Write-Host "Installation stopped: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "Nothing outside $BarlasHome was changed." -ForegroundColor DarkGray
     Write-Host "Log: $InstallLog" -ForegroundColor DarkGray
+    if ($NonInteractive) { throw }
 } finally {
     if (Test-Path -LiteralPath $WorkDir) { Remove-Item -LiteralPath $WorkDir -Recurse -Force }
 }

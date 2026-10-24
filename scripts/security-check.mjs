@@ -63,6 +63,10 @@ for (const required of [
   "scripts/update-native.ps1",
   "scripts/uninstall-native.ps1",
   "scripts/desktop-native.ps1",
+  "scripts/build-windows-installer.ps1",
+  "installer/windows/barlas-agent.nsi",
+  "installer/windows/barlas-welcome.bmp",
+  "installer/windows/barlas.ico",
   "scripts/start-native.ps1",
   "scripts/stop-native.ps1",
   "scripts/dashboard-url.sh",
@@ -81,6 +85,7 @@ const installer = await readFile("install.sh", "utf8");
 const windowsInstaller = await readFile("install.ps1", "utf8");
 const nativeWindowsInstaller = await readFile("install-native.ps1", "utf8");
 const nativeDesktop = await readFile("scripts/desktop-native.ps1", "utf8");
+const graphicalInstaller = await readFile("installer/windows/barlas-agent.nsi", "utf8");
 const windowsBootstrap = await readFile("install-windows.ps1", "utf8");
 const doctor = await readFile("scripts/doctor.sh", "utf8");
 const updater = await readFile("scripts/update.sh", "utf8");
@@ -110,6 +115,12 @@ for (const required of [
 }
 for (const forbidden of ["Electron", "http://0.0.0.0", "--remote-debugging-port"]) {
   if (nativeDesktop.includes(forbidden)) throw new Error(`Native desktop must not include ${forbidden}`);
+}
+for (const required of ["RequestExecutionLevel user", "-NonInteractive -NoLaunch", "SetEnvironmentVariable", "Uninstall Barlas.exe", "127.0.0.1"]) {
+  if (!graphicalInstaller.includes(required)) throw new Error(`Graphical Windows installer boundary is missing: ${required}`);
+}
+for (const forbidden of ["RequestExecutionLevel admin", "MODEL_API_KEY", "TELEGRAM_BOT_TOKEN"]) {
+  if (graphicalInstaller.includes(forbidden)) throw new Error(`Graphical Windows installer must not collect or elevate for: ${forbidden}`);
 }
 for (const required of ["commits/main", "archive/$ReleaseSha.zip", ".barlas-version", "LOCALAPPDATA", "native.env", "barlas.cmd", "ExecutionPolicy Bypass", "nodejs.org", "node_modules\\playwright-core\\cli.js", "THINK AHEAD.", "ACT BEYOND."]) {
   if (!windowsBootstrap.includes(required)) throw new Error(`Windows bootstrap boundary is missing: ${required}`);

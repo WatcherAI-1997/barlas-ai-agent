@@ -24,6 +24,8 @@ describe("production installer", () => {
     const nativeUpdater = await readFile(join(root, "scripts", "update-native.ps1"), "utf8");
     const nativeUninstaller = await readFile(join(root, "scripts", "uninstall-native.ps1"), "utf8");
     const nativeDesktop = await readFile(join(root, "scripts", "desktop-native.ps1"), "utf8");
+    const graphicalInstaller = await readFile(join(root, "installer", "windows", "barlas-agent.nsi"), "utf8");
+    const graphicalInstallerBuild = await readFile(join(root, "scripts", "build-windows-installer.ps1"), "utf8");
     const modelAuth = await readFile(join(root, "scripts", "model-auth-native.ps1"), "utf8");
     const webDiagnostic = await readFile(join(root, "scripts", "web-diagnostic.mjs"), "utf8");
     const windowsNode = await readFile(join(root, "scripts", "windows-node.ps1"), "utf8");
@@ -142,7 +144,7 @@ describe("production installer", () => {
       'Join-Path $env:LOCALAPPDATA "Barlas"',
       "native.env",
       "barlas.cmd",
-      'Start-Process ([string]$DashboardUrl).Trim()',
+      'desktop-native.ps1") -Action open',
       "Show-PixelBanner",
       '" ▄██▄  ▄██▄ "',
       '"    ▄██▄    "',
@@ -172,7 +174,8 @@ describe("production installer", () => {
       "nodejs.org/dist",
       "node_modules\\playwright-core\\cli.js",
       "install-native.ps1",
-      'param([string]$SourceArchive = "")',
+      "[switch]$NonInteractive",
+      "[switch]$NoLaunch",
       "Get-FileHash -LiteralPath $OfflineArchive",
       "UTF8Encoding($true)",
       'Get-ChildItem -LiteralPath $AppDir -Filter "*.ps1" -File -Recurse',
@@ -197,6 +200,21 @@ describe("production installer", () => {
     expect(nativeUpdater).toContain('System32\\WindowsPowerShell\\v1.0\\powershell.exe');
     expect(windowsNode).toContain('System32\\WindowsPowerShell\\v1.0\\powershell.exe');
     expect(windowsNode).toContain('desktop-native.ps1');
+    for (const required of [
+      'RequestExecutionLevel user',
+      'MUI_WELCOMEFINISHPAGE_BITMAP',
+      'Personal setup',
+      'O‘zbekcha',
+      'SetEnvironmentVariable',
+      '-NonInteractive -NoLaunch',
+      'Uninstall Barlas.exe',
+      'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Barlas AI Agent',
+      '127.0.0.1',
+    ]) expect(graphicalInstaller).toContain(required);
+    expect(graphicalInstaller).not.toContain('RequestExecutionLevel admin');
+    expect(graphicalInstallerBuild).toContain('Refusing to package a dirty worktree.');
+    expect(graphicalInstallerBuild).toContain('Get-FileHash');
+    expect(graphicalInstallerBuild).toContain('SHA256');
   });
 
   it("prepares a protected config without printing supplied secrets", async () => {
