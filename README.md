@@ -174,6 +174,17 @@ increments its identity version and preserves a reviewable snapshot; custom
 instructions cannot override owner authority, approvals, privacy, budgets,
 accuracy, or the prohibition on invented actions and memories.
 
+For a confirmed critical incident, the owner can temporarily activate TEMIR,
+an original cold and decisive Crisis Regent. Its posture is bounded by scope
+and time, cannot bypass approvals or the emergency pause, enters recovery on
+expiry, and hands control back automatically:
+
+```bash
+barlas crisis activate "Database integrity failure" --ttl 30 --scope "database,backups,service"
+barlas crisis status
+barlas crisis release "Restore verified"
+```
+
 ### Linux
 
 For a local installation without a domain, DNS, Caddy, or public web exposure,

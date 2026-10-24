@@ -67,6 +67,7 @@ import {
   type AgentProfileService,
 } from "./agents/profiles.js";
 import type { RuntimeControl, RuntimeControlState } from "./system/runtime-control.js";
+import type { CrisisAssessment, CrisisRegent } from "./agents/crisis-regent.js";
 
 class RuntimePausedError extends Error {}
 
@@ -97,6 +98,19 @@ const agentRunBodySchema = chatBodySchema.extend({
   message: "skillVersion requires skillId",
   path: ["skillVersion"],
 });
+
+const crisisActivateSchema = z.object({
+  reason: z.string().trim().min(1).max(500),
+  scope: z.array(z.string().trim().min(1).max(240)).max(8).optional(),
+  ttlMinutes: z.number().int().min(5).max(60).default(30),
+}).strict();
+const crisisAssessmentSchema = z.object({
+  severity: z.enum(["info", "warning", "critical"]),
+  confidence: z.number().min(0).max(1),
+  summary: z.string().trim().min(1).max(500),
+  signals: z.array(z.string().trim().min(1).max(240)).max(8),
+}).strict();
+const crisisReleaseSchema = z.object({ reason: z.string().trim().max(240).default("Released by owner") }).strict();
 
 type ChatMessage = z.infer<typeof chatBodySchema>["messages"][number];
 
@@ -444,6 +458,7 @@ export interface AppDependencies {
   webRoot?: string;
   runtimeInfo?: { workerEnabled: boolean };
   runtimeControl?: Pick<RuntimeControl, "state" | "isPaused" | "pause" | "resume">;
+  crisisRegent?: Pick<CrisisRegent, "state" | "activate" | "assess" | "release" | "reset" | "context">;
   defaultSpeechVoice?: SpeechVoice;
   agentIdentity?: {
     name: string;
@@ -508,6 +523,13 @@ async function outcomeContext(
 ): Promise<Array<{ role: "system"; content: string }>> {
   if (!outcomes) return [];
   const content = await outcomes.context(userId);
+  return content ? [{ role: "system", content }] : [];
+}
+
+async function crisisContext(
+  crisisRegent: AppDependencies["crisisRegent"],
+): Promise<Array<{ role: "system"; content: string }>> {
+  const content = await crisisRegent?.context();
   return content ? [{ role: "system", content }] : [];
 }
 
@@ -783,6 +805,67 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     return await dependencies.runtimeControl.resume();
   });
 
+  app.get("/v1/system/crisis", async (request, reply) => {
+    requireOwner(request);
+    if (!dependencies.crisisRegent) return reply.notFound();
+    return await dependencies.crisisRegent.state();
+  });
+
+  app.post("/v1/system/crisis/activate", async (request, reply) => {
+    const principal = requireOwner(request);
+    if (!dependencies.crisisRegent) return reply.notFound();
+    const parsed = crisisActivateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid crisis activation request");
+    const state = await dependencies.crisisRegent.activate({
+      reason: parsed.data.reason,
+      ttlMinutes: parsed.data.ttlMinutes,
+      source: "owner",
+      ...(parsed.data.scope ? { scope: parsed.data.scope } : {}),
+    });
+    await dependencies.database.appendAudit({
+      userId: principal.userId, eventType: "crisis_regent.activated", resourceType: "incident",
+      resourceId: state.incidentId ?? "crisis-regent", details: { reason: state.reason, scope: state.scope, expiresAt: state.expiresAt },
+    });
+    return state;
+  });
+
+  app.post("/v1/system/crisis/assess", async (request, reply) => {
+    const principal = requireOwner(request);
+    if (!dependencies.crisisRegent) return reply.notFound();
+    const parsed = crisisAssessmentSchema.safeParse(request.body);
+    if (!parsed.success) return reply.badRequest("Invalid crisis assessment");
+    const result = await dependencies.crisisRegent.assess(parsed.data satisfies CrisisAssessment);
+    await dependencies.database.appendAudit({
+      userId: principal.userId, eventType: result.activated ? "crisis_regent.auto_activated" : "crisis_regent.assessed",
+      resourceType: "incident", resourceId: result.state.incidentId ?? "crisis-regent",
+      details: { severity: parsed.data.severity, confidence: parsed.data.confidence, signals: parsed.data.signals.length, decision: result.reason },
+    });
+    return result;
+  });
+
+  app.post("/v1/system/crisis/release", async (request, reply) => {
+    const principal = requireOwner(request);
+    if (!dependencies.crisisRegent) return reply.notFound();
+    const parsed = crisisReleaseSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.badRequest("Invalid crisis release request");
+    const state = await dependencies.crisisRegent.release(parsed.data.reason);
+    await dependencies.database.appendAudit({
+      userId: principal.userId, eventType: "crisis_regent.released", resourceType: "incident",
+      resourceId: state.incidentId ?? "crisis-regent", details: { reason: parsed.data.reason, recoveryUntil: state.expiresAt },
+    });
+    return state;
+  });
+
+  app.post("/v1/system/crisis/reset", async (request, reply) => {
+    const principal = requireOwner(request);
+    if (!dependencies.crisisRegent) return reply.notFound();
+    const state = await dependencies.crisisRegent.reset();
+    await dependencies.database.appendAudit({
+      userId: principal.userId, eventType: "crisis_regent.reset", resourceType: "incident", resourceId: "crisis-regent", details: {},
+    });
+    return state;
+  });
+
   app.get("/v1/me", async (request) => {
     const principal = principalFor(request);
     return {
@@ -937,6 +1020,13 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       id: "chief",
       name: "Chief Barlas",
       mandate: "Single accountable voice that serves the owner, commands the Council, reconciles dissent, and owns the final result.",
+    },
+    crisisRegent: {
+      id: "temir",
+      name: "TEMIR",
+      status: "standby",
+      mandate: "Temporary crisis command for containment, verified recovery, and an explicit handback to the owner.",
+      boundaries: "Cannot bypass owner authority, permissions, approval gates, budgets, privacy, policy, or emergency pause; every activation expires.",
     },
     members: barlasCouncil,
   }));
@@ -1431,7 +1521,8 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const identityContext = selectedProfile
       ? [{ role: "system" as const, content: agentProfileInstruction(selectedProfile) }]
       : agentIdentityContext(dependencies.agentIdentity);
-    const [languageContext, commitmentsContext, outcomesContext] = await Promise.all([
+    const [crisisModeContext, languageContext, commitmentsContext, outcomesContext] = await Promise.all([
+      crisisContext(dependencies.crisisRegent),
       preferredLanguageContext(input.userId, dependencies.authService),
       continuityContext(input.userId, dependencies.continuity),
       outcomeContext(input.userId, dependencies.outcomes),
@@ -1447,7 +1538,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const result = await dependencies.modelProvider.generate({
         userId: input.userId,
         conversationId,
-        messages: [...identityContext, ...languageContext, ...commitmentsContext, ...outcomesContext, ...projectContext, ...memoryContext, ...conversation.modelMessages],
+        messages: [...identityContext, ...crisisModeContext, ...languageContext, ...commitmentsContext, ...outcomesContext, ...projectContext, ...memoryContext, ...conversation.modelMessages],
         taskClass: effectiveTaskClass,
       });
 
@@ -1607,7 +1698,8 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const identityContext = selectedProfile
       ? [{ role: "system" as const, content: agentProfileInstruction(selectedProfile) }]
       : agentIdentityContext(dependencies.agentIdentity);
-    const [languageContext, commitmentsContext, outcomesContext] = await Promise.all([
+    const [crisisModeContext, languageContext, commitmentsContext, outcomesContext] = await Promise.all([
+      crisisContext(dependencies.crisisRegent),
       preferredLanguageContext(userId, dependencies.authService),
       continuityContext(userId, dependencies.continuity),
       outcomeContext(userId, dependencies.outcomes),
@@ -1666,7 +1758,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
       const loopInput = {
         userId,
         conversationId,
-        messages: [...identityContext, ...languageContext, ...commitmentsContext, ...outcomesContext, ...projectContext, ...skillContext, ...memoryContext, ...conversation.modelMessages],
+        messages: [...identityContext, ...crisisModeContext, ...languageContext, ...commitmentsContext, ...outcomesContext, ...projectContext, ...skillContext, ...memoryContext, ...conversation.modelMessages],
         taskClass: effectiveTaskClass,
         maxSteps: parsed.data.maxSteps,
         ...(parsed.data.maxTotalTokens ? { maxTotalTokens: parsed.data.maxTotalTokens } : {}),
@@ -2452,7 +2544,8 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         role: "system" as const,
         content: ["Use these Barlas AI Agent user memories only when relevant:", ...memories.map((item) => `- [${item.category}] ${item.content}`)].join("\n"),
       }] : [];
-      const [languageContext, commitmentsContext, outcomesContext] = await Promise.all([
+      const [crisisModeContext, languageContext, commitmentsContext, outcomesContext] = await Promise.all([
+        crisisContext(dependencies.crisisRegent),
         preferredLanguageContext(userId, dependencies.authService),
         continuityContext(userId, dependencies.continuity),
         outcomeContext(userId, dependencies.outcomes),
@@ -2467,7 +2560,7 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         : false;
       const run = await dependencies.agentRuntime.enqueue({
         userId, conversationId,
-        messages: [...identityContext, ...languageContext, ...commitmentsContext, ...outcomesContext, ...memoryContext, ...conversation.modelMessages],
+        messages: [...identityContext, ...crisisModeContext, ...languageContext, ...commitmentsContext, ...outcomesContext, ...memoryContext, ...conversation.modelMessages],
         conversationMessages: persistedImmediately ? [] : conversation.newMessages,
         delivery: { channel: "telegram", chatId: message.chat.id, ...(voiceCommand.requested ? { voice: true } : {}) },
         taskClass: "fast",

@@ -36,6 +36,9 @@
 - Durable Identity & Character layer. *(fixed Council characters plus owner-created
   versioned identity cards with values, strengths, voice, initiative, risk and
   critique posture, visual cues, protected principles, and auditable evolution implemented)*
+- Bounded Crisis Regent. *(TEMIR persistent standby/active/recovery state,
+  owner activation, strict two-signal trusted-monitor threshold, expiring
+  authority, runtime context, audit, CLI, and cabinet controls implemented)*
 - Versioned skills with evaluation and rollback. *(persistent owner-installed candidates, Ed25519-signed third-party packages with explicit fingerprint trust, bounded automated acceptance evaluation, activation gate, exact selection, tool-permission enforcement, and rollback implemented)*
 - Signed skill catalog. *(expiring Ed25519 index, HTTPS-only package URLs,
   SHA-256 byte pinning, independent publisher trust, publisher/version

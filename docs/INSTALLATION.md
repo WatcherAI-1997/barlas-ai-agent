@@ -423,6 +423,25 @@ The cabinet supports owner-led evolution of a personality. A reason is required,
 the identity version increases, and earlier snapshots remain reviewable.
 Protected Barlas principles always remain in force regardless of custom text.
 
+### Crisis Regent TEMIR
+
+TEMIR is an original emergency personality inspired by a cold, decisive machine
+strategist. It is deliberately not an autonomous ruler: it cannot expand its
+tools or authority, bypass approvals, ignore the owner, or remain active
+indefinitely. The owner can operate it from the cabinet or CLI:
+
+```powershell
+barlas crisis status
+barlas crisis activate "Database integrity failure" --ttl 30 --scope "database,backups,service"
+barlas crisis release "Writes contained and restore verified"
+barlas crisis reset
+```
+
+An automatic activation endpoint is available to trusted local monitors, but
+it activates only for `critical` severity, confidence `>= 0.90`, and at least
+two distinct signals. Every activation and release is audited. The active
+window expires automatically into recovery and then returns to standby.
+
 ## Discord without a domain
 
 Create a dedicated Discord application and bot, enable the Message Content

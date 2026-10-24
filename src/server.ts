@@ -44,12 +44,14 @@ import { createModelProvider } from "./providers/factory.js";
 import { runRuntimeShutdownHook } from "./runtime-lifecycle.js";
 import { AgentProfileService } from "./agents/profiles.js";
 import { RuntimeControl } from "./system/runtime-control.js";
+import { CrisisRegent } from "./agents/crisis-regent.js";
 import { ContinuityService } from "./continuity/service.js";
 import { ContinuityReminderWorker } from "./continuity/worker.js";
 import { OutcomeService } from "./outcomes/service.js";
 
 const config = loadConfig();
 const runtimeControl = new RuntimeControl();
+const crisisRegent = new CrisisRegent();
 const openAIServiceApiKey = config.MEDIA_API_KEY ?? (config.MODEL_PROVIDER === "openai" ? config.MODEL_API_KEY : undefined);
 const database = new Database(config.DATABASE_URL);
 const authService = new AuthService(database, config.SESSION_TTL_HOURS);
@@ -403,6 +405,7 @@ const app = await buildApp({
   webRoot: config.WEB_ROOT,
   runtimeInfo: { workerEnabled: config.JOB_WORKER_ENABLED },
   runtimeControl,
+  crisisRegent,
   defaultSpeechVoice: config.DEFAULT_SPEECH_VOICE,
   agentIdentity: {
     name: config.AGENT_NAME,

@@ -41,6 +41,11 @@ server-side; each plaintext token is shown only once.
 - `GET /v1/conversations` — list a user's stored conversations.
 - `GET /v1/conversations/:id` — load ordered messages from one conversation.
 - `GET /v1/agents/council` — return the fixed Chief and bounded internal Council roles.
+- `GET /v1/system/crisis` — inspect the persistent TEMIR crisis posture (owner/service only).
+- `POST /v1/system/crisis/activate` — manually grant TEMIR a bounded 5–60 minute incident window.
+- `POST /v1/system/crisis/assess` — apply the deterministic trusted-monitor threshold; a single alarm or confidence below 0.90 cannot activate TEMIR.
+- `POST /v1/system/crisis/release` — end the critical phase and enter ten-minute recovery oversight.
+- `POST /v1/system/crisis/reset` — immediately return to standby; control requests and monitor assessments are audited.
 - `POST /v1/agents` — create an owned agent with a structured identity card: values, strengths, voice, initiative, risk posture, critique style, color, optional avatar, model class, and workspace.
 - `GET /v1/agents` — list the current user's agents and identity versions.
 - `PATCH /v1/agents/:id` — evolve an owned identity card with a required reason; protected Barlas authority and safety principles cannot be replaced.

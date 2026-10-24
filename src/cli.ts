@@ -497,9 +497,31 @@ async function runtimeControl(ctx: CliContext, actionName: "status" | "pause" | 
   output.write(`Runtime: ${state.paused ? "paused" : "active"}${state.reason ? `\nReason: ${state.reason}` : ""}${state.changedAt ? `\nChanged: ${state.changedAt}` : ""}\n`);
 }
 
+async function crisisControl(ctx: CliContext, args: string[]): Promise<void> {
+  const actionName = args[1] ?? "status";
+  const firstFlag = args.findIndex((item, index) => index >= 2 && item.startsWith("--"));
+  const reasonParts = args.slice(2, firstFlag === -1 ? args.length : firstFlag);
+  const path = actionName === "status" ? "/v1/system/crisis" : `/v1/system/crisis/${actionName}`;
+  const request = actionName === "status" ? {} : {
+    method: "POST",
+    body: JSON.stringify(actionName === "activate"
+      ? {
+          reason: reasonParts.join(" ").trim() || "Critical situation declared by owner",
+          ttlMinutes: Number(option(args, "--ttl") ?? 30),
+          ...(option(args, "--scope") ? { scope: commaList(option(args, "--scope")) } : {}),
+        }
+      : actionName === "release" ? { reason: reasonParts.join(" ").trim() || "Released by owner" } : {}),
+  };
+  if (!["status", "activate", "release", "reset"].includes(actionName)) {
+    throw new Error("Использование: crisis status|activate|release|reset");
+  }
+  const state = await ctx.api.request<JsonObject>(path, request);
+  output.write(`TEMIR: ${value(state.mode)}${state.reason ? `\nИнцидент: ${value(state.reason)}` : ""}${state.expiresAt ? `\nДо: ${value(state.expiresAt)}` : ""}${state.incidentId ? `\nID: ${value(state.incidentId)}` : ""}\n`);
+}
+
 const completionCommands = [
   "agent", "agents", "approvals", "approve", "audit", "backup", "channels", "chat", "completion", "council",
-  "config", "configure", "cron", "daemon", "dashboard", "desktop", "devices", "doctor", "extensions", "gateway",
+  "config", "configure", "crisis", "cron", "daemon", "dashboard", "desktop", "devices", "doctor", "extensions", "gateway",
   "health", "integrations", "jobs", "logs", "memory", "models", "node", "nodes", "onboard", "pause",
   "plugins", "projects", "reject", "repair", "resume", "runs", "schedules", "security", "sessions",
   "skills", "status", "system", "tasks", "terminal", "tools", "transcripts", "tui", "uninstall", "update", "voice",
@@ -763,6 +785,11 @@ function help(): void {
   pause [причина]                   аварийно остановить новые задачи и workers
   resume                            продолжить работу после общей паузы
   system status                     показать состояние общей паузы
+  crisis status                     состояние кризисного регента TEMIR
+  crisis activate ПРИЧИНА [--ttl 30] [--scope a,b]
+                                    временно включить кризисное командование
+  crisis release [ПРИЧИНА]         перейти к контролируемому восстановлению
+  crisis reset                      немедленно вернуть обычный режим
   runs                              последние запуски
   runs cancel <id>                  отменить запуск
   jobs                              фоновые задачи
@@ -933,6 +960,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (command === "pause") return runtimeControl(ctx, "pause", args.slice(1).join(" ").trim());
   if (command === "resume") return runtimeControl(ctx, "resume");
   if (command === "system" && (args[1] ?? "status") === "status") return runtimeControl(ctx, "status");
+  if (command === "crisis") return crisisControl(ctx, args);
   if (["tui", "chat", "terminal"].includes(command)) return tui(ctx);
   if (["ask", "agent"].includes(command)) {
     const profileId = option(args, "--profile");

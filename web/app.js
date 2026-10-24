@@ -639,6 +639,14 @@ async function loadAgents() {
   await loadProjectOptions();
   await loadAgentOptions();
   const council = await api("/v1/agents/council");
+  $("#crisis-form").classList.toggle("hidden", state.account.role !== "owner");
+  const crisis = state.account.role === "owner" ? await api("/v1/system/crisis") : { mode: "standby" };
+  const regent = council.crisisRegent;
+  renderList("#crisis-regent", [crisis], (item) => card(
+    `${regent.name} · ${item.mode}`,
+    item.expiresAt ? `Полномочия до ${new Date(item.expiresAt).toLocaleString()}` : "Временная кризисная роль",
+    [item.reason || regent.mandate, item.scope?.length ? `Область: ${item.scope.join(", ")}` : "", `Границы: ${regent.boundaries}`].filter(Boolean).join("\n"),
+  ));
   renderList("#council", [council.chief, ...council.members], (member, index) => index === 0
     ? card(member.name, "Глава · единая ответственность", member.mandate)
     : card(member.name, `${member.id} · ${member.taskClass}`, `${member.character}\n${member.mandate}\nГраница: ${member.boundaries}`));
@@ -673,6 +681,28 @@ async function loadAgents() {
     node.append(use, evolve, remove); return node;
   });
 }
+
+$("#crisis-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#crisis-status").textContent = "Активация…";
+  try {
+    await api("/v1/system/crisis/activate", { method: "POST", body: JSON.stringify({
+      reason: $("#crisis-reason").value.trim(),
+      scope: $("#crisis-scope").value.split(",").map((item) => item.trim()).filter(Boolean),
+      ttlMinutes: Number($("#crisis-ttl").value),
+    }) });
+    $("#crisis-status").textContent = "TEMIR принял временное кризисное командование."; await loadAgents();
+  } catch (error) { $("#crisis-status").textContent = `Ошибка: ${error.message}`; }
+});
+
+$("#crisis-release").addEventListener("click", async () => {
+  await api("/v1/system/crisis/release", { method: "POST", body: JSON.stringify({ reason: "Владелец завершил критическую фазу" }) });
+  $("#crisis-status").textContent = "TEMIR перешёл к проверке восстановления."; await loadAgents();
+});
+
+$("#crisis-reset").addEventListener("click", async () => {
+  await api("/v1/system/crisis/reset", { method: "POST", body: "{}" });
+  $("#crisis-status").textContent = "Управление полностью возвращено обычному Barlas."; await loadAgents();
+});
 
 $("#agent-form").addEventListener("submit", async (event) => {
   event.preventDefault(); $("#agent-status").textContent = "Создание…";

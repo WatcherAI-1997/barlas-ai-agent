@@ -136,6 +136,18 @@
           <div id="files" class="grid"></div>
         </section>
         <section id="panel-agents" class="panel hidden">
+          <h2>Кризисный регент TEMIR</h2>
+          <p class="meta">Оригинальная кризисная личность в духе холодного машинного стратега. Включается временно, действует только в заданной области, не обходит подтверждения и обязана вернуть управление владельцу.</p>
+          <div id="crisis-regent" class="grid"></div>
+          <form id="crisis-form" class="inline-form">
+            <input id="crisis-reason" maxlength="500" placeholder="Подтверждённая критическая ситуация" required>
+            <input id="crisis-scope" maxlength="1000" placeholder="Область через запятую: данные, сервис, доступ">
+            <select id="crisis-ttl"><option value="15">15 минут</option><option value="30" selected>30 минут</option><option value="60">60 минут</option></select>
+            <button type="submit" class="reject">Активировать TEMIR</button>
+            <button id="crisis-release" type="button" class="secondary">Начать восстановление</button>
+            <button id="crisis-reset" type="button" class="secondary">Вернуть обычный режим</button>
+          </form>
+          <p id="crisis-status" class="meta" role="status"></p>
           <h2>Совет Barlas</h2>
           <p class="meta">Владелец стоит над системой. Глава Barlas — единый ответственный голос; внутренние советники обладают разными характерами, задачами и границами власти.</p>
           <div id="council" class="grid"></div>

@@ -1,13 +1,13 @@
 # Release readiness
 
-## Verified on 2026-10-17
+## Verified on 2026-10-24
 
 - TypeScript typecheck and production build pass.
-- 179 automated tests across 53 files pass.
+- 234 automated tests across 64 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
-- All twenty SQL migrations apply twice to a clean PostgreSQL 17 database.
+- All 26 SQL migrations apply twice to a clean PostgreSQL-compatible database.
 - The production Docker image builds and runs read-only with dropped capabilities.
 - The pinned Playwright sidecar builds separately, runs read-only as an
   unprivileged user with all capabilities dropped, and completed a live public
@@ -31,6 +31,11 @@
 - Project-tool tests verify that tenant identity comes only from execution
   context, reads execute immediately, and no agent-proposed project mutation
   runs before the exact stored request is approved.
+- Crisis Regent tests verify that TEMIR needs either explicit owner activation
+  or critical severity with confidence of at least 0.90 and two independent
+  monitor signals; active authority expires through recovery to standby, cannot
+  refresh itself from repeated alarms, and never replaces approval or owner
+  authority. API tests cover persisted control, audit, and runtime injection.
 - Installer tests verify Bash syntax, discoverable help, non-interactive
   prepare-only operation, `0600` secret storage, placeholder removal, and that
   supplied secrets never appear in installer output.

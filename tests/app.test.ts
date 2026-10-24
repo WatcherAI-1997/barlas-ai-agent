@@ -156,6 +156,63 @@ describe("Barlas AI Agent API", () => {
     await app.close();
   });
 
+  it("activates a bounded Crisis Regent and injects its posture into conversations", async () => {
+    const deps = dependencies();
+    let mode: "standby" | "active" | "recovery" = "standby";
+    let paused = false;
+    const crisisRegent = {
+      state: vi.fn(async () => ({ mode })),
+      activate: vi.fn(async ({ reason }: { reason: string }) => {
+        mode = "active";
+        return { mode: "active" as const, incidentId: "incident-1", reason, scope: ["data integrity"], expiresAt: "2026-10-24T00:30:00.000Z" };
+      }),
+      assess: vi.fn(),
+      release: vi.fn(async () => { mode = "recovery"; return { mode: "recovery" as const, incidentId: "incident-1" }; }),
+      reset: vi.fn(async () => { mode = "standby"; return { mode: "standby" as const }; }),
+      context: vi.fn(async () => mode === "active" ? "Crisis Regent TEMIR is active. Owner authority and approval gates remain binding." : null),
+    };
+    const runtimeControl = {
+      state: vi.fn(async () => ({ paused })), isPaused: vi.fn(async () => paused),
+      pause: vi.fn(async () => ({ paused: (paused = true) })), resume: vi.fn(async () => ({ paused: (paused = false) })),
+    };
+    const app = await buildApp({ apiToken, ...deps, crisisRegent, runtimeControl });
+    const headers = { authorization: `Bearer ${apiToken}` };
+
+    const activated = await app.inject({
+      method: "POST", url: "/v1/system/crisis/activate", headers,
+      payload: { reason: "confirmed integrity failure", scope: ["data integrity"], ttlMinutes: 30 },
+    });
+    expect(activated.statusCode).toBe(200);
+    expect(activated.json()).toMatchObject({ mode: "active", incidentId: "incident-1" });
+    await app.inject({ method: "POST", url: "/v1/chat", headers, payload: { userId: "user-1", messages: [{ role: "user", content: "stabilize" }] } });
+    expect(deps.modelProvider.generate).toHaveBeenCalledWith(expect.objectContaining({
+      messages: expect.arrayContaining([expect.objectContaining({ role: "system", content: expect.stringContaining("TEMIR") })]),
+    }));
+    paused = true;
+    const blocked = await app.inject({ method: "POST", url: "/v1/chat", headers, payload: { userId: "user-1", messages: [{ role: "user", content: "override pause" }] } });
+    expect(blocked.statusCode).toBe(503);
+    expect(deps.database.appendAudit).toHaveBeenCalledWith(expect.objectContaining({ eventType: "crisis_regent.activated" }));
+    await app.close();
+  });
+
+  it("only auto-activates TEMIR through the regent's deterministic assessment", async () => {
+    const deps = dependencies();
+    const crisisRegent = {
+      state: vi.fn(async () => ({ mode: "standby" as const })),
+      activate: vi.fn(), release: vi.fn(), reset: vi.fn(), context: vi.fn(async () => null),
+      assess: vi.fn(async () => ({ activated: false, reason: "Two independent trusted signals are required", state: { mode: "standby" as const } })),
+    };
+    const app = await buildApp({ apiToken, ...deps, crisisRegent });
+    const response = await app.inject({
+      method: "POST", url: "/v1/system/crisis/assess", headers: { authorization: `Bearer ${apiToken}` },
+      payload: { severity: "critical", confidence: 0.99, summary: "single alarm", signals: ["health"] },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ activated: false, state: { mode: "standby" } });
+    expect(crisisRegent.assess).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
   it("lists extension capabilities and configuration state", async () => {
     const deps = dependencies();
     const extensionCatalog = createBuiltinExtensionCatalog({

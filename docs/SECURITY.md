@@ -30,6 +30,15 @@ grants, inspect approval and audit records, restore only from verified backups,
 notify affected users and authorities when required, and publish a blameless
 post-incident review.
 
+TEMIR Crisis Regent is an incident-response posture, not a privilege bypass.
+It cannot override the owner, runtime pause, consent, tool allowlists, approval
+gates, budgets, tenant boundaries, or privacy rules. Owner activation expires
+after at most 60 minutes. Trusted-monitor activation additionally requires
+critical severity, at least 0.90 confidence, and two distinct signals. Expiry
+enters bounded recovery before returning to standby. State is persisted with
+restrictive file permissions; API control requests and monitor assessments are
+recorded in the audit log.
+
 Media files are stored only in per-user workspaces. Upload format is determined
 from a fixed magic-byte allowlist rather than filename or browser MIME alone;
 SVG and unknown formats are rejected. Any vision, PDF, transcription, or speech
