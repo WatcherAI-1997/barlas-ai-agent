@@ -585,9 +585,14 @@ describe("Barlas AI Agent API", () => {
       payload: {
         id: installed.id, version: installed.version, description: installed.description,
         instructions: installed.instructions, allowedTools: installed.allowedTools,
+        provenance: { format: "agentskills.io", sha256: `sha256:${"a".repeat(64)}` },
       },
     });
     expect(created.statusCode).toBe(201);
+    expect(skillManager.install).toHaveBeenCalledWith({
+      id: installed.id, version: installed.version, description: installed.description,
+      instructions: installed.instructions, allowedTools: installed.allowedTools,
+    }, null);
 
     const evaluated = await app.inject({
       method: "POST", url: `/v1/skills/${installed.id}/${installed.version}/evaluate`, headers,

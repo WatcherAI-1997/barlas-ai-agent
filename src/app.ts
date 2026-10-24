@@ -319,6 +319,10 @@ const skillInstallSchema = z.object({
   description: z.string().trim().min(1).max(500),
   instructions: z.string().trim().min(1).max(20_000),
   allowedTools: z.array(z.string().min(1).max(128)).max(32),
+  provenance: z.object({
+    format: z.literal("agentskills.io"),
+    sha256: z.string().regex(/^sha256:[a-f0-9]{64}$/u),
+  }).strict().optional(),
 }).strict();
 const skillEvaluationSchema = z.object({
   cases: z.array(z.object({
@@ -1823,13 +1827,14 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const principal = requireOwner(request);
     const parsed = skillInstallSchema.safeParse(request.body);
     if (!parsed.success) return reply.badRequest("Invalid skill definition");
-    const skill = await dependencies.skillManager.install(parsed.data, principal.account?.id ?? null);
+    const { provenance, ...definition } = parsed.data;
+    const skill = await dependencies.skillManager.install(definition, principal.account?.id ?? null);
     await dependencies.database.appendAudit({
       userId: principal.userId,
       eventType: "skill.installed",
       resourceType: "skill",
       resourceId: `${skill.id}@${skill.version}`,
-      details: { allowedTools: skill.allowedTools },
+      details: { allowedTools: skill.allowedTools, ...(provenance ? { provenance } : {}) },
     });
     return reply.code(201).send({ skill });
   });

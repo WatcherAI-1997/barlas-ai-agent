@@ -330,6 +330,31 @@ Third-party skill packages use the signed lifecycle:
 Never trust a fingerprint copied only from the package itself. Compare it with
 the publisher's independently authenticated release page or direct contact.
 
+### Importing an open Agent Skill from skills.sh
+
+Barlas supports the portable, single-file `SKILL.md` format used by
+[skills.sh](https://skills.sh) and the Agent Skills ecosystem. Download or
+otherwise review the skill source first; Barlas does not run the external
+installer, scripts, hooks, or bundled executables. Inspect the exact file:
+
+```powershell
+barlas skills inspect-agent path\to\skill
+```
+
+After reading `SKILL.md`, pin the digest printed by that command and import it:
+
+```powershell
+barlas skills import-agent path\to\skill --trust-sha256 sha256:REVIEWED_DIGEST
+```
+
+The default imported ID is `community.<name>`, the version is `1.0.0`, and no
+tools are granted. Optional flags are `--id`, `--version`, and a comma-separated
+`--allow-tools`. The result is always an inactive candidate. It still needs
+explicit acceptance cases through `skills evaluate` before Barlas permits
+activation. Referenced files, scripts, MCP servers, and installation hooks are
+not imported or executed; package those capabilities separately through the
+signed Barlas lifecycle if they are genuinely required.
+
 For a signed catalog, first verify the catalog key through an independent
 maintainer channel, then inspect or install only non-revoked entries:
 

@@ -3,7 +3,7 @@ import { createInterface } from "node:readline/promises";
 import { emitKeypressEvents } from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
 import { generateKeyPairSync } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
@@ -32,6 +32,11 @@ import {
   selectCatalogEntry,
   verifySkillCatalog,
 } from "./skills/catalog.js";
+import {
+  defaultAgentSkillId,
+  parseAgentSkill,
+  verifyAgentSkillDigest,
+} from "./skills/agent-skill.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -269,6 +274,47 @@ async function skills(ctx: CliContext): Promise<void> {
 function option(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
+}
+
+async function readAgentSkill(path: string) {
+  if (!path) throw new Error("Укажите путь к SKILL.md или каталогу навыка");
+  const source = resolve(path);
+  const file = (await stat(source)).isDirectory() ? join(source, "SKILL.md") : source;
+  return { file, skill: parseAgentSkill(await readFile(file, "utf8")) };
+}
+
+async function inspectAgentSkill(path: string): Promise<void> {
+  const { file, skill } = await readAgentSkill(path);
+  output.write([
+    `Agent Skill: ${skill.name}`,
+    `Описание: ${skill.description}`,
+    `Файл: ${file}`,
+    `SHA-256: ${skill.sha256}`,
+    "Импорт ничего не исполняет. Изучите SKILL.md, затем повторите digest через skills import-agent --trust-sha256.",
+  ].join("\n") + "\n");
+}
+
+async function importAgentSkill(ctx: CliContext, args: string[]): Promise<void> {
+  const { skill } = await readAgentSkill(args[2] ?? "");
+  const trustedDigest = option(args, "--trust-sha256") ?? "";
+  verifyAgentSkillDigest(skill, trustedDigest);
+  const id = option(args, "--id") ?? defaultAgentSkillId(skill.name);
+  const version = option(args, "--version") ?? "1.0.0";
+  const allowedTools = (option(args, "--allow-tools") ?? "")
+    .split(",").map((value) => value.trim()).filter(Boolean);
+  const { skill: installed } = await ctx.api.request<{ skill: JsonObject }>("/v1/skills", {
+    method: "POST",
+    body: JSON.stringify({
+      id, version, description: skill.description, instructions: skill.instructions, allowedTools,
+      provenance: { format: "agentskills.io", sha256: skill.sha256 },
+    }),
+  });
+  output.write([
+    `Импортирован неактивный кандидат ${value(installed.id)}@${value(installed.version)}.`,
+    `Источник agentskills.io/skills.sh: ${skill.sha256}.`,
+    `Разрешённые инструменты: ${allowedTools.join(", ") || "нет"}.`,
+    "Перед активацией создайте acceptance cases и выполните skills evaluate.",
+  ].join("\n") + "\n");
 }
 
 async function readHiddenSecret(prompt: string): Promise<string> {
@@ -708,6 +754,9 @@ function help(): void {
   memory search <запрос>            поиск памяти
   sessions | transcripts            диалоги
   skills                            установленные навыки
+  skills inspect-agent <path>       проверить открытый SKILL.md и получить SHA-256
+  skills import-agent <path> --trust-sha256 DIGEST [--id ID] [--version X.Y.Z] [--allow-tools a,b]
+                                    импортировать skills.sh/Agent Skills как неактивный кандидат
   skills verify <package.json>      проверить подпись и отпечаток издателя
   skills install <json> --trust FP  установить, проверить и активировать пакет
   skills keygen <prefix>            создать Ed25519-ключ издателя
@@ -843,6 +892,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (["help", "--help", "-h"].includes(command)) { help(); return; }
   if (command === "completion") { output.write(generateShellCompletion(args[1] ?? "")); return; }
   if (command === "backup") return backupCommand(args);
+  if (command === "skills" && args[1] === "inspect-agent") return inspectAgentSkill(args[2] ?? "");
   if (command === "skills" && args[1] === "verify") return verifySkillPackageFile(args[2] ?? "");
   if (command === "skills" && args[1] === "keygen") return createSkillSigningKey(args[2] ?? "");
   if (command === "skills" && args[1] === "sign") return signSkillPackageFile(args[2] ?? "", args[3] ?? "", args[4] ?? "");
@@ -898,6 +948,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
   if (command === "skills" && args[1] === "install") {
     return installSkillPackage(ctx, args[2] ?? "", option(args, "--trust") ?? "");
   }
+  if (command === "skills" && args[1] === "import-agent") return importAgentSkill(ctx, args);
   if (command === "skills" && args[1] === "evaluate") return evaluateSkill(ctx, args[2] ?? "", args[3] ?? "", args[4] ?? "");
   if (command === "skills" && ["activate", "rollback"].includes(args[1] ?? "")) return activateSkill(ctx, args[2] ?? "", args[3] ?? "");
   if (command === "skills") return skills(ctx);
