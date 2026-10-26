@@ -34,6 +34,7 @@ describe("production installer", () => {
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
     const nativeStart = await readFile(join(root, "scripts", "start-native.ps1"), "utf8");
     const nativeStop = await readFile(join(root, "scripts", "stop-native.ps1"), "utf8");
+    const windowsReleaseGate = await readFile(join(root, "scripts", "release-gate-windows.ps1"), "utf8");
     const cli = await readFile(join(root, "barlas.ps1"), "utf8");
 
     expect(installer).toContain("$SupportedLanguageNames");
@@ -151,6 +152,12 @@ describe("production installer", () => {
     expect(nativeStop).toContain("[int]::TryParse");
     expect(nativeStop).toContain("$MatchesNode -and $MatchesEntryPoint");
     expect(nativeStop).toContain("Wait-Process");
+    for (const required of [
+      'Invoke-NpmStep @("test")',
+      'Invoke-NpmStep @("run", "test:native-release")',
+      "build-windows-installer.ps1",
+      "Barlas Windows release gate passed",
+    ]) expect(windowsReleaseGate).toContain(required);
     expect(cli).toContain("dist/src/cli.js");
     for (const required of [
       "commits/main",

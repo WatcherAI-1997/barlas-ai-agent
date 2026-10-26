@@ -55,6 +55,11 @@
   chat turn. Windows start/stop scripts validate the exact private Node binary
   and entrypoint, reject stale or malformed PID files, verify that the launched
   process owns the listening port, and remove a failed launch.
+- `scripts/release-gate-windows.ps1` performs a clean dependency install, tests,
+  typecheck, build, security, isolation, dependency audit, native restart and
+  persistence smoke, then compiles the NSIS installer and its SHA-256 file.
+  Authenticode signing and a clean-machine interactive install remain manual
+  public-release gates.
 - The public repository reports `private=false`; the one-command Windows
   bootstrap on `raw.githubusercontent.com/.../main/install-windows.ps1` returns
   HTTP 200 without GitHub authentication.
