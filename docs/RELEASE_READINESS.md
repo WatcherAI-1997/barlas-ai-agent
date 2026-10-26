@@ -1,9 +1,9 @@
 # Release readiness
 
-## Verified on 2026-10-25
+## Verified on 2026-10-26
 
 - TypeScript typecheck and production build pass.
-- 246 automated tests across 66 files pass.
+- 256 automated tests across 68 files pass.
 - `npm audit --audit-level=low` reports zero known vulnerabilities.
 - The repository security baseline scans tracked text files for common committed
   key formats and verifies container, terminal, and secret-ignore invariants.
@@ -45,6 +45,16 @@
   bootstrap, and an Apps & Features uninstall entry. Its source compiles to a
   PE installer in CI-compatible NSIS; real Windows 10/11 execution and
   Authenticode signing remain release gates.
+- The native release smoke starts the production runtime against the embedded
+  database and a deterministic compatible-model server, verifies health, one
+  real chat, a read-only tool, durable memory, graceful shutdown, restart, and
+  persistence of both memory and conversation history. Run it with
+  `npm run test:native-release`.
+- Native PGlite accepts the same ten connections as the application database
+  pool, preventing parallel context reads from being rejected during a normal
+  chat turn. Windows start/stop scripts validate the exact private Node binary
+  and entrypoint, reject stale or malformed PID files, verify that the launched
+  process owns the listening port, and remove a failed launch.
 - The public repository reports `private=false`; the one-command Windows
   bootstrap on `raw.githubusercontent.com/.../main/install-windows.ps1` returns
   HTTP 200 without GitHub authentication.

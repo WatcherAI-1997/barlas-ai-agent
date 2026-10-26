@@ -23,7 +23,18 @@ await mkdir(databaseDirectory, { recursive: true });
 // directly; PGlite's NodeFS backend supports absolute paths on every OS.
 const embedded = await PGlite.create(databaseDirectory);
 await applyMigrations(embedded, migrationsDirectory);
-const socket = new PGLiteSocketServer({ db: embedded, host: "127.0.0.1", port: databasePort });
+// The application database pool can issue several independent reads in
+// parallel while assembling one chat turn (memory, outcomes, commitments,
+// project context, and conversation history). pglite-socket defaults to one
+// client connection, so a normal chat could make pg open a second connection
+// that the socket server immediately rejected. Keep this aligned with the
+// Database pool size; PGlite still serializes the actual queries internally.
+const socket = new PGLiteSocketServer({
+  db: embedded,
+  host: "127.0.0.1",
+  port: databasePort,
+  maxConnections: 10,
+});
 await socket.start();
 
 process.env.DATABASE_URL = `postgresql://postgres:postgres@127.0.0.1:${databasePort}/postgres`;

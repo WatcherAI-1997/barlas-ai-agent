@@ -32,6 +32,8 @@ describe("production installer", () => {
     const installerMenuTest = await readFile(join(root, "tests", "powershell-installer-menu.ps1"), "utf8");
     const configureMenuTest = await readFile(join(root, "tests", "powershell-configure-menu.ps1"), "utf8");
     const dashboard = await readFile(join(root, "scripts", "dashboard-url.ps1"), "utf8");
+    const nativeStart = await readFile(join(root, "scripts", "start-native.ps1"), "utf8");
+    const nativeStop = await readFile(join(root, "scripts", "stop-native.ps1"), "utf8");
     const cli = await readFile(join(root, "barlas.ps1"), "utf8");
 
     expect(installer).toContain("$SupportedLanguageNames");
@@ -136,6 +138,19 @@ describe("production installer", () => {
     expect(modelAuth).toContain('Write-Output "disconnected"');
     expect(modelAuth).not.toContain("exit $LASTEXITCODE");
     expect(dashboard).toContain("#token=$Token");
+    for (const required of [
+      "Test-BarlasProcess",
+      "Test-ListeningProcess",
+      "Test-BarlasReady",
+      "Get-NetTCPConnection",
+      "Stop-LaunchedProcess",
+      "[int]::TryParse",
+    ]) expect(nativeStart).toContain(required);
+    expect(nativeStart).toContain("Stop-LaunchedProcess $Process");
+    expect(nativeStart).toContain("is running but is not ready");
+    expect(nativeStop).toContain("[int]::TryParse");
+    expect(nativeStop).toContain("$MatchesNode -and $MatchesEntryPoint");
+    expect(nativeStop).toContain("Wait-Process");
     expect(cli).toContain("dist/src/cli.js");
     for (const required of [
       "commits/main",

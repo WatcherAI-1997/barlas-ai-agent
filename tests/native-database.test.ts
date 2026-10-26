@@ -51,4 +51,9 @@ describe("native embedded database", () => {
     expect(entrypoint).toContain("PGlite.create(databaseDirectory)");
     expect(entrypoint).not.toContain("pathToFileURL(databaseDirectory)");
   });
+
+  it("accepts the database pool's parallel native connections", async () => {
+    const entrypoint = await readFile(resolve(import.meta.dirname, "..", "src", "native.ts"), "utf8");
+    expect(entrypoint).toContain("maxConnections: 10");
+  });
 });

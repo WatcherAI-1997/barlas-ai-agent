@@ -155,6 +155,11 @@ gateway around the filesystem operation so the embedded database is captured
 consistently. Shell completion is available through
 `barlas completion powershell|bash|zsh|fish`.
 
+Maintainers can verify the complete native persistence path without external
+credentials by running `npm run test:native-release`. The check launches the
+real embedded database and application twice and verifies health, chat, a
+read-only tool, memory, graceful restart, and conversation persistence.
+
 Create independent agent profiles with durable personality cards, protected
 Barlas principles, model-routing class, and an optional project workspace:
 
