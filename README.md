@@ -193,8 +193,19 @@ barlas crisis release "Restore verified"
 
 ### Linux
 
-For a local installation without a domain, DNS, Caddy, or public web exposure,
-run:
+For a personal native installation without root, Docker, a domain, or a public
+port, run one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-linux-native.sh | bash
+```
+
+It installs a private Node.js runtime, PGlite database, Chromium, current-user
+launcher and optional systemd user autostart under
+`${XDG_DATA_HOME:-$HOME/.local/share}/barlas`. Configuration is mode `0600`,
+the gateway remains on `127.0.0.1`, and atomic updates retain one rollback copy.
+
+For the stronger container-isolated local server mode, run:
 
 ```bash
 git clone https://github.com/WatcherAI-1997/barlas-ai-agent.git

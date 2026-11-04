@@ -1,8 +1,23 @@
 # Installation
 
-Barlas AI Agent has a native personal mode for Windows 10/11 and an isolated
-Docker Compose mode for Linux servers. The installers do not reuse, migrate,
-stop, or reconfigure another agent.
+Barlas AI Agent has native personal modes for Windows 10/11 and Linux, plus an
+isolated Docker Compose mode for Linux servers. The installers do not reuse,
+migrate, stop, or reconfigure another agent.
+
+## Linux laptop (native, rootless)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-linux-native.sh | bash
+```
+
+The installer uses no `sudo`, Docker, domain, or public listener. It places its
+private Node.js runtime, PGlite data, Chromium, logs and application below
+`${XDG_DATA_HOME:-$HOME/.local/share}/barlas`, installs `barlas` in
+`~/.local/bin`, protects `deploy/native.env` with mode `0600`, and configures a
+systemd user service when a user manager is available. `barlas update check`,
+`barlas update`, `barlas update rollback`, `barlas doctor`, and
+`barlas uninstall` manage the lifecycle. Uninstall preserves data unless the
+owner explicitly runs `barlas uninstall --purge` and types `DELETE`.
 
 ## Windows laptop
 

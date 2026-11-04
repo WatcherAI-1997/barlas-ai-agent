@@ -55,6 +55,7 @@ for (const required of [
   "install.ps1",
   "install-native.ps1",
   "install-windows.ps1",
+  "install-linux-native.sh",
   "barlas.ps1",
   "scripts/doctor.sh",
   "scripts/doctor.ps1",
@@ -69,6 +70,13 @@ for (const required of [
   "installer/windows/barlas.ico",
   "scripts/start-native.ps1",
   "scripts/stop-native.ps1",
+  "scripts/configure-native-linux.sh",
+  "scripts/start-native-linux.sh",
+  "scripts/stop-native-linux.sh",
+  "scripts/doctor-native-linux.sh",
+  "scripts/update-native-linux.sh",
+  "scripts/uninstall-native-linux.sh",
+  "scripts/barlas-native-linux.sh",
   "scripts/dashboard-url.sh",
   "scripts/dashboard-url.ps1",
   "docs/INSTALLATION.md",
@@ -88,6 +96,8 @@ const nativeWindowsInstaller = await readFile("install-native.ps1", "utf8");
 const nativeDesktop = await readFile("scripts/desktop-native.ps1", "utf8");
 const graphicalInstaller = await readFile("installer/windows/barlas-agent.nsi", "utf8");
 const windowsBootstrap = await readFile("install-windows.ps1", "utf8");
+const nativeLinuxBootstrap = await readFile("install-linux-native.sh", "utf8");
+const nativeLinuxConfigure = await readFile("scripts/configure-native-linux.sh", "utf8");
 const doctor = await readFile("scripts/doctor.sh", "utf8");
 const updater = await readFile("scripts/update.sh", "utf8");
 const readme = await readFile("README.md", "utf8");
@@ -128,6 +138,15 @@ for (const required of ["commits/main", "archive/$ReleaseSha.zip", ".barlas-vers
 }
 for (const forbidden of ["docker info", "Docker.DockerDesktop", "compose.local.yml"]) {
   if (windowsBootstrap.includes(forbidden)) throw new Error(`Native Windows bootstrap must not require ${forbidden}`);
+}
+for (const required of ["set -Eeuo pipefail", "commits/main", "nodejs.org/dist", "chmod 600", "PREVIOUS_DIR", "rollback", "Docker and root were not used"]) {
+  if (!nativeLinuxBootstrap.includes(required)) throw new Error(`Native Linux bootstrap boundary is missing: ${required}`);
+}
+for (const required of ["HOST=127.0.0.1", "umask 077", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY"]) {
+  if (!nativeLinuxConfigure.includes(required)) throw new Error(`Native Linux configuration boundary is missing: ${required}`);
+}
+for (const forbidden of ["sudo ", "0.0.0.0", "chmod 777"]) {
+  if (nativeLinuxBootstrap.includes(forbidden)) throw new Error(`Native Linux bootstrap must not include ${forbidden}`);
 }
 for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {
   if (!doctor.includes(required)) throw new Error(`Doctor safety/usability boundary is missing: ${required}`);

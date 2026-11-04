@@ -9,11 +9,29 @@ const root = resolve(import.meta.dirname, "..");
 
 describe("production installer", () => {
   it("has valid Bash syntax and documents both entry points", () => {
-    expect(spawnSync("bash", ["-n", "install.sh", "barlas", "scripts/doctor.sh", "scripts/dashboard-url.sh", "scripts/update.sh"], { cwd: root }).status).toBe(0);
+    expect(spawnSync("bash", ["-n", "install.sh", "install-linux-native.sh", "barlas", "scripts/doctor.sh", "scripts/dashboard-url.sh", "scripts/update.sh", "scripts/configure-native-linux.sh", "scripts/native-linux-common.sh", "scripts/start-native-linux.sh", "scripts/stop-native-linux.sh", "scripts/doctor-native-linux.sh", "scripts/install-native-linux-service.sh", "scripts/update-native-linux.sh", "scripts/uninstall-native-linux.sh", "scripts/barlas-native-linux.sh"], { cwd: root }).status).toBe(0);
     expect(spawnSync("sh", ["-n", "deploy/backup-loop.sh", "deploy/backup-now.sh"], { cwd: root }).status).toBe(0);
     expect(spawnSync("bash", ["install.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--prepare-only");
     expect(spawnSync("bash", ["scripts/doctor.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--require-running");
     expect(spawnSync("bash", ["scripts/update.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--rollback");
+  });
+
+  it("ships an atomic rootless native Linux installer and lifecycle", async () => {
+    const bootstrap = await readFile(join(root, "install-linux-native.sh"), "utf8");
+    const configure = await readFile(join(root, "scripts", "configure-native-linux.sh"), "utf8");
+    const common = await readFile(join(root, "scripts", "native-linux-common.sh"), "utf8");
+    const updater = await readFile(join(root, "scripts", "update-native-linux.sh"), "utf8");
+    const uninstaller = await readFile(join(root, "scripts", "uninstall-native-linux.sh"), "utf8");
+    const service = await readFile(join(root, "scripts", "install-native-linux-service.sh"), "utf8");
+    const cli = await readFile(join(root, "scripts", "barlas-native-linux.sh"), "utf8");
+    for (const required of ["nodejs.org/dist", "commits/main", "--non-interactive", "--source-dir", "chmod 600", "PREVIOUS_DIR", "rollback", "playwright-core/cli.js", "Docker and root were not used"]) expect(bootstrap).toContain(required);
+    expect(bootstrap).not.toContain("sudo");
+    for (const required of ["umask 077", "randomBytes", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY", "HOST=127.0.0.1"]) expect(configure).toContain(required);
+    for (const required of ["/proc/$pid/cmdline", "ENTRY_POINT", "BARLAS_HOME"]) expect(common).toContain(required);
+    for (const required of ["check|update|rollback|repair", "rollback-swap", "native.env", "start-native-linux.sh"]) expect(updater).toContain(required);
+    for (const required of ["Unsafe Barlas home", "Type DELETE", "Data preserved", "Managed by Barlas native Linux installer"]) expect(uninstaller).toContain(required);
+    for (const required of ["NoNewPrivileges=true", "PrivateTmp=true", "systemctl --user", "127.0.0.1"]) expect(service).toContain(required);
+    for (const required of ["readlink -f", "BARLAS_URL", "BARLAS_GATEWAY_TOKEN", "gateway", "update-native-linux.sh"]) expect(cli).toContain(required);
   });
 
   it("ships a native Windows local installer and companion commands", async () => {
