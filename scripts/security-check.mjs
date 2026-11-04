@@ -56,6 +56,7 @@ for (const required of [
   "install-native.ps1",
   "install-windows.ps1",
   "install-linux-native.sh",
+  "install-macos-native.sh",
   "barlas.ps1",
   "scripts/doctor.sh",
   "scripts/doctor.ps1",
@@ -77,6 +78,15 @@ for (const required of [
   "scripts/update-native-linux.sh",
   "scripts/uninstall-native-linux.sh",
   "scripts/barlas-native-linux.sh",
+  "scripts/configure-native-macos.sh",
+  "scripts/native-macos-common.sh",
+  "scripts/start-native-macos.sh",
+  "scripts/stop-native-macos.sh",
+  "scripts/doctor-native-macos.sh",
+  "scripts/install-native-macos-service.sh",
+  "scripts/update-native-macos.sh",
+  "scripts/uninstall-native-macos.sh",
+  "scripts/barlas-native-macos.sh",
   "scripts/dashboard-url.sh",
   "scripts/dashboard-url.ps1",
   "docs/INSTALLATION.md",
@@ -98,6 +108,9 @@ const graphicalInstaller = await readFile("installer/windows/barlas-agent.nsi", 
 const windowsBootstrap = await readFile("install-windows.ps1", "utf8");
 const nativeLinuxBootstrap = await readFile("install-linux-native.sh", "utf8");
 const nativeLinuxConfigure = await readFile("scripts/configure-native-linux.sh", "utf8");
+const nativeMacosBootstrap = await readFile("install-macos-native.sh", "utf8");
+const nativeMacosConfigure = await readFile("scripts/configure-native-macos.sh", "utf8");
+const nativeMacosService = await readFile("scripts/install-native-macos-service.sh", "utf8");
 const doctor = await readFile("scripts/doctor.sh", "utf8");
 const updater = await readFile("scripts/update.sh", "utf8");
 const readme = await readFile("README.md", "utf8");
@@ -147,6 +160,18 @@ for (const required of ["HOST=127.0.0.1", "umask 077", "BARLAS_GATEWAY_TOKEN", "
 }
 for (const forbidden of ["sudo ", "0.0.0.0", "chmod 777"]) {
   if (nativeLinuxBootstrap.includes(forbidden)) throw new Error(`Native Linux bootstrap must not include ${forbidden}`);
+}
+for (const required of ["set -Eeuo pipefail", "uname -s", "commits/main", "nodejs.org/dist", "chmod 600", "PREVIOUS_DIR", "rollback", "Docker, Homebrew and root were not used"]) {
+  if (!nativeMacosBootstrap.includes(required)) throw new Error(`Native macOS bootstrap boundary is missing: ${required}`);
+}
+for (const required of ["HOST=127.0.0.1", "umask 077", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY", "native-macos"]) {
+  if (!nativeMacosConfigure.includes(required)) throw new Error(`Native macOS configuration boundary is missing: ${required}`);
+}
+for (const required of ["Library/LaunchAgents", "RunAtLoad", "KeepAlive", "ProcessType", "Managed by Barlas native macOS installer"]) {
+  if (!nativeMacosService.includes(required)) throw new Error(`Native macOS launchd boundary is missing: ${required}`);
+}
+for (const forbidden of ["sudo ", "0.0.0.0", "chmod 777", "/Library/LaunchDaemons"]) {
+  if (nativeMacosBootstrap.includes(forbidden) || nativeMacosService.includes(forbidden)) throw new Error(`Native macOS lifecycle must not include ${forbidden}`);
 }
 for (const required of ["--require-running", "expected 600", "non-symlink", "/ready", "Secret values are never printed"]) {
   if (!doctor.includes(required)) throw new Error(`Doctor safety/usability boundary is missing: ${required}`);

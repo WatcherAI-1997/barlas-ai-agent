@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,7 +9,7 @@ const root = resolve(import.meta.dirname, "..");
 
 describe("production installer", () => {
   it("has valid Bash syntax and documents both entry points", () => {
-    expect(spawnSync("bash", ["-n", "install.sh", "install-linux-native.sh", "barlas", "scripts/doctor.sh", "scripts/dashboard-url.sh", "scripts/update.sh", "scripts/configure-native-linux.sh", "scripts/native-linux-common.sh", "scripts/start-native-linux.sh", "scripts/stop-native-linux.sh", "scripts/doctor-native-linux.sh", "scripts/install-native-linux-service.sh", "scripts/update-native-linux.sh", "scripts/uninstall-native-linux.sh", "scripts/barlas-native-linux.sh"], { cwd: root }).status).toBe(0);
+    expect(spawnSync("bash", ["-n", "install.sh", "install-linux-native.sh", "install-macos-native.sh", "barlas", "scripts/doctor.sh", "scripts/dashboard-url.sh", "scripts/update.sh", "scripts/configure-native-linux.sh", "scripts/native-linux-common.sh", "scripts/start-native-linux.sh", "scripts/stop-native-linux.sh", "scripts/doctor-native-linux.sh", "scripts/install-native-linux-service.sh", "scripts/update-native-linux.sh", "scripts/uninstall-native-linux.sh", "scripts/barlas-native-linux.sh", "scripts/configure-native-macos.sh", "scripts/native-macos-common.sh", "scripts/start-native-macos.sh", "scripts/stop-native-macos.sh", "scripts/doctor-native-macos.sh", "scripts/install-native-macos-service.sh", "scripts/update-native-macos.sh", "scripts/uninstall-native-macos.sh", "scripts/barlas-native-macos.sh"], { cwd: root }).status).toBe(0);
     expect(spawnSync("sh", ["-n", "deploy/backup-loop.sh", "deploy/backup-now.sh"], { cwd: root }).status).toBe(0);
     expect(spawnSync("bash", ["install.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--prepare-only");
     expect(spawnSync("bash", ["scripts/doctor.sh", "--help"], { cwd: root, encoding: "utf8" }).stdout).toContain("--require-running");
@@ -32,6 +32,49 @@ describe("production installer", () => {
     for (const required of ["Unsafe Barlas home", "Type DELETE", "Data preserved", "Managed by Barlas native Linux installer"]) expect(uninstaller).toContain(required);
     for (const required of ["NoNewPrivileges=true", "PrivateTmp=true", "systemctl --user", "127.0.0.1"]) expect(service).toContain(required);
     for (const required of ["readlink -f", "BARLAS_URL", "BARLAS_GATEWAY_TOKEN", "gateway", "update-native-linux.sh"]) expect(cli).toContain(required);
+  });
+
+  it("ships an atomic rootless native macOS installer and launchd lifecycle", async () => {
+    const bootstrap = await readFile(join(root, "install-macos-native.sh"), "utf8");
+    const configure = await readFile(join(root, "scripts", "configure-native-macos.sh"), "utf8");
+    const common = await readFile(join(root, "scripts", "native-macos-common.sh"), "utf8");
+    const service = await readFile(join(root, "scripts", "install-native-macos-service.sh"), "utf8");
+    const start = await readFile(join(root, "scripts", "start-native-macos.sh"), "utf8");
+    const updater = await readFile(join(root, "scripts", "update-native-macos.sh"), "utf8");
+    const uninstaller = await readFile(join(root, "scripts", "uninstall-native-macos.sh"), "utf8");
+    const cli = await readFile(join(root, "scripts", "barlas-native-macos.sh"), "utf8");
+
+    for (const required of ["uname -s", "node-v${NODE_VERSION}-darwin", "commits/main", "--source-dir", "chmod 600", "PREVIOUS_DIR", "rollback", "playwright-core/cli.js", "Docker, Homebrew and root were not used"]) expect(bootstrap).toContain(required);
+    expect(bootstrap).not.toContain("sudo");
+    for (const required of ["umask 077", "randomBytes", "BARLAS_GATEWAY_TOKEN", "CONNECTOR_VAULT_KEY", "HOST=127.0.0.1", "native-macos"]) expect(configure).toContain(required);
+    for (const required of ["ps -p", "launch_domain", "Library/LaunchAgents", "ENTRY_POINT"]) expect(common).toContain(required);
+    for (const required of ["Managed by Barlas native macOS installer", "RunAtLoad", "KeepAlive", "ProcessType", "launchctl bootstrap"]) expect(service).toContain(required);
+    for (const required of ["launchctl kickstart -k", "nohup", "--env-file", "/ready"]) expect(start).toContain(required);
+    for (const required of ["check|update|rollback|repair", "rollback-swap", "native.env", "install-native-macos-service.sh"]) expect(updater).toContain(required);
+    for (const required of ["Unsafe Barlas home", "Type DELETE", "Data preserved", "launchctl bootout"]) expect(uninstaller).toContain(required);
+    for (const required of ["BARLAS_URL", "BARLAS_GATEWAY_TOKEN", "gateway", "update-native-macos.sh", "open \"$url\""]) expect(cli).toContain(required);
+  });
+
+  it("creates a protected macOS native configuration in an isolated fixture", async () => {
+    const fixture = await mkdtemp(join(tmpdir(), "barlas-macos-config-"));
+    const fixtureRoot = join(fixture, "app");
+    const fixtureScripts = join(fixtureRoot, "scripts");
+    const fixtureHome = join(fixture, "home");
+    await mkdir(fixtureScripts, { recursive: true });
+    await copyFile(join(root, "scripts", "configure-native-macos.sh"), join(fixtureScripts, "configure-native-macos.sh"));
+    const result = spawnSync("bash", [join(fixtureScripts, "configure-native-macos.sh")], {
+      cwd: fixtureRoot,
+      encoding: "utf8",
+      env: { ...process.env, BARLAS_HOME: fixtureHome, BARLAS_NODE: process.execPath, BARLAS_NON_INTERACTIVE: "true" },
+    });
+    expect(result.status, result.stderr).toBe(0);
+    const envPath = join(fixtureRoot, "deploy", "native.env");
+    const environment = await readFile(envPath, "utf8");
+    expect(environment).toContain("BARLAS_INSTALL_MODE=native-macos");
+    expect(environment).toContain("HOST=127.0.0.1");
+    expect(environment).toContain("BARLAS_GATEWAY_TOKEN='");
+    expect((await stat(envPath)).mode & 0o777).toBe(0o600);
+    await rm(fixture, { recursive: true, force: true });
   });
 
   it("ships a native Windows local installer and companion commands", async () => {

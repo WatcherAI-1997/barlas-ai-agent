@@ -205,6 +205,23 @@ launcher and optional systemd user autostart under
 `${XDG_DATA_HOME:-$HOME/.local/share}/barlas`. Configuration is mode `0600`,
 the gateway remains on `127.0.0.1`, and atomic updates retain one rollback copy.
 
+### macOS
+
+For a private native installation on Apple Silicon or Intel macOS, without
+Homebrew, Docker, administrator access, a domain, or a public port, run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-macos-native.sh | bash
+```
+
+The installer keeps its private Node.js runtime, PGlite data, Chromium, logs,
+and application under `~/Library/Application Support/Barlas`, installs the
+current-user `barlas` launcher in `~/.local/bin`, protects `native.env` with
+mode `0600`, and configures a current-user `launchd` agent. The gateway binds
+only to `127.0.0.1`. `barlas update`, `barlas update rollback`, `barlas repair`,
+`barlas doctor`, and safe data-preserving uninstall use the same lifecycle as
+the Linux native release.
+
 For the stronger container-isolated local server mode, run:
 
 ```bash

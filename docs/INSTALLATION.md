@@ -1,6 +1,6 @@
 # Installation
 
-Barlas AI Agent has native personal modes for Windows 10/11 and Linux, plus an
+Barlas AI Agent has native personal modes for Windows 10/11, macOS, and Linux, plus an
 isolated Docker Compose mode for Linux servers. The installers do not reuse,
 migrate, stop, or reconfigure another agent.
 
@@ -18,6 +18,26 @@ systemd user service when a user manager is available. `barlas update check`,
 `barlas update`, `barlas update rollback`, `barlas doctor`, and
 `barlas uninstall` manage the lifecycle. Uninstall preserves data unless the
 owner explicitly runs `barlas uninstall --purge` and types `DELETE`.
+
+## macOS laptop (native, rootless)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/WatcherAI-1997/barlas-ai-agent/main/install-macos-native.sh | bash
+```
+
+The macOS bootstrap supports Apple Silicon and Intel Macs. It requires only the
+system `curl` and `tar`; it does not install or depend on Homebrew, Docker, Git,
+or a system Node.js. The private runtime, PGlite database, Chromium, logs and
+application live under `~/Library/Application Support/Barlas`. The launcher is
+placed in `~/.local/bin`, configuration is mode `0600`, and a managed
+`~/Library/LaunchAgents/com.barlas.agent.plist` provides current-user autostart.
+The service listens only on `127.0.0.1:17840`.
+
+Use `barlas gateway start|stop|restart|status|logs`, `barlas doctor`,
+`barlas update check|update|rollback`, `barlas repair`, and `barlas uninstall`.
+Normal uninstall removes the app and private runtimes but preserves the database
+and workspaces. `barlas uninstall --purge` requires typing `DELETE` before it
+removes the complete Barlas directory.
 
 ## Windows laptop
 
