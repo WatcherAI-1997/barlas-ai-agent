@@ -414,7 +414,14 @@ const nodePairSchema = z.object({
 const nodeHeartbeatSchema = z.object({
   capabilities: z.array(z.string().regex(/^[a-z][a-z0-9._-]{1,63}$/u)).max(32).optional(),
 }).strict();
-const nodeResultSchema = z.object({ succeeded: z.boolean(), error: z.string().max(1_000).optional() }).strict();
+const nodeResultSchema = z.object({
+  succeeded: z.boolean(),
+  error: z.string().max(1_000).optional(),
+  result: z.record(z.string().max(100), z.unknown()).refine(
+    (value) => Buffer.byteLength(JSON.stringify(value), "utf8") <= 64_000,
+    "Node result exceeds 64 KB",
+  ).optional(),
+}).strict();
 const nodeCommandParamsSchema = z.object({ id: z.string().uuid() }).strict();
 
 interface Principal {
@@ -726,7 +733,9 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const params = nodeCommandParamsSchema.safeParse(request.params);
     const body = nodeResultSchema.safeParse(request.body);
     if (!params.success || !body.success) return reply.badRequest("Invalid node command result");
-    const accepted = await dependencies.deviceNodes.complete(nodeToken(request), params.data.id, body.data.succeeded, body.data.error);
+    const accepted = await dependencies.deviceNodes.complete(
+      nodeToken(request), params.data.id, body.data.succeeded, body.data.error, body.data.result,
+    );
     if (!accepted) return reply.notFound("Node command not found");
     return { accepted: true };
   });

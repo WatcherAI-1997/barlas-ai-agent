@@ -14,7 +14,12 @@ function store(): DeviceNodeStore {
     authenticateNode: vi.fn(async () => node),
     listDeviceNodes: vi.fn(async () => [node]),
     revokeDeviceNode: vi.fn(async () => true),
-    enqueueDeviceCommand: vi.fn(async (input) => ({ id: "00000000-0000-4000-8000-000000000022", nodeId: input.nodeId, kind: "notify" as const, payload: input.payload, status: "queued" as const, createdAt: node.createdAt })),
+    enqueueDeviceCommand: vi.fn(async (input) => ({
+      id: "00000000-0000-4000-8000-000000000022", nodeId: input.nodeId, kind: input.kind,
+      payload: input.payload, status: "queued" as const, result: null, createdAt: node.createdAt,
+      expiresAt: input.expiresAt.toISOString(),
+    })),
+    getDeviceCommand: vi.fn(async () => null),
     claimDeviceCommands: vi.fn(async () => []),
     completeDeviceCommand: vi.fn(async () => true),
   };
@@ -41,5 +46,33 @@ describe("Barlas device nodes", () => {
     const service = new DeviceNodeService(backend);
     const command = await service.notify("00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000021", "Ready", "Task completed");
     expect(command).toMatchObject({ kind: "notify", status: "queued" });
+    expect(vi.mocked(backend.enqueueDeviceCommand).mock.calls[0]?.[0]).toMatchObject({
+      requiredCapability: "notifications",
+    });
+  });
+
+  it("gates short-lived location requests on the location capability", async () => {
+    const backend = store();
+    const service = new DeviceNodeService(backend);
+    const command = await service.requestLocation(
+      "00000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000021",
+      "high",
+      30,
+    );
+    expect(command).toMatchObject({ kind: "location.get", payload: { accuracy: "high", timeoutSeconds: 30 } });
+    const queued = vi.mocked(backend.enqueueDeviceCommand).mock.calls[0]?.[0];
+    expect(queued?.requiredCapability).toBe("location");
+    expect(queued!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(queued!.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 60_000);
+  });
+
+  it("rejects oversized device results before persistence", async () => {
+    const backend = store();
+    const service = new DeviceNodeService(backend);
+    await expect(service.complete("token", "00000000-0000-4000-8000-000000000022", true, undefined, {
+      value: "x".repeat(64_001),
+    })).resolves.toBe(false);
+    expect(backend.completeDeviceCommand).not.toHaveBeenCalled();
   });
 });

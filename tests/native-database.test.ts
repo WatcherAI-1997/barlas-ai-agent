@@ -23,7 +23,7 @@ describe("native embedded database", () => {
       const result = await database.query<{ count: string }>("select count(*)::text as count from information_schema.tables where table_schema = 'public'");
       expect(Number(result.rows[0]?.count)).toBeGreaterThan(20);
       const migrations = await database.query<{ count: string }>("select count(*)::text as count from _barlas_native_migrations");
-      expect(Number(migrations.rows[0]?.count)).toBe(26);
+      expect(Number(migrations.rows[0]?.count)).toBe(27);
       const personality = await database.query<{ identity_version: number }>(
         `insert into agent_profiles (user_id, slug, name, character_values, initiative_level, risk_posture, critique_style, color)
          values ($1, $2, $3, $4, $5, $6, $7, $8) returning identity_version`,
@@ -42,6 +42,27 @@ describe("native embedded database", () => {
       await expect(database.query(
         "insert into commitments (user_id, title, next_reminder_at, reminder_interval_hours) values ($1, $2, now(), 0)",
         ["owner", "Invalid reminder"],
+      )).rejects.toThrow();
+      const account = await database.query<{ id: string }>(
+        "insert into user_accounts (email, display_name, role) values ($1, $2, 'owner') returning id",
+        ["node-owner@example.test", "Node owner"],
+      );
+      const node = await database.query<{ id: string }>(
+        `insert into device_nodes (account_id, name, platform, token_hash, capabilities)
+         values ($1, 'Phone', 'android', 'node-token-hash', array['location']) returning id`,
+        [account.rows[0]!.id],
+      );
+      const location = await database.query<{ kind: string; status: string; expires_at: Date }>(
+        `insert into device_node_commands (node_id, account_id, kind, payload, expires_at)
+         values ($1, $2, 'location.get', '{"accuracy":"balanced","timeoutSeconds":30}', now() + interval '1 minute')
+         returning kind, status, expires_at`,
+        [node.rows[0]!.id, account.rows[0]!.id],
+      );
+      expect(location.rows[0]).toMatchObject({ kind: "location.get", status: "queued" });
+      await expect(database.query(
+        `insert into device_node_commands (node_id, account_id, kind, payload)
+         values ($1, $2, 'shell.execute', '{}')`,
+        [node.rows[0]!.id, account.rows[0]!.id],
       )).rejects.toThrow();
     } finally { await database.close(); }
   });

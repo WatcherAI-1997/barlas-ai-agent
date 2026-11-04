@@ -71,8 +71,8 @@ server-side; each plaintext token is shown only once.
 - `DELETE /v1/nodes/:id` — revoke a node and its bearer token.
 - `POST /nodes/pair` — exchange a one-time code for a device token; the plaintext token is returned once.
 - `POST /nodes/heartbeat` — update node presence and advertised capabilities with the node token.
-- `GET /nodes/commands` — atomically claim a bounded batch of queued commands with the node token.
-- `POST /nodes/commands/:id/result` — acknowledge success or failure. The initial protocol only accepts `notify` commands.
+- `GET /nodes/commands` — atomically claim a bounded batch of non-expired commands with the node token; expired work is never delivered.
+- `POST /nodes/commands/:id/result` — acknowledge success or failure with an optional structured result capped at 64 KB. Supported command kinds are `notify` and `location.get`; capability checks happen when commands are queued.
 - `GET /v1/skills` — list installed skill IDs, versions, descriptions, activation state, tool permissions, runtime readiness (`ready`, `degraded`, or `unavailable`), available/missing tools, and missing hard capabilities.
 - `POST /v1/skills` — owner-only installation of an inactive candidate skill version; optional audited `agentskills.io` provenance records an exact SHA-256 without granting trust.
 - `POST /v1/skills/packages` — owner-only installation of an Ed25519-signed package after exact publisher-fingerprint confirmation; signature and trust binding are rechecked server-side and written to audit metadata.

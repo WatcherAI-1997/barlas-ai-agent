@@ -10,7 +10,7 @@ planned functionality as complete.
 | Multiple agents | Owned profiles with versioned character cards (values, strengths, voice, initiative, risk, critique, visual cues), protected principles, revision history, independent model-routing class, project workspace, conversation binding and CLI selection | Implemented |
 | Domain-free local channels | Telegram long polling, Discord Gateway, and Slack Socket Mode | Implemented |
 | Channel safety | Dedicated tokens, mention-gated group chat, approvals and bounded delivery | Implemented foundation |
-| Device nodes | One-time pairing, revocable node tokens, heartbeat and approval-gated notifications | Implemented foundation |
+| Device nodes | One-time pairing, revocable node tokens, heartbeat, capability-gated expiring commands, approval-gated notifications and location requests, and bounded structured results | Implemented protocol foundation; signed Android/iOS clients pending |
 | Extension discovery | Typed capability, risk and configuration catalog | Implemented |
 | Continuous terminal agent | Persistent conversations, sessions and slash commands | Implemented |
 | Autonomous tool loop | Durable bounded runs, recovery, cancellation and approval continuation | Implemented |
@@ -26,7 +26,7 @@ planned functionality as complete.
 | Multi-agent execution | Bounded parallel workflows and non-recursive analytical subagents | Implemented |
 | Multimodal work | Images, PDF/DOCX/XLSX/PPTX, audio transcription and speech replies | Implemented; provider-dependent |
 | Wider channel ecosystem | Additional official adapters where safe local operation is possible | Planned |
-| Desktop/mobile control | Branded current-user NSIS setup, Windows desktop app-mode shell and shortcuts, rootless native Linux and macOS lifecycles, plus tray node with DPAPI token, current-user autostart, notifications only, and no remote shell | Windows desktop and reproducible installer plus native Linux/macOS implemented; Authenticode/macOS notarization/real-device E2E/mobile/camera/screen pending |
+| Desktop/mobile control | Branded current-user NSIS setup, Windows desktop app-mode shell and shortcuts, rootless native Linux and macOS lifecycles, plus tray node with DPAPI token, current-user autostart, notifications only, and no remote shell | Windows desktop and reproducible installer plus native Linux/macOS implemented; mobile protocol now supports expiring location requests, while Authenticode/macOS notarization/real-device E2E/native mobile clients/camera/screen remain pending |
 | Voice conversation | Explicit-consent web push-to-talk with ephemeral recordings and spoken contextual replies | Implemented; full-duplex interruption planned |
 | Skill marketplace | Expiring Ed25519 catalog, HTTPS package hashes, exact publisher trust, revocation and sequence rollback detection | Implemented foundation; reputation UI pending |
 

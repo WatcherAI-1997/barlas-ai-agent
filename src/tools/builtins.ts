@@ -34,7 +34,7 @@ export function createBuiltinToolRegistry(options: {
   claudeCodeRunner?: Pick<ClaudeCodeWorkspaceRunner, "run">;
   mediaService?: Pick<MediaService, "analyzeImage" | "analyzePdf" | "transcribeAudio" | "createSpeech">;
   projectService?: Pick<ProjectService, "detail" | "createGoal" | "updateGoal" | "createStep" | "updateStep" | "checkpoint" | "snapshot" | "restore">;
-  deviceNodes?: Pick<DeviceNodeService, "notify">;
+  deviceNodes?: Pick<DeviceNodeService, "notify" | "requestLocation" | "command">;
   continuity?: Pick<ContinuityService, "create" | "list" | "update" | "configureReminder">;
   outcomes?: Pick<OutcomeService, "create" | "list" | "detail" | "addEvidence" | "verify" | "cancel">;
 } = {}): ToolRegistry {
@@ -465,6 +465,35 @@ export function createBuiltinToolRegistry(options: {
         const value = input as { nodeId: string; title: string; body: string };
         const command = await options.deviceNodes!.notify(context.userId, value.nodeId, value.title, value.body);
         if (!command) throw new Error("Paired node not found or notifications capability is unavailable");
+        return command;
+      },
+    });
+    registry.register({
+      name: "nodes.location.get",
+      description: "Queue an explicit location request on one paired node. The node must advertise the location capability; the returned command expires quickly.",
+      risk: "external",
+      inputSchema: z.object({
+        nodeId: z.string().uuid(),
+        accuracy: z.enum(["balanced", "high"]).default("balanced"),
+        timeoutSeconds: z.number().int().min(5).max(120).default(30),
+      }).strict(),
+      execute: async (input, context) => {
+        const value = input as { nodeId: string; accuracy: "balanced" | "high"; timeoutSeconds: number };
+        const command = await options.deviceNodes!.requestLocation(
+          context.userId, value.nodeId, value.accuracy, value.timeoutSeconds,
+        );
+        if (!command) throw new Error("Paired node not found or location capability is unavailable");
+        return command;
+      },
+    });
+    registry.register({
+      name: "nodes.command.get",
+      description: "Read the status and untrusted device-reported result of one node command owned by the current user.",
+      risk: "read",
+      inputSchema: z.object({ commandId: z.string().uuid() }).strict(),
+      execute: async (input, context) => {
+        const command = await options.deviceNodes!.command(context.userId, (input as { commandId: string }).commandId);
+        if (!command) throw new Error("Node command not found");
         return command;
       },
     });

@@ -178,9 +178,15 @@ describe("project execution tool registration", () => {
 });
 
 describe("device node tool registration", () => {
-  it("exposes notifications only as an approval-gated external action", () => {
+  it("exposes device mutations as approval-gated actions and command inspection as read-only", () => {
     expect(createBuiltinToolRegistry().list().some((tool) => tool.name === "nodes.notify")).toBe(false);
-    const registry = createBuiltinToolRegistry({ deviceNodes: { notify: async () => null } });
+    const registry = createBuiltinToolRegistry({ deviceNodes: {
+      notify: async () => null,
+      requestLocation: async () => null,
+      command: async () => null,
+    } });
     expect(registry.list()).toContainEqual(expect.objectContaining({ name: "nodes.notify", risk: "external" }));
+    expect(registry.list()).toContainEqual(expect.objectContaining({ name: "nodes.location.get", risk: "external" }));
+    expect(registry.list()).toContainEqual(expect.objectContaining({ name: "nodes.command.get", risk: "read" }));
   });
 });

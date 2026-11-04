@@ -1977,41 +1977,64 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     return result.rowCount === 1;
   }
 
-  async enqueueDeviceCommand(input: { accountId: string; nodeId: string; kind: "notify"; payload: { title: string; body: string } }): Promise<DeviceCommand | null> {
+  async enqueueDeviceCommand(input: {
+    accountId: string; nodeId: string; kind: DeviceCommand["kind"];
+    payload: DeviceCommand["payload"]; requiredCapability: string; expiresAt: Date;
+  }): Promise<DeviceCommand | null> {
     const result = await this.pool.query<DeviceCommandRow>(
-      `insert into device_node_commands (node_id, account_id, kind, payload)
-       select id, account_id, $3, $4 from device_nodes
-       where id = $2 and account_id = $1 and revoked_at is null and capabilities @> array['notifications']::text[]
-       returning id, node_id, kind, payload, status, created_at`,
-      [input.accountId, input.nodeId, input.kind, input.payload],
+      `insert into device_node_commands (node_id, account_id, kind, payload, expires_at)
+       select id, account_id, $3, $4, $6 from device_nodes
+       where id = $2 and account_id = $1 and revoked_at is null and capabilities @> array[$5]::text[]
+       returning id, node_id, kind, payload, status, result, created_at, expires_at`,
+      [input.accountId, input.nodeId, input.kind, input.payload, input.requiredCapability, input.expiresAt],
+    );
+    return result.rows[0] ? mapDeviceCommand(result.rows[0]) : null;
+  }
+
+  async getDeviceCommand(accountId: string, commandId: string): Promise<DeviceCommand | null> {
+    const result = await this.pool.query<DeviceCommandRow>(
+      `select id, node_id, kind, payload,
+              case when status in ('queued', 'delivered') and expires_at <= now() then 'expired' else status end as status,
+              result, created_at, expires_at
+       from device_node_commands where id = $2 and account_id = $1`,
+      [accountId, commandId],
     );
     return result.rows[0] ? mapDeviceCommand(result.rows[0]) : null;
   }
 
   async claimDeviceCommands(tokenHash: string, limit: number): Promise<DeviceCommand[]> {
     const result = await this.pool.query<DeviceCommandRow>(
-      `with selected as (
+      `with matching_node as (
+         select id from device_nodes where token_hash = $1 and revoked_at is null
+       ), expired as (
+         update device_node_commands command set status = 'expired', completed_at = now(), error = 'Command expired before delivery'
+         where command.node_id in (select id from matching_node) and command.status = 'queued' and command.expires_at <= now()
+         returning command.id
+       ), selected as (
          select command.id from device_node_commands command
-         join device_nodes node on node.id = command.node_id
-         where node.token_hash = $1 and node.revoked_at is null and command.status = 'queued'
+         where command.node_id in (select id from matching_node) and command.status = 'queued' and command.expires_at > now()
          order by command.created_at for update skip locked limit $2
        )
        update device_node_commands command set status = 'delivered', delivered_at = now()
        from selected where command.id = selected.id
-       returning command.id, command.node_id, command.kind, command.payload, command.status, command.created_at`,
+       returning command.id, command.node_id, command.kind, command.payload, command.status, command.result, command.created_at, command.expires_at`,
       [tokenHash, limit],
     );
     return result.rows.map(mapDeviceCommand);
   }
 
-  async completeDeviceCommand(input: { tokenHash: string; commandId: string; succeeded: boolean; error?: string }): Promise<boolean> {
+  async completeDeviceCommand(input: {
+    tokenHash: string; commandId: string; succeeded: boolean; error?: string; result?: Record<string, unknown>;
+  }): Promise<boolean> {
     const result = await this.pool.query(
       `update device_node_commands command
-       set status = $3, completed_at = now(), error = $4
+       set status = case when command.expires_at <= now() then 'expired' else $3 end,
+           completed_at = now(), error = case when command.expires_at <= now() then 'Command expired before completion' else $4 end,
+           result = case when command.expires_at <= now() then null else $5 end
        from device_nodes node
        where command.id = $2 and command.node_id = node.id and node.token_hash = $1
          and node.revoked_at is null and command.status = 'delivered'`,
-      [input.tokenHash, input.commandId, input.succeeded ? "completed" : "failed", input.error ?? null],
+      [input.tokenHash, input.commandId, input.succeeded ? "completed" : "failed", input.error ?? null, input.result ?? null],
     );
     return result.rowCount === 1;
   }
@@ -2337,7 +2360,10 @@ interface ProjectGoalRow { id: string; project_id: string; title: string; descri
 interface ProjectPlanStepRow { id: string; project_id: string; goal_id: string | null; title: string; position: number; status: PlanStepStatus; created_at: Date; updated_at: Date }
 interface ProjectCheckpointRow { id: string; project_id: string; goal_id: string | null; kind: ProjectCheckpoint["kind"]; title: string; summary: string; progress: number; agent_run_id: string | null; created_at: Date; updated_at: Date }
 interface DeviceNodeRow { id: string; account_id: string; name: string; platform: NodePlatform; capabilities: string[]; last_seen_at: Date | null; created_at: Date; revoked_at: Date | null }
-interface DeviceCommandRow { id: string; node_id: string; kind: "notify"; payload: { title: string; body: string }; status: DeviceCommand["status"]; created_at: Date }
+interface DeviceCommandRow {
+  id: string; node_id: string; kind: DeviceCommand["kind"]; payload: DeviceCommand["payload"];
+  status: DeviceCommand["status"]; result: Record<string, unknown> | null; created_at: Date; expires_at: Date;
+}
 
 function mapProject(row: ProjectRow): Project {
   return { id: row.id, userId: row.user_id, name: row.name, description: row.description, status: row.status, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() };
@@ -2427,7 +2453,10 @@ function mapDeviceNode(row: DeviceNodeRow): DeviceNode {
 }
 
 function mapDeviceCommand(row: DeviceCommandRow): DeviceCommand {
-  return { id: row.id, nodeId: row.node_id, kind: row.kind, payload: row.payload, status: row.status, createdAt: row.created_at.toISOString() };
+  return {
+    id: row.id, nodeId: row.node_id, kind: row.kind, payload: row.payload, status: row.status,
+    result: row.result, createdAt: row.created_at.toISOString(), expiresAt: row.expires_at.toISOString(),
+  };
 }
 
 function mapSkill(row: SkillRow): StoredSkill {

@@ -16,10 +16,12 @@ export interface DeviceNode {
 export interface DeviceCommand {
   id: string;
   nodeId: string;
-  kind: "notify";
-  payload: { title: string; body: string };
-  status: "queued" | "delivered" | "completed" | "failed";
+  kind: "notify" | "location.get";
+  payload: { title: string; body: string } | { accuracy: "balanced" | "high"; timeoutSeconds: number };
+  status: "queued" | "delivered" | "completed" | "failed" | "expired";
+  result: Record<string, unknown> | null;
   createdAt: string;
+  expiresAt: string;
 }
 
 export interface DeviceNodeStore {
@@ -28,9 +30,15 @@ export interface DeviceNodeStore {
   authenticateNode(tokenHash: string, capabilities?: string[]): Promise<DeviceNode | null>;
   listDeviceNodes(accountId: string): Promise<DeviceNode[]>;
   revokeDeviceNode(accountId: string, nodeId: string): Promise<boolean>;
-  enqueueDeviceCommand(input: { accountId: string; nodeId: string; kind: "notify"; payload: { title: string; body: string } }): Promise<DeviceCommand | null>;
+  enqueueDeviceCommand(input: {
+    accountId: string; nodeId: string; kind: DeviceCommand["kind"];
+    payload: DeviceCommand["payload"]; requiredCapability: string; expiresAt: Date;
+  }): Promise<DeviceCommand | null>;
+  getDeviceCommand(accountId: string, commandId: string): Promise<DeviceCommand | null>;
   claimDeviceCommands(tokenHash: string, limit: number): Promise<DeviceCommand[]>;
-  completeDeviceCommand(input: { tokenHash: string; commandId: string; succeeded: boolean; error?: string }): Promise<boolean>;
+  completeDeviceCommand(input: {
+    tokenHash: string; commandId: string; succeeded: boolean; error?: string; result?: Record<string, unknown>;
+  }): Promise<boolean>;
 }
 
 export class DeviceNodeService {
@@ -60,12 +68,27 @@ export class DeviceNodeService {
   revoke(accountId: string, nodeId: string) { return this.store.revokeDeviceNode(accountId, nodeId); }
 
   notify(accountId: string, nodeId: string, title: string, body: string) {
-    return this.store.enqueueDeviceCommand({ accountId, nodeId, kind: "notify", payload: { title, body } });
+    return this.store.enqueueDeviceCommand({
+      accountId, nodeId, kind: "notify", payload: { title, body }, requiredCapability: "notifications",
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+    });
   }
 
+  requestLocation(accountId: string, nodeId: string, accuracy: "balanced" | "high", timeoutSeconds: number) {
+    return this.store.enqueueDeviceCommand({
+      accountId, nodeId, kind: "location.get", payload: { accuracy, timeoutSeconds }, requiredCapability: "location",
+      expiresAt: new Date(Date.now() + Math.min(timeoutSeconds + 30, 150) * 1_000),
+    });
+  }
+
+  command(accountId: string, commandId: string) { return this.store.getDeviceCommand(accountId, commandId); }
+
   poll(token: string, limit = 10) { return this.store.claimDeviceCommands(hash(token), limit); }
-  complete(token: string, commandId: string, succeeded: boolean, error?: string) {
-    return this.store.completeDeviceCommand({ tokenHash: hash(token), commandId, succeeded, ...(error ? { error } : {}) });
+  complete(token: string, commandId: string, succeeded: boolean, error?: string, result?: Record<string, unknown>) {
+    if (result && Buffer.byteLength(JSON.stringify(result), "utf8") > 64_000) return Promise.resolve(false);
+    return this.store.completeDeviceCommand({
+      tokenHash: hash(token), commandId, succeeded, ...(error ? { error } : {}), ...(result ? { result } : {}),
+    });
   }
 }
 
