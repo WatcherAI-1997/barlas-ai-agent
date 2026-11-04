@@ -81,6 +81,7 @@ server-side; each plaintext token is shown only once.
 - `GET /v1/traces` — list recent execution trace events for one user.
 - `POST /v1/tools/execute` — execute a read-only tool or create an approval.
 - `POST /v1/approvals/:id/decision` — approve or reject a pending action.
+- `POST /v1/approvals/:id/reconcile` — owner resolution for an interrupted external action; records whether it completed or should be rejected without invoking it again.
 - `GET /v1/approvals` — list pending and historical approval requests.
 - `POST /v1/jobs` — persist a durable task for immediate or scheduled work.
 - `GET /v1/jobs` — list a user's durable tasks.
@@ -396,6 +397,12 @@ automatically. If the service stops after the tool decision but before the next
 model step, startup recovery finds the executed/rejected approval and continues
 from the saved provider response and call ID. Conditional state transitions
 prevent a cancelled run from being overwritten by a late model response.
+
+Approval-gated tool execution is claimed atomically before the external call and
+fenced with a one-use execution token. A repeated decision replays a stored
+terminal result. If the process stops after an external effect may have begun,
+the approval remains `executing` (or `failed`) and is never retried blindly;
+the owner must reconcile the observed outcome before the exact run continues.
 
 The built-in `project.execution` skill can read the current user's project and
 propose goal, ordered-plan, checkpoint, artifact snapshot, or artifact restore

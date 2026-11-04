@@ -998,8 +998,35 @@ async function loadApprovals() {
       reject.addEventListener("click", () => decideApproval(item.id, false));
       actions.append(approve, reject); node.append(actions);
     }
+    if (["executing", "failed"].includes(item.status)) {
+      const warning = document.createElement("p");
+      warning.textContent = "Результат внешнего действия неизвестен. BARLAS не повторит его без вашего решения.";
+      node.append(warning);
+      const actions = document.createElement("div"); actions.className = "actions";
+      const completed = document.createElement("button"); completed.textContent = "Действие выполнено";
+      const rejected = document.createElement("button"); rejected.textContent = "Не выполнено"; rejected.className = "reject";
+      completed.addEventListener("click", () => reconcileApproval(item.id, "executed"));
+      rejected.addEventListener("click", () => reconcileApproval(item.id, "rejected"));
+      actions.append(completed, rejected); node.append(actions);
+    }
     return node;
   });
+}
+
+async function reconcileApproval(id, resolution) {
+  const note = window.prompt("Кратко укажите, как вы проверили результат действия:");
+  if (!note || note.trim().length < 3) return;
+  const output = resolution === "executed" ? { reconciled: true, note: note.trim() } : undefined;
+  const data = await api(`/v1/approvals/${id}/reconcile`, {
+    method: "POST",
+    body: JSON.stringify({ userId: state.account.id, resolution, output, note: note.trim() }),
+  });
+  if (data.resumedRun?.result?.text) {
+    state.conversationId = data.resumedRun.conversationId;
+    addMessage("agent", data.resumedRun.result.text);
+    await loadConversations();
+  }
+  await loadApprovals();
 }
 
 async function decideApproval(id, approved) {

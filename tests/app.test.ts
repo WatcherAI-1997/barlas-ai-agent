@@ -56,7 +56,10 @@ function dependencies() {
       createdAt: "2026-10-16T00:00:00.000Z",
     })),
     decideApproval: vi.fn(async () => null),
-    markApprovalExecuted: vi.fn(async () => undefined),
+    getApproval: vi.fn(async () => null),
+    claimApprovalExecution: vi.fn(async () => null),
+    completeApprovalExecution: vi.fn(async () => false),
+    reconcileApprovalExecution: vi.fn(async () => null),
     listApprovals: vi.fn(async () => []),
     appendAudit: vi.fn(async () => undefined),
     createJob: vi.fn(async (input: {
@@ -699,6 +702,7 @@ describe("Barlas AI Agent API", () => {
       listTools: vi.fn(() => [{ name: "files.read", description: "Read", risk: "read" as const }]),
       execute: vi.fn(),
       decide: vi.fn(),
+      reconcile: vi.fn(),
     };
     const app = await buildApp({ apiToken, ...deps, agentLoop, skillRegistry, toolExecutor });
     const headers = { authorization: `Bearer ${apiToken}` };

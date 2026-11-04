@@ -16,9 +16,11 @@ export interface ApprovalRequest {
   risk: "write" | "external" | "destructive";
   summary: string;
   input: unknown;
-  status: "pending" | "approved" | "rejected" | "executed" | "failed";
+  status: "pending" | "approved" | "executing" | "rejected" | "executed" | "failed";
   createdAt: string;
   output?: unknown;
+  executionStartedAt?: string;
+  executionError?: string;
 }
 
 export interface DurableJob {
@@ -101,7 +103,27 @@ export interface AgentStore {
     userId: string;
     approved: boolean;
   }): Promise<ApprovalRequest | null>;
-  markApprovalExecuted(id: string, succeeded: boolean, output?: unknown): Promise<void>;
+  getApproval(userId: string, id: string): Promise<ApprovalRequest | null>;
+  claimApprovalExecution(input: {
+    id: string;
+    userId: string;
+    executionToken: string;
+  }): Promise<ApprovalRequest | null>;
+  completeApprovalExecution(input: {
+    id: string;
+    userId: string;
+    executionToken: string;
+    succeeded: boolean;
+    output?: unknown;
+    error?: string;
+  }): Promise<boolean>;
+  reconcileApprovalExecution(input: {
+    id: string;
+    userId: string;
+    resolution: "executed" | "rejected";
+    output?: unknown;
+    note: string;
+  }): Promise<ApprovalRequest | null>;
   listApprovals(userId: string, limit: number): Promise<ApprovalRequest[]>;
   appendAudit(input: {
     userId: string;

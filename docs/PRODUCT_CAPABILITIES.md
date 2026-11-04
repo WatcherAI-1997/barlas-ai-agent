@@ -13,7 +13,7 @@ planned functionality as complete.
 | Device nodes | One-time pairing, revocable node tokens, heartbeat, capability-gated expiring commands, approval-gated notifications and location requests, and bounded structured results | Implemented protocol foundation; signed Android/iOS clients pending |
 | Extension discovery | Typed capability, risk and configuration catalog | Implemented |
 | Continuous terminal agent | Persistent conversations, sessions and slash commands | Implemented |
-| Autonomous tool loop | Durable bounded runs, CAS-renewed worker leases, stale-worker fencing, recovery, cancellation and approval continuation | Implemented |
+| Autonomous tool loop | Durable bounded runs, CAS-renewed worker leases, stale-worker fencing, crash-safe approval execution journal, explicit indeterminate reconciliation, recovery, cancellation and approval continuation | Implemented |
 | Adaptive cognition and live Cortex | Automatic fast/deep routing, evidence-first observe/plan/act/verify protocol, independent deep-task completion audit, and animated content-safe run telemetry | Implemented |
 | Skills | 63 built-in workflows with runtime `ready`/`degraded`/`unavailable` assessment, hard capability gates, missing-tool disclosure, versioned custom skills, and bounded Codex/Claude Code runners | Implemented; OpenCode and platform-specific adapters remain gated |
 | Third-party skill safety | Ed25519 packages, explicit publisher trust, evaluation gate and rollback | Implemented |

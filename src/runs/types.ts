@@ -82,7 +82,7 @@ export interface AgentRunStore {
   appendAgentRunEvent(input: { runId: string; step: number; eventType: string; details?: unknown }): Promise<void>;
   listAgentRunEvents(userId: string, runId: string): Promise<AgentRunEvent[]>;
   getApprovalOutcome(userId: string, approvalId: string): Promise<{
-    status: "pending" | "approved" | "rejected" | "executed" | "failed";
+    status: "pending" | "approved" | "executing" | "rejected" | "executed" | "failed";
     output?: unknown;
   } | null>;
   listReadyAgentRuns(limit: number): Promise<AgentRunRecord[]>;

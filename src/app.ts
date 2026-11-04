@@ -275,6 +275,12 @@ const approvalDecisionSchema = z.object({
   userId: z.string().min(1).max(128),
   approved: z.boolean(),
 });
+const approvalReconciliationSchema = z.object({
+  userId: z.string().min(1).max(128),
+  resolution: z.enum(["executed", "rejected"]),
+  output: z.unknown().optional(),
+  note: z.string().min(3).max(2_000),
+}).strict();
 
 const createJobSchema = z.discriminatedUnion("jobType", [
   z.object({
@@ -440,7 +446,7 @@ export interface AppDependencies {
   modelProvider: ModelProvider;
   agentLoop?: Pick<AgentLoop, "run">;
   agentRuntime?: Pick<PersistentAgentRuntime, "start" | "enqueue" | "resume" | "resumeByApproval" | "get" | "list" | "events" | "cancel">;
-  toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide">;
+  toolExecutor?: Pick<ToolExecutor, "listTools" | "execute" | "decide" | "reconcile">;
   skillRegistry?: Pick<SkillRegistry, "list" | "get" | "isActive">;
   skillManager?: Pick<SkillManager, "install" | "evaluate" | "activate">;
   extensionCatalog?: Pick<ExtensionCatalog, "list" | "get">;
@@ -2178,6 +2184,46 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
         approved: body.data.approved,
       });
       const userId = authorizeUser(request, body.data.userId);
+      const resumedRun = dependencies.agentRuntime && ["completed", "rejected"].includes(decision.status)
+        ? await dependencies.agentRuntime.resumeByApproval({
+            userId,
+            approvalId: params.data.id,
+            output: decision.status === "completed" ? decision.output : null,
+            rejected: decision.status === "rejected",
+          })
+        : null;
+      if (resumedRun?.result && resumedRun.status !== "waiting_approval") {
+        await dependencies.database.saveTurn({
+          userId,
+          conversationId: resumedRun.conversationId,
+          messages: [],
+          result: resumedRun.result.result,
+        });
+        await dependencies.projects?.recordRunResult(resumedRun);
+      }
+      return { ...decision, resumedRun };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("not found")) {
+        return reply.notFound(error.message);
+      }
+      throw error;
+    }
+  });
+
+  app.post("/v1/approvals/:id/reconcile", async (request, reply) => {
+    if (!dependencies.toolExecutor) return reply.notFound();
+    const params = approvalParamsSchema.safeParse(request.params);
+    const body = approvalReconciliationSchema.safeParse(request.body);
+    if (!params.success || !body.success) return reply.badRequest("Invalid approval reconciliation");
+    const userId = authorizeUser(request, body.data.userId);
+    try {
+      const decision = await dependencies.toolExecutor.reconcile({
+        approvalId: params.data.id,
+        userId,
+        resolution: body.data.resolution,
+        output: body.data.output,
+        note: body.data.note,
+      });
       const resumedRun = dependencies.agentRuntime
         ? await dependencies.agentRuntime.resumeByApproval({
             userId,

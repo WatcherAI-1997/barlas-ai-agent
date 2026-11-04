@@ -23,7 +23,7 @@ describe("native embedded database", () => {
       const result = await database.query<{ count: string }>("select count(*)::text as count from information_schema.tables where table_schema = 'public'");
       expect(Number(result.rows[0]?.count)).toBeGreaterThan(20);
       const migrations = await database.query<{ count: string }>("select count(*)::text as count from _barlas_native_migrations");
-      expect(Number(migrations.rows[0]?.count)).toBe(27);
+      expect(Number(migrations.rows[0]?.count)).toBe(28);
       const personality = await database.query<{ identity_version: number }>(
         `insert into agent_profiles (user_id, slug, name, character_values, initiative_level, risk_posture, critique_style, color)
          values ($1, $2, $3, $4, $5, $6, $7, $8) returning identity_version`,

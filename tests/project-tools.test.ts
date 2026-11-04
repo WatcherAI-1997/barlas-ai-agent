@@ -28,7 +28,14 @@ function approvalStore(): AgentStore {
       if (!request || request.id !== id || request.userId !== userId) return null;
       return { ...request, status: approved ? "approved" : "rejected" };
     }),
-    markApprovalExecuted: vi.fn(async () => undefined),
+    getApproval: vi.fn(async () => pending),
+    claimApprovalExecution: vi.fn(async ({ id, userId }) => {
+      const request = pending;
+      if (!request || request.id !== id || request.userId !== userId) return null;
+      return { ...request, status: "executing" };
+    }),
+    completeApprovalExecution: vi.fn(async () => true),
+    reconcileApprovalExecution: vi.fn(async () => null),
     appendAudit: vi.fn(async () => undefined),
   } as unknown as AgentStore;
 }

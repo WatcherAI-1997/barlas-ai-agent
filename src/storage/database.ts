@@ -1108,20 +1108,87 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     return row ? this.mapApproval(row) : null;
   }
 
-  async markApprovalExecuted(id: string, succeeded: boolean, output?: unknown): Promise<void> {
-    await this.pool.query(
-      `update approval_requests
-       set status = $2, executed_at = now(), output = $3::jsonb
-       where id = $1 and status = 'approved'`,
-      [id, succeeded ? "executed" : "failed", JSON.stringify(output ?? null)],
+  async getApproval(userId: string, id: string): Promise<ApprovalRequest | null> {
+    const result = await this.pool.query<ApprovalRow>(
+      `select id, user_id, tool_name, risk, summary, input, status, created_at, output,
+              execution_started_at, execution_error
+       from approval_requests where id = $1 and user_id = $2`,
+      [id, userId],
     );
+    const row = result.rows[0];
+    return row ? this.mapApproval(row) : null;
+  }
+
+  async claimApprovalExecution(input: {
+    id: string;
+    userId: string;
+    executionToken: string;
+  }): Promise<ApprovalRequest | null> {
+    const result = await this.pool.query<ApprovalRow>(
+      `update approval_requests
+       set status = 'executing', decided_at = coalesce(decided_at, now()),
+           execution_token = $3, execution_started_at = now(), execution_error = null
+       where id = $1 and user_id = $2 and status = 'pending'
+       returning id, user_id, tool_name, risk, summary, input, status, created_at, output,
+                 execution_started_at, execution_error`,
+      [input.id, input.userId, input.executionToken],
+    );
+    const row = result.rows[0];
+    return row ? this.mapApproval(row) : null;
+  }
+
+  async completeApprovalExecution(input: {
+    id: string;
+    userId: string;
+    executionToken: string;
+    succeeded: boolean;
+    output?: unknown;
+    error?: string;
+  }): Promise<boolean> {
+    const result = await this.pool.query(
+      `update approval_requests
+       set status = $4, executed_at = now(), output = $5::jsonb,
+           execution_error = $6, execution_token = null
+       where id = $1 and user_id = $2 and status = 'executing' and execution_token = $3`,
+      [
+        input.id,
+        input.userId,
+        input.executionToken,
+        input.succeeded ? "executed" : "failed",
+        JSON.stringify(input.output ?? null),
+        input.error ?? null,
+      ],
+    );
+    return result.rowCount === 1;
+  }
+
+  async reconcileApprovalExecution(input: {
+    id: string;
+    userId: string;
+    resolution: "executed" | "rejected";
+    output?: unknown;
+    note: string;
+  }): Promise<ApprovalRequest | null> {
+    const result = await this.pool.query<ApprovalRow>(
+      `update approval_requests
+       set status = $3, executed_at = case when $3 = 'executed' then now() else executed_at end,
+           decided_at = coalesce(decided_at, now()), output = $4::jsonb,
+           execution_error = $5, execution_token = null
+       where id = $1 and user_id = $2 and status in ('executing', 'failed')
+       returning id, user_id, tool_name, risk, summary, input, status, created_at, output,
+                 execution_started_at, execution_error`,
+      [input.id, input.userId, input.resolution, JSON.stringify(input.output ?? null), input.note],
+    );
+    const row = result.rows[0];
+    return row ? this.mapApproval(row) : null;
   }
 
   async listApprovals(userId: string, limit: number): Promise<ApprovalRequest[]> {
     const result = await this.pool.query<ApprovalRow>(
-      `select id, user_id, tool_name, risk, summary, input, status, created_at, output
+      `select id, user_id, tool_name, risk, summary, input, status, created_at, output,
+              execution_started_at, execution_error
        from approval_requests where user_id = $1
-       order by (status = 'pending') desc, created_at desc limit $2`,
+       order by (status in ('pending', 'executing', 'failed')) desc, created_at desc limit $2`,
       [userId, limit],
     );
     return result.rows.map((row) => this.mapApproval(row));
@@ -1243,7 +1310,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
            where ($1::text is null or conversation.user_id = $1)) as messages,
          (select count(*) from jobs where status in ('queued', 'running', 'waiting') and ($1::text is null or user_id = $1)) as queued_jobs,
          (select count(*) from jobs where status = 'failed' and ($1::text is null or user_id = $1)) as failed_jobs,
-         (select count(*) from approval_requests where status = 'pending' and ($1::text is null or user_id = $1)) as pending_approvals,
+         (select count(*) from approval_requests where status in ('pending', 'executing', 'failed') and ($1::text is null or user_id = $1)) as pending_approvals,
          (select coalesce(sum(message.input_tokens), 0) from messages message join conversations conversation on conversation.id = message.conversation_id
            where ($1::text is null or conversation.user_id = $1)) as input_tokens,
          (select coalesce(sum(message.output_tokens), 0) from messages message join conversations conversation on conversation.id = message.conversation_id
@@ -2059,6 +2126,8 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     status: ApprovalRequest["status"];
     created_at: Date;
     output?: unknown | null;
+    execution_started_at?: Date | null;
+    execution_error?: string | null;
   }): ApprovalRequest {
     const approval: ApprovalRequest = {
       id: row.id,
@@ -2071,6 +2140,8 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       createdAt: row.created_at.toISOString(),
     };
     if (row.output !== undefined && row.output !== null) approval.output = row.output;
+    if (row.execution_started_at) approval.executionStartedAt = row.execution_started_at.toISOString();
+    if (row.execution_error) approval.executionError = row.execution_error;
     return approval;
   }
 
@@ -2264,6 +2335,8 @@ interface ApprovalRow {
   status: ApprovalRequest["status"];
   created_at: Date;
   output?: unknown | null;
+  execution_started_at?: Date | null;
+  execution_error?: string | null;
 }
 
 interface AgentRunRow {
