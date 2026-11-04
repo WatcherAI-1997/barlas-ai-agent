@@ -72,6 +72,7 @@ export class AgentLoop {
     toolOutputs?: ModelToolOutput[];
     shouldCancel?: () => Promise<boolean>;
     onStep?: (event: { step: number; type: string; details?: unknown }) => Promise<void>;
+    onCheckpoint?: (continuation: AgentLoopContinuation) => Promise<void>;
   }): Promise<AgentLoopResult> {
     const maxSteps = Math.min(Math.max(input.maxSteps ?? this.defaultMaxSteps, 1), 12);
     const tokenBudget = Math.min(Math.max(input.maxTotalTokens ?? this.hardTokenBudget, 1_000), this.hardTokenBudget);
@@ -92,7 +93,7 @@ export class AgentLoop {
       ].join(" "),
     }, ...input.messages];
     let previousResponseId = input.continuation?.previousResponseId;
-    let toolOutputs = input.toolOutputs;
+    let toolOutputs = input.toolOutputs ?? input.continuation?.completedToolOutputs;
     let toolExecutions = input.continuation?.toolExecutions ?? 0;
     const approvalIds = [...(input.continuation?.approvalIds ?? [])];
     let aggregateUsage = input.continuation?.usage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 };
@@ -174,6 +175,7 @@ export class AgentLoop {
       if (response.toolCalls.length > MAX_CALLS_PER_STEP) {
         throw new Error(`Model requested too many tools in one step (maximum ${MAX_CALLS_PER_STEP})`);
       }
+      if (!response.responseId) throw new Error("Model response ID is required for tool continuation");
       previousResponseId = response.responseId;
       toolOutputs = [];
       for (const call of response.toolCalls) {
@@ -229,6 +231,15 @@ export class AgentLoop {
           ? JSON.stringify(execution.output)
           : JSON.stringify({ rejected: true });
         toolOutputs.push({ callId: call.callId, output: (output ?? "null").slice(0, MAX_OUTPUT_CHARS) });
+        await input.onCheckpoint?.({
+          previousResponseId,
+          steps: step,
+          toolExecutions,
+          approvalIds,
+          usage: aggregateUsage,
+          last,
+          completedToolOutputs: [...toolOutputs],
+        });
         await input.onStep?.({ step, type: "tool.completed", details: { toolName: definition.toolName } });
         await input.onStep?.({
           step,

@@ -1957,7 +1957,10 @@ export async function buildApp(dependencies: AppDependencies): Promise<FastifyIn
     const userId = authorizeUser(request, body.data.userId);
     const existing = await dependencies.agentRuntime.get(userId, params.data.id);
     if (!existing) return reply.notFound("Agent run not found");
-    if (existing.status !== "waiting_approval") return reply.conflict("Only a waiting agent run can be resumed");
+    const resumableFailure = existing.status === "failed" && Boolean(existing.continuation?.completedToolOutputs?.length);
+    if (existing.status !== "waiting_approval" && !resumableFailure) {
+      return reply.conflict("Only a waiting or checkpointed failed agent run can be resumed");
+    }
     const run = await dependencies.agentRuntime.resume(userId, params.data.id);
     if (!run) return reply.conflict("Agent run could not be resumed");
     if (run.result && run.status !== "waiting_approval") {

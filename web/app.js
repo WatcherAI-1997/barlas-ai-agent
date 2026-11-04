@@ -1060,6 +1060,14 @@ async function loadRuns() {
       });
       actions.append(cancel);
     }
+    if (item.status === "failed" && item.continuation?.completedToolOutputs?.length) {
+      const resume = document.createElement("button"); resume.textContent = "Продолжить с checkpoint";
+      resume.addEventListener("click", async () => {
+        await api(`/v1/agent-runs/${item.id}/resume`, { method: "POST", body: JSON.stringify({ userId: state.account.id }) });
+        await loadRuns();
+      });
+      actions.append(resume);
+    }
     node.append(actions); return node;
   });
 }

@@ -28,7 +28,7 @@
 
 - Native autonomous tool loop with bounded steps and approval pauses. *(implemented)*
 - Evidence-first cognition protocol and live Cortex visualization. *(observe/plan/act/verify behavior and content-safe phase telemetry implemented; private reasoning is never exposed)*
-- Durable run checkpoints, approval continuation, recovery, cancellation, and step journal. *(implemented)*
+- Durable run checkpoints, provider-neutral post-tool continuation, approval continuation, recovery, cancellation, and step journal. *(implemented; opaque OpenAI/Anthropic/Codex/Ollama continuation is persisted before the next model step and fenced by worker ownership)*
 - Asynchronous agent-run queue with CAS-renewed leases, stale-worker fencing,
   bounded abandoned-run recovery, live progress polling, and Telegram result delivery. *(implemented)*
 - Durable long-running job storage and schedules. *(job worker, leases, retries,

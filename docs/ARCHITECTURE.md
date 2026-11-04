@@ -161,8 +161,12 @@ fall back to the original answer.
 - Autonomous run checkpoints and content-safe step events are durable. Pending
   approvals are linked one-to-one with the exact model call; decisions trigger
   continuation, and startup recovery resumes decisions committed immediately
-  before a process interruption. Cancellation wins over late completion through
-  conditional PostgreSQL updates.
+  before a process interruption. Successful immediate tool calls also commit a
+  provider-neutral checkpoint containing the provider's opaque continuation ID
+  and bounded completed output before the next model request. Checkpoint writes
+  are fenced by the current worker lease; retries continue from the committed
+  boundary instead of executing the tool again. Cancellation wins over late
+  completion through conditional PostgreSQL updates.
 - New runs use a PostgreSQL lease queue and return to web/Telegram immediately.
   Active workers renew ownership with a compare-and-set heartbeat; a failed
   renewal stops new model/tool steps and stale workers cannot write terminal

@@ -19,6 +19,7 @@ import type {
   StoredConnector,
 } from "../connectors/vault.js";
 import type { AgentMessage, GenerateResult } from "../core/models.js";
+import type { AgentLoopContinuation } from "../core/agent-loop.js";
 import type { GovernanceStore, QuotaCategory, TraceEvent, TraceStatus } from "../governance/runtime.js";
 import type {
   AgentRunEvent,
@@ -1575,7 +1576,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       `update agent_runs
        set status = $3,
            continuation = case
-             when $3 in ('running', 'waiting_approval') then coalesce($4::jsonb, continuation)
+             when $3 in ('running', 'waiting_approval', 'failed') then coalesce($4::jsonb, continuation)
              else null end,
            pending_approval_id = case when $3 = 'waiting_approval' then $5::uuid else null end,
            result = $6::jsonb, error = $7,
@@ -1585,7 +1586,7 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
        where id = $1 and user_id = $2
          and status <> 'cancelled'
          and ($8::text is null or worker_id = $8)
-         and (status = 'running' or (status = 'waiting_approval' and $3 = 'running'))
+         and (status = 'running' or (status in ('waiting_approval', 'failed') and $3 = 'running'))
        returning *`,
       [
         input.id,
@@ -1599,6 +1600,22 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
       ],
     );
     return result.rows[0] ? this.mapAgentRun(result.rows[0]) : null;
+  }
+
+  async checkpointAgentRun(input: {
+    id: string;
+    userId: string;
+    continuation: AgentLoopContinuation;
+    workerId?: string;
+  }): Promise<boolean> {
+    const result = await this.pool.query(
+      `update agent_runs
+       set continuation = $3::jsonb, updated_at = now()
+       where id = $1 and user_id = $2 and status = 'running'
+         and ($4::text is null or worker_id = $4)`,
+      [input.id, input.userId, JSON.stringify(input.continuation), input.workerId ?? null],
+    );
+    return result.rowCount === 1;
   }
 
   async cancelAgentRun(userId: string, id: string): Promise<AgentRunRecord | null> {

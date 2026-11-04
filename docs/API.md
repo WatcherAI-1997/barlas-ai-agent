@@ -37,7 +37,7 @@ server-side; each plaintext token is shown only once.
 - `GET /v1/agent-runs/:id` — inspect one owned run.
 - `GET /v1/agent-runs/:id/events` — load its ordered, content-safe step journal.
 - `POST /v1/agent-runs/:id/cancel` — cancel a running or approval-waiting run.
-- `POST /v1/agent-runs/:id/resume` — recover a waiting run after its approval was decided.
+- `POST /v1/agent-runs/:id/resume` — recover a waiting run after its approval was decided, or explicitly continue a failed run from its last completed provider/tool checkpoint.
 - `GET /v1/conversations` — list a user's stored conversations.
 - `GET /v1/conversations/:id` — load ordered messages from one conversation.
 - `GET /v1/agents/council` — return the fixed Chief and bounded internal Council roles.
@@ -392,7 +392,12 @@ Every autonomous invocation is persisted before the first model call. Its
 conversation, limits, provider continuation ID, aggregate usage, pending call,
 approval link, terminal result, error, and timestamps live in PostgreSQL. Step
 events contain operation names and IDs but not prompts, file bodies, or tool
-outputs. Approving or rejecting a linked action resumes that exact run
+outputs. After every successful immediate tool call, BARLAS durably stores the
+provider's opaque continuation ID together with the bounded tool output before
+asking the model for another step. The checkpoint write is fenced by the active
+worker lease, so a stale worker cannot replace newer progress. A failed
+interactive run with such a checkpoint can be resumed explicitly without
+calling the completed tool again. Approving or rejecting a linked action resumes that exact run
 automatically. If the service stops after the tool decision but before the next
 model step, startup recovery finds the executed/rejected approval and continues
 from the saved provider response and call ID. Conditional state transitions

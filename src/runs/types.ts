@@ -78,6 +78,12 @@ export interface AgentRunStore {
     error?: string;
     workerId?: string;
   }): Promise<AgentRunRecord | null>;
+  checkpointAgentRun(input: {
+    id: string;
+    userId: string;
+    continuation: AgentLoopContinuation;
+    workerId?: string;
+  }): Promise<boolean>;
   cancelAgentRun(userId: string, id: string): Promise<AgentRunRecord | null>;
   appendAgentRunEvent(input: { runId: string; step: number; eventType: string; details?: unknown }): Promise<void>;
   listAgentRunEvents(userId: string, runId: string): Promise<AgentRunEvent[]>;

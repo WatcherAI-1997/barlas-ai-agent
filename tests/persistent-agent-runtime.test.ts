@@ -78,6 +78,12 @@ function memoryStore() {
       };
       return current;
     }),
+    checkpointAgentRun: vi.fn(async (input) => {
+      if (!current || current.id !== input.id || current.userId !== input.userId || current.status !== "running") return false;
+      if (input.workerId && current.workerId !== input.workerId) return false;
+      current = { ...current, continuation: input.continuation };
+      return true;
+    }),
     cancelAgentRun: vi.fn(async () => current ? (current = { ...current, status: "cancelled" }) : null),
     appendAgentRunEvent: vi.fn(async ({ eventType }) => { events.push(eventType); }),
     listAgentRunEvents: vi.fn(async () => []),
@@ -161,5 +167,39 @@ describe("Barlas AI Agent persistent runtime", () => {
 
     await expect(runtime.executeClaimed(leased, () => true)).rejects.toThrow(/lease ownership was lost/i);
     expect(memory.store.updateAgentRun).not.toHaveBeenCalled();
+  });
+
+  it("persists a provider checkpoint and resumes a failed run from it", async () => {
+    const memory = memoryStore();
+    const checkpoint = {
+      previousResponseId: "response-before-outage",
+      steps: 1,
+      toolExecutions: 1,
+      approvalIds: [],
+      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, costUsd: 0 },
+      last: { text: "", provider: "test", model: "test-model", responseId: "response-before-outage" },
+      completedToolOutputs: [{ callId: "call-1", output: '{"ok":true}' }],
+    };
+    const loop = { run: vi.fn()
+      .mockImplementationOnce(async (input: { onCheckpoint?: (value: typeof checkpoint) => Promise<void> }) => {
+        await input.onCheckpoint?.(checkpoint);
+        throw new Error("provider unavailable");
+      })
+      .mockResolvedValueOnce(result("completed")) };
+    const runtime = new PersistentAgentRuntime(loop, memory.store);
+    const failed = await runtime.start({
+      userId: "user-1",
+      conversationId: "00000000-0000-4000-8000-000000000001",
+      messages: [{ role: "user", content: "Continue after the tool" }],
+      taskClass: "fast",
+      maxSteps: 8,
+    });
+
+    expect(failed.status).toBe("failed");
+    expect(failed.continuation).toEqual(checkpoint);
+    const resumed = await runtime.resume("user-1", runId);
+    expect(resumed?.status).toBe("completed");
+    expect(loop.run).toHaveBeenNthCalledWith(2, expect.objectContaining({ continuation: checkpoint }));
+    expect(memory.events).toContain("run.checkpointed");
   });
 });

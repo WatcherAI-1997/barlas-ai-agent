@@ -10,7 +10,7 @@ const request = {
 };
 
 function provider(
-  steps: Array<{ text?: string; calls?: Array<{ callId: string; name: string; arguments: unknown }> }>,
+  steps: Array<{ text?: string; responseId?: string; calls?: Array<{ callId: string; name: string; arguments: unknown }> }>,
   totalTokens = 15,
 ) {
   let index = 0;
@@ -24,7 +24,7 @@ function provider(
         text: step.text ?? "",
         provider: "test",
         model: "test-model",
-        responseId: `response-${index}`,
+        responseId: step.responseId ?? `response-${index}`,
         toolCalls: step.calls ?? [],
         usage: { inputTokens: totalTokens - 5, outputTokens: 5, totalTokens, costUsd: 0.01 },
       };
@@ -168,6 +168,59 @@ describe("Barlas AI Agent autonomous loop", () => {
       previousResponseId: "response-before-restart",
       toolOutputs: [{ callId: "call-write", output: '{"written":true}' }],
     }));
+  });
+
+  it("resumes from a durable post-tool provider checkpoint without repeating the tool", async () => {
+    const firstModel = provider([{ calls: [{ callId: "call-1", name: "system_time", arguments: {} }] }]);
+    const firstExecute = vi.fn(async () => ({ status: "completed" as const, output: { iso: "2026-10-16T12:00:00Z" } }));
+    let checkpoint: Parameters<NonNullable<Parameters<AgentLoop["run"]>[0]["onCheckpoint"]>>[0] | undefined;
+    await expect(new AgentLoop(firstModel, tools(firstExecute)).run({
+      ...request,
+      onCheckpoint: async (value) => {
+        checkpoint = value;
+        throw new Error("simulated process interruption");
+      },
+    })).rejects.toThrow("simulated process interruption");
+    expect(checkpoint).toMatchObject({
+      previousResponseId: "response-1",
+      steps: 1,
+      completedToolOutputs: [{ callId: "call-1", output: '{"iso":"2026-10-16T12:00:00Z"}' }],
+    });
+
+    const resumedModel = provider([{ text: "It is noon." }]);
+    const resumedExecute = vi.fn();
+    const result = await new AgentLoop(resumedModel, tools(resumedExecute)).run({ ...request, continuation: checkpoint! });
+
+    expect(result.status).toBe("completed");
+    expect(resumedExecute).not.toHaveBeenCalled();
+    expect(resumedModel.generateWithTools).toHaveBeenCalledWith(expect.objectContaining({
+      previousResponseId: "response-1",
+      toolOutputs: [{ callId: "call-1", output: '{"iso":"2026-10-16T12:00:00Z"}' }],
+    }));
+  });
+
+  it.each([
+    ["OpenAI", "resp_openai_1"],
+    ["Anthropic", "anthropic:opaque-history"],
+    ["Codex account", "barlas-cli:opaque-context"],
+    ["Ollama", "ollama:opaque-history"],
+  ])("preserves the opaque %s continuation in a checkpoint", async (_providerName, responseId) => {
+    const model = provider([
+      { responseId, calls: [{ callId: "call-1", name: "system_time", arguments: {} }] },
+      { text: "Done" },
+    ]);
+    const checkpoints: string[] = [];
+    const result = await new AgentLoop(model, tools(vi.fn(async () => ({
+      status: "completed" as const,
+      output: { ok: true },
+    })))).run({
+      ...request,
+      onCheckpoint: async (value) => { checkpoints.push(value.previousResponseId); },
+    });
+
+    expect(result.status).toBe("completed");
+    expect(checkpoints).toEqual([responseId]);
+    expect(model.generateWithTools).toHaveBeenNthCalledWith(2, expect.objectContaining({ previousResponseId: responseId }));
   });
 
   it("stops at the configured step limit", async () => {

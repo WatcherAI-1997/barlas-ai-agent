@@ -80,6 +80,15 @@ export class PersistentAgentRuntime {
 
   async resume(userId: string, runId: string): Promise<AgentRunRecord | null> {
     const run = await this.store.getAgentRun(userId, runId);
+    if (run?.status === "failed" && run.continuation?.completedToolOutputs?.length) {
+      const claimed = await this.store.updateAgentRun({
+        id: run.id,
+        userId: run.userId,
+        status: "running",
+        continuation: run.continuation,
+      });
+      return claimed ? this.execute(claimed) : null;
+    }
     if (!run || run.status !== "waiting_approval" || !run.pendingApprovalId) return run;
     const approval = await this.store.getApprovalOutcome(userId, run.pendingApprovalId);
     if (!approval || !["executed", "rejected"].includes(approval.status)) return run;
@@ -141,6 +150,26 @@ export class PersistentAgentRuntime {
           eventType: event.type,
           details: event.details,
         }),
+        onCheckpoint: async (continuation) => {
+          if (shouldAbort?.()) throw new Error("Agent run lease ownership was lost before checkpoint");
+          const stored = await this.store.checkpointAgentRun({
+            id: run.id,
+            userId: run.userId,
+            continuation,
+            ...(run.workerId ? { workerId: run.workerId } : {}),
+          });
+          if (!stored) throw new Error("Agent run checkpoint was rejected because ownership changed");
+          await this.store.appendAgentRunEvent({
+            runId: run.id,
+            step: continuation.steps,
+            eventType: "run.checkpointed",
+            details: {
+              provider: continuation.last.provider,
+              model: continuation.last.model,
+              toolOutputs: continuation.completedToolOutputs?.length ?? 0,
+            },
+          });
+        },
       });
       if (shouldAbort?.()) throw new Error("Agent run lease ownership was lost");
       return await this.persistResult(run, result);
