@@ -1657,6 +1657,16 @@ export class Database implements AgentStore, GovernanceStore, AuthStore, AgentRu
     return result.rows.map((row) => this.mapAgentRun(row));
   }
 
+  async renewAgentRunLease(input: { id: string; workerId: string; leaseSeconds: number }): Promise<boolean> {
+    const result = await this.pool.query(
+      `update agent_runs set locked_at = now()
+       where id = $1 and worker_id = $2 and status = 'running'
+         and locked_at > now() - make_interval(secs => $3)`,
+      [input.id, input.workerId, input.leaseSeconds],
+    );
+    return result.rowCount === 1;
+  }
+
   async failClaimedAgentRun(input: {
     id: string;
     workerId: string;

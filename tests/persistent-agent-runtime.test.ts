@@ -84,6 +84,7 @@ function memoryStore() {
     getApprovalOutcome: vi.fn(async () => ({ status: "executed" as const, output: { written: true } })),
     listReadyAgentRuns: vi.fn(async () => current ? [current] : []),
     claimAgentRuns: vi.fn(async () => []),
+    renewAgentRunLease: vi.fn(async () => true),
     failClaimedAgentRun: vi.fn(async () => "failed" as const),
   };
   return { store, events, current: () => current };
@@ -135,5 +136,30 @@ describe("Barlas AI Agent persistent runtime", () => {
       continuation: expect.objectContaining({ pendingCallId: "call-1" }),
       toolOutputs: [{ callId: "call-1", output: '{"written":true}' }],
     }));
+  });
+
+  it("does not persist a stale result after worker lease ownership is lost", async () => {
+    const memory = memoryStore();
+    const loop = { run: vi.fn(async () => result("completed")) };
+    const runtime = new PersistentAgentRuntime(loop, memory.store);
+    const leased: AgentRunRecord = {
+      id: runId,
+      userId: "user-1",
+      conversationId: "00000000-0000-4000-8000-000000000001",
+      status: "running",
+      messages: [{ role: "user", content: "Do it" }],
+      conversationMessages: [{ role: "user", content: "Do it" }],
+      taskClass: "deep",
+      maxSteps: 8,
+      scheduledFor: "2026-10-16T00:00:00.000Z",
+      attempts: 1,
+      maxAttempts: 3,
+      workerId: "worker-old",
+      createdAt: "2026-10-16T00:00:00.000Z",
+      updatedAt: "2026-10-16T00:00:00.000Z",
+    };
+
+    await expect(runtime.executeClaimed(leased, () => true)).rejects.toThrow(/lease ownership was lost/i);
+    expect(memory.store.updateAgentRun).not.toHaveBeenCalled();
   });
 });

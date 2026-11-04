@@ -34,7 +34,7 @@ describe("Barlas AI Agent asynchronous run worker", () => {
     const worker = new AgentRunWorker(store, runtime, { workerId: "worker-test", onFinished });
 
     await expect(worker.runOnce()).resolves.toBe(1);
-    expect(runtime.executeClaimed).toHaveBeenCalledWith(run);
+    expect(runtime.executeClaimed).toHaveBeenCalledWith(run, expect.any(Function));
     expect(onFinished).toHaveBeenCalledWith(finished);
     expect(appendAgentRunEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "run.started" }));
   });
@@ -57,5 +57,51 @@ describe("Barlas AI Agent asynchronous run worker", () => {
       error: "temporary",
       retryAt: expect.any(Date),
     }));
+  });
+
+  it("renews ownership while a long autonomous run is active", async () => {
+    const renewAgentRunLease = vi.fn(async () => true);
+    const store = {
+      claimAgentRuns: vi.fn(async () => [run]),
+      renewAgentRunLease,
+      appendAgentRunEvent: vi.fn(async () => undefined),
+      failClaimedAgentRun: vi.fn(),
+    } as unknown as AgentRunStore;
+    const finished = { ...run, status: "completed" as const };
+    const runtime = { executeClaimed: vi.fn(async (_run: AgentRunRecord, shouldAbort?: () => boolean) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(shouldAbort?.()).toBe(false);
+      return finished;
+    }) };
+    const worker = new AgentRunWorker(store, runtime, { workerId: "worker-test", leaseHeartbeatMs: 5 });
+
+    await expect(worker.runOnce()).resolves.toBe(1);
+
+    expect(renewAgentRunLease).toHaveBeenCalledWith({ id: run.id, workerId: "worker-test", leaseSeconds: 300 });
+  });
+
+  it("stops a superseded worker and records lease loss without overwriting the new owner", async () => {
+    const appendAgentRunEvent = vi.fn(async () => undefined);
+    const failClaimedAgentRun = vi.fn(async () => null);
+    const store = {
+      claimAgentRuns: vi.fn(async () => [run]),
+      renewAgentRunLease: vi.fn(async () => false),
+      appendAgentRunEvent,
+      failClaimedAgentRun,
+      getAgentRun: vi.fn(async () => ({ ...run, workerId: "worker-new" })),
+    } as unknown as AgentRunStore;
+    const runtime = { executeClaimed: vi.fn(async (_run: AgentRunRecord, shouldAbort?: () => boolean) => {
+      for (let index = 0; index < 20 && !shouldAbort?.(); index += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2));
+      }
+      throw new Error("Agent run lease ownership was lost");
+    }) };
+    const worker = new AgentRunWorker(store, runtime, { workerId: "worker-test", leaseHeartbeatMs: 1 });
+
+    await expect(worker.runOnce()).resolves.toBe(1);
+
+    expect(failClaimedAgentRun).toHaveBeenCalledWith(expect.objectContaining({ id: run.id, workerId: "worker-test" }));
+    expect(appendAgentRunEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: "run.lease_lost" }));
+    expect(appendAgentRunEvent).not.toHaveBeenCalledWith(expect.objectContaining({ eventType: "run.failed" }));
   });
 });

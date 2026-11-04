@@ -450,7 +450,9 @@ credentials. `CLAUDE_CODE_MODEL` defaults to `sonnet`.
 
 Queued runs are leased with PostgreSQL `FOR UPDATE SKIP LOCKED`. A worker crash
 leaves a recoverable lease; after its timeout another worker may claim the run.
-Retries are bounded and use exponential delay. The original visible messages
+Healthy long runs renew `locked_at` through an owner-checked heartbeat. Failed
+renewal stops the stale worker before another model/tool step, and terminal
+writes remain guarded by worker ownership. Retries are bounded and use exponential delay. The original visible messages
 are stored separately from injected memory context so background completion
 cannot leak internal context into conversation history. The web cabinet polls
 the content-safe event journal while work continues without holding the submit

@@ -164,9 +164,11 @@ fall back to the original answer.
   before a process interruption. Cancellation wins over late completion through
   conditional PostgreSQL updates.
 - New runs use a PostgreSQL lease queue and return to web/Telegram immediately.
-  Bounded retries recover stale `running` leases, while worker ownership guards
-  terminal writes. Visible conversation messages, injected memory context, and
-  optional delivery metadata are stored as separate fields.
+  Active workers renew ownership with a compare-and-set heartbeat; a failed
+  renewal stops new model/tool steps and stale workers cannot write terminal
+  state. Bounded retries recover genuinely abandoned `running` leases. Visible
+  conversation messages, injected memory context, and optional delivery metadata
+  are stored as separate fields.
 - A separate leased schedule worker evaluates five-field cron expressions in
   each schedule's IANA timezone. Dispatch uses a unique schedule/occurrence key,
   preventing duplicate autonomous runs after lease expiry or process restart;

@@ -64,6 +64,10 @@ Run this separately in an isolated staging deployment:
 6. Start a long read-only run, interrupt the worker after its lease is claimed,
    restart it after lease expiry, and verify bounded retry/recovery without a
    duplicate terminal write.
+7. Start a healthy run longer than one lease interval and verify heartbeat
+   renewal prevents a second worker from claiming it; then replace its worker
+   owner deliberately and verify the old worker records `run.lease_lost` and
+   does not persist a stale result.
 
 This drill intentionally controls containers and therefore is not automated by
 the application test command. It must never target existing agents or a shared

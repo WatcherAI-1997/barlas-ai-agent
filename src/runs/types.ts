@@ -87,6 +87,7 @@ export interface AgentRunStore {
   } | null>;
   listReadyAgentRuns(limit: number): Promise<AgentRunRecord[]>;
   claimAgentRuns(input: { workerId: string; limit: number; leaseSeconds: number }): Promise<AgentRunRecord[]>;
+  renewAgentRunLease(input: { id: string; workerId: string; leaseSeconds: number }): Promise<boolean>;
   failClaimedAgentRun(input: {
     id: string;
     workerId: string;

@@ -18,6 +18,7 @@ export class AgentRunWorker {
       leaseSeconds?: number;
       batchSize?: number;
       retryBaseMs?: number;
+      leaseHeartbeatMs?: number;
       onFinished?: (run: AgentRunRecord) => Promise<void>;
       onError?: (error: unknown) => void;
       isPaused?: () => Promise<boolean>;
@@ -67,9 +68,11 @@ export class AgentRunWorker {
   }
 
   private async process(run: AgentRunRecord): Promise<void> {
+    const lease = this.startLeaseHeartbeat(run);
     try {
       await this.store.appendAgentRunEvent({ runId: run.id, step: 0, eventType: "run.started", details: { attempt: run.attempts } });
-      const finished = await this.runtime.executeClaimed(run);
+      const finished = await this.runtime.executeClaimed(run, lease.lost);
+      await lease.stop();
       await this.options.onFinished?.(finished);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown agent run failure";
@@ -88,6 +91,16 @@ export class AgentRunWorker {
           await this.store.appendAgentRunEvent({ runId: run.id, step: 0, eventType: "run.cancelled" });
           return;
         }
+        if (lease.lost() && current?.status === "running" && current.workerId !== this.workerId) {
+          await this.store.appendAgentRunEvent({
+            runId: run.id,
+            step: 0,
+            eventType: "run.lease_lost",
+            details: { attempt: run.attempts },
+          });
+          return;
+        }
+        if (current && current.status !== "running") return;
       }
       await this.store.appendAgentRunEvent({
         runId: run.id,
@@ -96,6 +109,57 @@ export class AgentRunWorker {
         details: { attempt: run.attempts, error: message.slice(0, 500) },
       });
       this.options.onError?.(error);
+    } finally {
+      await lease.stop();
     }
+  }
+
+  private startLeaseHeartbeat(run: AgentRunRecord): {
+    lost: () => boolean;
+    stop: () => Promise<void>;
+  } {
+    const leaseSeconds = Math.max(3, this.options.leaseSeconds ?? 300);
+    const intervalMs = this.options.leaseHeartbeatMs === undefined
+      ? Math.max(250, Math.floor(leaseSeconds * 1_000 / 3))
+      : Math.max(1, this.options.leaseHeartbeatMs);
+    let stopped = false;
+    let lost = false;
+    let timer: NodeJS.Timeout | undefined;
+    let inFlight = Promise.resolve();
+
+    const schedule = () => {
+      if (stopped || lost) return;
+      timer = setTimeout(() => {
+        inFlight = (async () => {
+          try {
+            const renewed = await this.store.renewAgentRunLease({
+              id: run.id,
+              workerId: this.workerId,
+              leaseSeconds,
+            });
+            if (!renewed) {
+              lost = true;
+              return;
+            }
+          } catch (error) {
+            lost = true;
+            this.options.onError?.(error);
+            return;
+          }
+          schedule();
+        })();
+      }, intervalMs);
+      timer.unref();
+    };
+
+    schedule();
+    return {
+      lost: () => lost,
+      stop: async () => {
+        stopped = true;
+        if (timer) clearTimeout(timer);
+        await inFlight;
+      },
+    };
   }
 }

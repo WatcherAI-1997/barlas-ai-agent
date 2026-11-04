@@ -54,9 +54,9 @@ export class PersistentAgentRuntime {
     return run;
   }
 
-  executeClaimed(run: AgentRunRecord): Promise<AgentRunRecord> {
+  executeClaimed(run: AgentRunRecord, shouldAbort?: () => boolean): Promise<AgentRunRecord> {
     if (run.status !== "running" || !run.workerId) throw new Error("Agent run is not leased by a worker");
-    return this.execute(run);
+    return this.execute(run, undefined, shouldAbort);
   }
 
   async resumeByApproval(input: {
@@ -117,7 +117,11 @@ export class PersistentAgentRuntime {
     return this.store.cancelAgentRun(userId, id);
   }
 
-  private async execute(run: AgentRunRecord, toolOutputs?: ModelToolOutput[]): Promise<AgentRunRecord> {
+  private async execute(
+    run: AgentRunRecord,
+    toolOutputs?: ModelToolOutput[],
+    shouldAbort?: () => boolean,
+  ): Promise<AgentRunRecord> {
     try {
       const result = await this.loop.run({
         userId: run.userId,
@@ -129,7 +133,8 @@ export class PersistentAgentRuntime {
         ...(run.allowedTools ? { allowedTools: run.allowedTools } : {}),
         ...(run.continuation ? { continuation: run.continuation } : {}),
         ...(toolOutputs ? { toolOutputs } : {}),
-        shouldCancel: async () => (await this.store.getAgentRun(run.userId, run.id))?.status === "cancelled",
+        shouldCancel: async () => shouldAbort?.() === true
+          || (await this.store.getAgentRun(run.userId, run.id))?.status === "cancelled",
         onStep: async (event) => this.store.appendAgentRunEvent({
           runId: run.id,
           step: event.step,
@@ -137,6 +142,7 @@ export class PersistentAgentRuntime {
           details: event.details,
         }),
       });
+      if (shouldAbort?.()) throw new Error("Agent run lease ownership was lost");
       return await this.persistResult(run, result);
     } catch (error) {
       if (run.workerId) throw error;
