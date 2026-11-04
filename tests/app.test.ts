@@ -384,6 +384,8 @@ describe("Barlas AI Agent API", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("Barlas AI Agent");
     expect(response.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(response.headers["content-security-policy"]).toContain("style-src 'self'");
+    expect(response.headers["content-security-policy"]).not.toContain("'unsafe-inline'");
     expect(response.headers["x-frame-options"]).toBe("DENY");
     await app.close();
   });

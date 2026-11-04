@@ -42,6 +42,8 @@ describe("Barlas web interface", () => {
       ".nav-backdrop",
       "grid-template-areas",
       "@media (max-width: 700px)",
+      ".cortex-delay-25",
+      ".agent-color-chip",
     ]) expect(css).toContain(marker);
 
     for (const marker of [
@@ -63,7 +65,9 @@ describe("Barlas web interface", () => {
       "function initialPublicLanguage()",
       '$("#login-submit").textContent = phrases.connectLabel',
       "setInterval(() => { void syncConversations(); }, 1_500)",
+      'document.createElementNS("http://www.w3.org/2000/svg", "svg")',
     ]) expect(script).toContain(marker);
     expect(script).not.toContain("alert(");
+    expect(script).not.toMatch(/(?:\.style\.|\sstyle=)/u);
   });
 });

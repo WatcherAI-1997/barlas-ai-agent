@@ -562,7 +562,7 @@ function buildCortexMap(activeKey = "idle") {
     }
   }
   const labels = cortexColumns.map((column) => `<text class="cortex-label" x="${column.x}" y="35" text-anchor="middle">${column.title}</text>`);
-  const nodes = points.flat().map((point, index) => `<g class="cortex-node ${point.key === activeKey ? "active" : ""}" style="--delay:${index * 34}ms"><circle cx="${point.x}" cy="${point.y}" r="10"/><circle class="halo" cx="${point.x}" cy="${point.y}" r="22"/></g>`);
+  const nodes = points.flat().map((point, index) => `<g class="cortex-node cortex-delay-${index} ${point.key === activeKey ? "active" : ""}"><circle cx="${point.x}" cy="${point.y}" r="10"/><circle class="halo" cx="${point.x}" cy="${point.y}" r="22"/></g>`);
   svg.innerHTML = `${lines.join("")}${labels.join("")}${nodes.join("")}`;
 }
 
@@ -747,7 +747,23 @@ async function loadAgents() {
       `Инициатива: ${character.initiativeLevel || "balanced"} · риск: ${character.riskPosture || "balanced"} · критика: ${character.critiqueStyle || "direct"}`,
     ].filter(Boolean).join("\n");
     const node = card(agent.name, `${agent.slug} · ${agent.style} · v${agent.identityVersion || 1}`, body);
-    node.style.borderTopColor = character.color || "#C62828";
+    const color = /^#[0-9a-f]{6}$/iu.test(character.color || "") ? character.color : "#C62828";
+    const swatch = document.createElement("span");
+    swatch.className = "agent-color-chip";
+    swatch.setAttribute("role", "img");
+    swatch.setAttribute("aria-label", `Цвет агента ${color}`);
+    swatch.title = color;
+    const colorIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    colorIcon.setAttribute("viewBox", "0 0 20 20");
+    colorIcon.setAttribute("aria-hidden", "true");
+    const colorCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    colorCircle.setAttribute("cx", "10");
+    colorCircle.setAttribute("cy", "10");
+    colorCircle.setAttribute("r", "8");
+    colorCircle.setAttribute("fill", color);
+    colorIcon.append(colorCircle);
+    swatch.append(colorIcon);
+    node.prepend(swatch);
     const use = document.createElement("button"); use.textContent = "Открыть чат"; use.addEventListener("click", () => {
       $("#chat-agent").value = agent.id; state.conversationId = null; loadPanel("chat").catch((error) => notify(error.message, "error"));
     });

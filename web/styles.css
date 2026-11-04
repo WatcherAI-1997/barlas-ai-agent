@@ -117,6 +117,32 @@ nav button.active::before { color: var(--accent-bright); }
 .cortex-node .halo { fill: none; stroke: #e21f3d; opacity: .08; }
 .cortex-node.active circle:first-child { fill: #fff; stroke: #ff3652; opacity: 1; filter: drop-shadow(0 0 9px #ff3652); animation: cortex-node 1.1s ease-in-out infinite alternate; animation-delay: var(--delay); }
 .cortex-node.active .halo { opacity: .55; animation: cortex-halo 1.5s ease-out infinite; animation-delay: var(--delay); }
+.cortex-delay-0 { --delay: 0ms; }
+.cortex-delay-1 { --delay: 34ms; }
+.cortex-delay-2 { --delay: 68ms; }
+.cortex-delay-3 { --delay: 102ms; }
+.cortex-delay-4 { --delay: 136ms; }
+.cortex-delay-5 { --delay: 170ms; }
+.cortex-delay-6 { --delay: 204ms; }
+.cortex-delay-7 { --delay: 238ms; }
+.cortex-delay-8 { --delay: 272ms; }
+.cortex-delay-9 { --delay: 306ms; }
+.cortex-delay-10 { --delay: 340ms; }
+.cortex-delay-11 { --delay: 374ms; }
+.cortex-delay-12 { --delay: 408ms; }
+.cortex-delay-13 { --delay: 442ms; }
+.cortex-delay-14 { --delay: 476ms; }
+.cortex-delay-15 { --delay: 510ms; }
+.cortex-delay-16 { --delay: 544ms; }
+.cortex-delay-17 { --delay: 578ms; }
+.cortex-delay-18 { --delay: 612ms; }
+.cortex-delay-19 { --delay: 646ms; }
+.cortex-delay-20 { --delay: 680ms; }
+.cortex-delay-21 { --delay: 714ms; }
+.cortex-delay-22 { --delay: 748ms; }
+.cortex-delay-23 { --delay: 782ms; }
+.cortex-delay-24 { --delay: 816ms; }
+.cortex-delay-25 { --delay: 850ms; }
 .cortex-label { fill: #a9a0a4; font-size: 15px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .cortex-legend { position: absolute; right: 1rem; bottom: .8rem; display: flex; flex-wrap: wrap; gap: .8rem; color: #87818a; font-size: .72rem; }
 .cortex-legend span { display: flex; align-items: center; gap: .35rem; }
@@ -127,6 +153,8 @@ nav button.active::before { color: var(--accent-bright); }
 .cortex-phase > span { grid-row: 1 / 3; display: grid; width: 26px; height: 26px; place-items: center; border-radius: 50%; color: #ff7085; background: var(--accent-soft); font-size: .72rem; font-weight: 800; }
 .cortex-phase strong { font-size: .82rem; }
 .cortex-phase small { overflow: hidden; color: var(--muted); font-size: .67rem; text-overflow: ellipsis; white-space: nowrap; }
+.agent-color-chip { display: inline-flex; width: 1.35rem; height: 1.35rem; margin: 0 0 .65rem; padding: 2px; border: 1px solid #4b4b53; border-radius: 50%; background: #0b0b0d; vertical-align: middle; }
+.agent-color-chip svg { display: block; width: 100%; height: 100%; }
 @keyframes cortex-flow { to { stroke-dashoffset: -17; } }
 @keyframes cortex-pulse { 50% { transform: scale(.75); opacity: .65; } }
 @keyframes cortex-node { to { transform: scale(1.12); transform-origin: center; } }
